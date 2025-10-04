@@ -1,0 +1,10 @@
+commit-msg:
+  commands:
+    "commitlint":
+      run: commitlint
+pre-commit:
+  commands:
+    check:
+      glob: "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}"
+      run: biome check --write --no-errors-on-unmatched --colors=off {staged_files}
+      stage_fixed: true
