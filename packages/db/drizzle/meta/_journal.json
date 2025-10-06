@@ -8,6 +8,13 @@
       "when": 1759693973188,
       "tag": "0000_graceful_the_watchers",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1759877951633,
+      "tag": "0001_brief_pete_wisdom",
+      "breakpoints": true
     }
   ]
 }
