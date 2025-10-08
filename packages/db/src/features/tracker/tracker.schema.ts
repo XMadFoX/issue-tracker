@@ -1,3 +1,4 @@
+import { relations } from "drizzle-orm";
 import {
 	boolean,
 	integer,
@@ -5,7 +6,13 @@ import {
 	text,
 	timestamp,
 	uniqueIndex,
+	uuid,
 } from "drizzle-orm/pg-core";
+import {
+	policyConstraints,
+	roleAssignments,
+	roleDefinitions,
+} from "../abac/abac.schema"; // Import roleDefinitions
 import { user } from "../auth/auth.schema";
 
 export const workspace = pgTable(
@@ -26,6 +33,14 @@ export const workspace = pgTable(
 	(table) => [uniqueIndex("workspace_slug_key").on(table.slug)],
 );
 
+export const workspaceRelations = relations(workspace, ({ many }) => ({
+	memberships: many(workspaceMembership),
+	teams: many(team),
+	roleDefinitions: many(roleDefinitions),
+	policyConstraints: many(policyConstraints),
+	roleAssignments: many(roleAssignments),
+}));
+
 export const workspaceMembership = pgTable(
 	"workspace_membership",
 	{
@@ -36,7 +51,9 @@ export const workspaceMembership = pgTable(
 		userId: text("user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		role: text("role").notNull(),
+		roleId: uuid("role_id") // changed to roleId referencing roleDefinitions
+			.notNull()
+			.references(() => roleDefinitions.id, { onDelete: "cascade" }),
 		status: text("status").notNull(),
 		invitedBy: text("invited_by").references(() => user.id, {
 			onDelete: "set null",
@@ -56,6 +73,28 @@ export const workspaceMembership = pgTable(
 			table.userId,
 		),
 	],
+);
+
+export const workspaceMembershipRelations = relations(
+	workspaceMembership,
+	({ one }) => ({
+		workspace: one(workspace, {
+			fields: [workspaceMembership.workspaceId],
+			references: [workspace.id],
+		}),
+		user: one(user, {
+			fields: [workspaceMembership.userId],
+			references: [user.id],
+		}),
+		invitedBy: one(user, {
+			fields: [workspaceMembership.invitedBy],
+			references: [user.id],
+		}),
+		role: one(roleDefinitions, {
+			fields: [workspaceMembership.roleId],
+			references: [roleDefinitions.id],
+		}),
+	}),
 );
 
 export const team = pgTable(
@@ -86,6 +125,20 @@ export const team = pgTable(
 	],
 );
 
+export const teamRelations = relations(team, ({ one, many }) => ({
+	workspace: one(workspace, {
+		fields: [team.workspaceId],
+		references: [workspace.id],
+	}),
+	lead: one(user, {
+		fields: [team.leadId],
+		references: [user.id],
+	}),
+	memberships: many(teamMembership),
+	roleDefinitions: many(roleDefinitions),
+	roleAssignments: many(roleAssignments),
+}));
+
 export const teamMembership = pgTable(
 	"team_membership",
 	{
@@ -106,3 +159,14 @@ export const teamMembership = pgTable(
 		uniqueIndex("team_membership_team_user_key").on(table.teamId, table.userId),
 	],
 );
+
+export const teamMembershipRelations = relations(teamMembership, ({ one }) => ({
+	team: one(team, {
+		fields: [teamMembership.teamId],
+		references: [team.id],
+	}),
+	user: one(user, {
+		fields: [teamMembership.userId],
+		references: [user.id],
+	}),
+}));

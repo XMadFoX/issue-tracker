@@ -1,4 +1,6 @@
+import { relations } from "drizzle-orm";
 import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { roleAssignments, roleDefinitions } from "../abac/abac.schema";
 
 export const user = pgTable("user", {
 	id: text("id").primaryKey(),
@@ -16,6 +18,18 @@ export const user = pgTable("user", {
 		.notNull(),
 });
 
+export const userRelations = relations(user, ({ many }) => ({
+	roleDefinitions: many(roleDefinitions, {
+		relationName: "CreatedBy",
+	}),
+	assignedRoles: many(roleAssignments, {
+		relationName: "AssignedUser",
+	}),
+	rolesAssignedBy: many(roleAssignments, {
+		relationName: "AssignedBy",
+	}),
+}));
+
 export const session = pgTable("session", {
 	id: text("id").primaryKey(),
 	expiresAt: timestamp("expires_at").notNull(),
@@ -28,6 +42,13 @@ export const session = pgTable("session", {
 		.notNull()
 		.references(() => user.id, { onDelete: "cascade" }),
 });
+
+export const sessionRelations = relations(session, ({ one }) => ({
+	user: one(user, {
+		fields: [session.userId],
+		references: [user.id],
+	}),
+}));
 
 export const account = pgTable("account", {
 	id: text("id").primaryKey(),
@@ -46,6 +67,13 @@ export const account = pgTable("account", {
 	createdAt: timestamp("created_at").notNull(),
 	updatedAt: timestamp("updated_at").notNull(),
 });
+
+export const accountRelations = relations(account, ({ one }) => ({
+	user: one(user, {
+		fields: [account.userId],
+		references: [user.id],
+	}),
+}));
 
 export const verification = pgTable("verification", {
 	id: text("id").primaryKey(),
