@@ -1,7 +1,7 @@
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import type { Context } from "@orpc/server";
-import { CORSPlugin } from "@orpc/server/plugins";
+import { CORSPlugin, ResponseHeadersPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod";
 import { Elysia } from "elysia";
 import { auth } from "./lib/auth";
@@ -10,6 +10,7 @@ import { router } from "./router";
 const handler = new OpenAPIHandler(router, {
 	plugins: [
 		new CORSPlugin(),
+		new ResponseHeadersPlugin(),
 		new OpenAPIReferencePlugin({
 			docsProvider: "scalar",
 			schemaConverters: [new ZodToJsonSchemaConverter()],
