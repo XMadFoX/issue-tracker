@@ -43,7 +43,7 @@ new Elysia()
 				prefix: "/rpc",
 				context: {
 					headers: request.headers,
-					session: await auth.api.getSession({ headers: request.headers }),
+					auth: await auth.api.getSession({ headers: request.headers }),
 				},
 			});
 
