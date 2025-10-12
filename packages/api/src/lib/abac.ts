@@ -1,6 +1,5 @@
 import { db } from "db";
 import {
-	attributeEntityEnum,
 	entityAttributes,
 	permissionsCatalog,
 	policyConstraints,
@@ -13,6 +12,16 @@ import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
 type Ambient = Record<string, any> | undefined;
 type Resource = { id?: string; attributes?: Record<string, any> } | undefined;
+
+const mapEntityAttributes = (
+	rows: { key: string; value: unknown }[] | undefined,
+) => {
+	const acc: Record<string, unknown> = {};
+	for (const row of rows ?? []) {
+		acc[row.key] = row.value;
+	}
+	return acc;
+};
 
 /**
  * ABAC helper: isAllowed
@@ -135,12 +144,12 @@ export async function isAllowed({
 
 		// If predicateJson.subject.attribute_equals exists, all of those must match subject attributes
 		try {
-			if (predicateJson.subject && predicateJson.subject.attribute_equals) {
+			if (predicateJson?.subject?.attribute_equals) {
 				const checks = predicateJson.subject.attribute_equals;
 				const subjectAttrs = ctx.subject?.attributes ?? {};
 				return Object.entries(checks).every(([k, v]) => subjectAttrs[k] === v);
 			}
-		} catch (e) {
+		} catch (_e) {
 			return false;
 		}
 
@@ -170,45 +179,62 @@ export async function isAllowed({
 		);
 	const membershipRow = membershipRows?.[0] ?? null;
 
-	// Fetch entity attributes for the user, workspace, and team
+	// Fetch entity attributes for the user, workspace, and team via (entity_type, entity_id)
 	const userAttributes = await db
-		.select()
+		.select({
+			key: entityAttributes.key,
+			value: entityAttributes.value,
+		})
 		.from(entityAttributes)
-		.where(eq(entityAttributes.userId, userId));
+		.where(
+			and(
+				eq(entityAttributes.entityType, "user"),
+				eq(entityAttributes.entityId, userId),
+			),
+		);
 
 	const workspaceAttributes = await db
-		.select()
+		.select({
+			key: entityAttributes.key,
+			value: entityAttributes.value,
+		})
 		.from(entityAttributes)
-		.where(eq(entityAttributes.workspaceId, workspaceId));
+		.where(
+			and(
+				eq(entityAttributes.entityType, "workspace"),
+				eq(entityAttributes.entityId, workspaceId),
+			),
+		);
 
 	const teamAttributes = teamId
 		? await db
-				.select()
+				.select({
+					key: entityAttributes.key,
+					value: entityAttributes.value,
+				})
 				.from(entityAttributes)
-				.where(eq(entityAttributes.teamId, teamId))
+				.where(
+					and(
+						eq(entityAttributes.entityType, "team"),
+						eq(entityAttributes.entityId, teamId),
+					),
+				)
 		: [];
 
 	const subject = {
 		attributes: {
-			...((userRow as any)?.attributes ?? {}), // Existing user attributes
-			...((membershipRow as any)?.attributes ?? {}), // Existing membership attributes
+			// ...(userRow?.attributes ?? {}),
+			...(membershipRow?.attributes ?? {}),
 			...(assignments?.reduce(
-				(acc: any, a: any) => ({ ...acc, ...((a as any).attributes ?? {}) }),
+				(acc: Record<string, unknown>, a) => ({
+					...acc,
+					...(a.attributes ?? {}),
+				}),
 				{},
 			) ?? {}), // Assignment attributes
-			// Add entityAttributes:
-			...(userAttributes ?? []).reduce(
-				(acc, attr) => ({ ...acc, [attr.key]: attr.value }),
-				{},
-			),
-			...(workspaceAttributes ?? []).reduce(
-				(acc, attr) => ({ ...acc, [attr.key]: attr.value }),
-				{},
-			),
-			...(teamAttributes ?? []).reduce(
-				(acc, attr) => ({ ...acc, [attr.key]: attr.value }),
-				{},
-			),
+			...mapEntityAttributes(userAttributes),
+			...mapEntityAttributes(workspaceAttributes),
+			...mapEntityAttributes(teamAttributes),
 		},
 		user: userRow
 			? { id: (userRow as any).id, email: (userRow as any).email }
