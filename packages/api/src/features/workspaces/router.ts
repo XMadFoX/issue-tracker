@@ -13,6 +13,7 @@ import {
 import { eq } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { authedRouter } from "../../context";
+import { isAllowed } from "../../lib/abac";
 
 export const list = authedRouter.handler(async ({ context }) => {
 	const userWorkspaces = await db
@@ -95,7 +96,31 @@ export const create = authedRouter
 		});
 	});
 
+const update = authedRouter
+	.input(createInsertSchema(workspace).partial().required({ id: true }))
+	.errors({
+		UNAUTHORIZED: {},
+	})
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.id,
+			permissionKey: "workspace:update",
+		});
+		if (!allowed)
+			throw errors.UNAUTHORIZED({
+				message:
+					"You don't have permission to update this workspace or the workspace doesn't exist",
+			});
+
+		return await db
+			.update(workspace)
+			.set(input)
+			.where(eq(workspace.id, input.id));
+	});
+
 export const workspaceRouter = {
 	list,
 	create,
+	update,
 };
