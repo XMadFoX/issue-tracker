@@ -68,7 +68,23 @@ export async function isAllowed({
 			),
 		);
 
+	console.debug("[ABAC] Loaded role assignments", {
+		userId,
+		workspaceId,
+		teamId,
+		assignmentsCount: assignments.length,
+		assignments,
+	});
+
+	const [reqResource, reqAction] = permissionKey.split(":");
+
 	if (!assignments || assignments.length === 0) {
+		console.info("[ABAC] No assignments found, denying", {
+			userId,
+			workspaceId,
+			teamId,
+			permissionKey,
+		});
 		return false;
 	}
 
@@ -97,7 +113,11 @@ export async function isAllowed({
 			eq(rolePermissions.constraintId, policyConstraints.id),
 		);
 
-	const [reqResource, reqAction] = permissionKey.split(":");
+	console.debug("[ABAC] Fetched permissions candidates", {
+		roleIds,
+		permissionKey,
+		totalCandidates: perms.length,
+	});
 
 	// Filter candidate permissions that match either:
 	//  - exact key
@@ -123,7 +143,21 @@ export async function isAllowed({
 		return false;
 	});
 
+	console.debug("[ABAC] Matching candidates after filter", {
+		permissionKey,
+		reqResource,
+		reqAction,
+		matchingCount: matchingCandidates.length,
+		candidateKeys: matchingCandidates.map((row) => row.pc?.key),
+	});
+
 	if (matchingCandidates.length === 0) {
+		console.info("[ABAC] No matching permission candidates", {
+			userId,
+			workspaceId,
+			teamId,
+			permissionKey,
+		});
 		return false;
 	}
 
@@ -137,23 +171,57 @@ export async function isAllowed({
 		predicateJson: any,
 		ctx: { subject: any; resource: any; ambient: any },
 	) {
-		if (!predicateJson) return true;
+		console.debug("[ABAC] Evaluating predicate", {
+			predicateJson,
+			subjectAttributes: ctx.subject?.attributes,
+			resource,
+			ambient,
+		});
+
+		if (!predicateJson) {
+			console.debug("[ABAC] Predicate empty, default allow", {
+				resource,
+				ambient,
+			});
+			return true;
+		}
 		// Basic example: support predicateJson = { "always": true } or { "subject": { "attribute_equals": { "k":"v" } } }
 		// For production use integrate a proper predicate engine.
-		if (predicateJson.always === true) return true;
+		if (predicateJson.always === true) {
+			console.debug("[ABAC] Predicate explicit always allow", {
+				resource,
+				ambient,
+			});
+			return true;
+		}
 
 		// If predicateJson.subject.attribute_equals exists, all of those must match subject attributes
 		try {
 			if (predicateJson?.subject?.attribute_equals) {
 				const checks = predicateJson.subject.attribute_equals;
 				const subjectAttrs = ctx.subject?.attributes ?? {};
-				return Object.entries(checks).every(([k, v]) => subjectAttrs[k] === v);
+				const attrMatch = Object.entries(checks).every(
+					([k, v]) => subjectAttrs[k] === v,
+				);
+				console.debug("[ABAC] Predicate subject attribute check", {
+					checks,
+					subjectAttrs,
+					attrMatch,
+				});
+				return attrMatch;
 			}
-		} catch (_e) {
+		} catch (error) {
+			console.warn("[ABAC] Predicate evaluation error", {
+				error,
+				predicateJson,
+			});
 			return false;
 		}
 
 		// Fallback: if unknown structure, deny (safe default)
+		console.debug("[ABAC] Predicate fell back to deny", {
+			predicateJson,
+		});
 		return false;
 	}
 
@@ -221,6 +289,27 @@ export async function isAllowed({
 				)
 		: [];
 
+	console.debug("[ABAC] Subject context composed", {
+		userId,
+		workspaceId,
+		teamId,
+		subjectAttributes: {
+			...(membershipRow?.attributes ?? {}),
+			...(assignments?.reduce(
+				(acc: Record<string, unknown>, a) => ({
+					...acc,
+					...(a.attributes ?? {}),
+				}),
+				{},
+			) ?? {}),
+			...mapEntityAttributes(userAttributes),
+			...mapEntityAttributes(workspaceAttributes),
+			...mapEntityAttributes(teamAttributes),
+		},
+		resource,
+		ambient,
+	});
+
 	const subject = {
 		attributes: {
 			// ...(userRow?.attributes ?? {}),
@@ -247,8 +336,17 @@ export async function isAllowed({
 	// 3) Evaluate each candidate: check constraint (if present) and collect effects
 	let anyAllow = false;
 	for (const c of matchingCandidates) {
+		const candidatePermissionKey = c.pc?.key;
 		const effect = c.rp.effect; // 'allow' or 'deny'
 		const predicate = c.constraint?.predicateJson ?? null;
+
+		console.debug("[ABAC] Evaluating candidate", {
+			permissionKey: candidatePermissionKey,
+			effect,
+			constraintId: c.constraint?.id,
+			roleId: c.rp.roleId,
+			permissionId: c.rp.permissionId,
+		});
 
 		const predicateResult = evaluatePredicate(predicate, {
 			subject,
@@ -256,17 +354,57 @@ export async function isAllowed({
 			ambient,
 		});
 
-		if (!predicateResult) continue;
+		console.debug("[ABAC] Predicate result for candidate", {
+			permissionKey: candidatePermissionKey,
+			roleId: c.rp.roleId,
+			permissionId: c.rp.permissionId,
+			predicateResult,
+		});
+
+		if (!predicateResult) {
+			console.debug("[ABAC] Predicate failed, skipping candidate", {
+				permissionKey: candidatePermissionKey,
+				roleId: c.rp.roleId,
+				permissionId: c.rp.permissionId,
+			});
+			continue;
+		}
 
 		if (effect === "deny") {
 			// deny overrides: immediate deny
+			console.warn("[ABAC] Deny effect matched, denying request", {
+				userId,
+				workspaceId,
+				teamId,
+				permissionKey,
+				candidatePermissionKey,
+				roleId: c.rp.roleId,
+				permissionId: c.rp.permissionId,
+			});
 			return false;
 		}
 
 		if (effect === "allow") {
+			console.debug("[ABAC] Allow effect matched", {
+				userId,
+				workspaceId,
+				teamId,
+				permissionKey,
+				candidatePermissionKey,
+				roleId: c.rp.roleId,
+				permissionId: c.rp.permissionId,
+			});
 			anyAllow = true;
 		}
 	}
+
+	console.info("[ABAC] Final decision", {
+		userId,
+		workspaceId,
+		teamId,
+		permissionKey,
+		decision: anyAllow ? "allow" : "deny",
+	});
 
 	return anyAllow;
 }
