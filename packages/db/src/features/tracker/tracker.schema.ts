@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
 	boolean,
 	integer,
+	jsonb,
 	pgTable,
 	text,
 	timestamp,
@@ -54,6 +55,10 @@ export const workspaceMembership = pgTable(
 		roleId: uuid("role_id") // changed to roleId referencing roleDefinitions
 			.notNull()
 			.references(() => roleDefinitions.id, { onDelete: "cascade" }),
+		attributes: jsonb("attributes")
+			.$type<Record<string, unknown>>()
+			.default({})
+			.notNull(),
 		status: text("status").notNull(),
 		invitedBy: text("invited_by").references(() => user.id, {
 			onDelete: "set null",
@@ -150,6 +155,10 @@ export const teamMembership = pgTable(
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
 		role: text("role").notNull(),
+		attributes: jsonb("attributes")
+			.$type<Record<string, unknown>>()
+			.default({})
+			.notNull(),
 		isDefault: boolean("is_default").notNull().default(false),
 		joinedAt: timestamp("joined_at", { withTimezone: true })
 			.defaultNow()
