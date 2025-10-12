@@ -1,0 +1,2 @@
+ALTER TABLE "team_membership" ADD COLUMN "attributes" jsonb DEFAULT '{}'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "workspace_membership" ADD COLUMN "attributes" jsonb DEFAULT '{}'::jsonb NOT NULL;
