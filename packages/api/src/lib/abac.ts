@@ -78,7 +78,10 @@ export async function isAllowed({
 
 	const [reqResource, reqAction] = permissionKey.split(":");
 
-	if (!assignments || assignments.length === 0) {
+	if (
+		(!assignments || assignments.length === 0) &&
+		reqResource !== "workspace"
+	) {
 		console.info("[ABAC] No assignments found, denying", {
 			userId,
 			workspaceId,
