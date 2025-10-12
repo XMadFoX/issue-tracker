@@ -96,11 +96,13 @@ export const create = authedRouter
 		});
 	});
 
+const commonErrors = { UNAUTHORIZED: {} };
+const unauthorizedMessage = (action: "update" | "delete") =>
+	`You don't have permission to ${action} this workspace or the workspace doesn't exist`;
+
 const update = authedRouter
 	.input(createInsertSchema(workspace).partial().required({ id: true }))
-	.errors({
-		UNAUTHORIZED: {},
-	})
+	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
@@ -109,8 +111,7 @@ const update = authedRouter
 		});
 		if (!allowed)
 			throw errors.UNAUTHORIZED({
-				message:
-					"You don't have permission to update this workspace or the workspace doesn't exist",
+				message: unauthorizedMessage("update"),
 			});
 
 		return await db
@@ -119,8 +120,26 @@ const update = authedRouter
 			.where(eq(workspace.id, input.id));
 	});
 
+const deleteWorkspace = authedRouter
+	.input(createInsertSchema(workspace).pick({ id: true }))
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.id,
+			permissionKey: "workspace:delete",
+		});
+		if (!allowed)
+			throw errors.UNAUTHORIZED({
+				message: unauthorizedMessage("delete"),
+			});
+
+		return await db.delete(workspace).where(eq(workspace.id, input.id));
+	});
+
 export const workspaceRouter = {
 	list,
 	create,
 	update,
+	delete: deleteWorkspace,
 };
