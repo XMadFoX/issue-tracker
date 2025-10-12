@@ -78,8 +78,22 @@ export async function isAllowed({
 
 	const [reqResource, reqAction] = permissionKey.split(":");
 
+	const membershipRows = await db
+		.select()
+		.from(workspaceMembership)
+		.where(
+			and(
+				eq(workspaceMembership.userId, userId),
+				eq(workspaceMembership.workspaceId, workspaceId),
+			),
+		);
+	const membershipRow = membershipRows?.[0] ?? null;
+	const membershipRoleId = membershipRow?.roleId ?? null;
+	const hasMembershipRole = Boolean(membershipRoleId);
+
 	if (
 		(!assignments || assignments.length === 0) &&
+		!hasMembershipRole &&
 		reqResource !== "workspace"
 	) {
 		console.info("[ABAC] No assignments found, denying", {
@@ -91,7 +105,22 @@ export async function isAllowed({
 		return false;
 	}
 
-	const roleIds = assignments.map((a) => a.roleId);
+	const roleIds = Array.from(
+		new Set([
+			...assignments.map((a) => a.roleId),
+			...(membershipRoleId ? [membershipRoleId] : []),
+		]),
+	);
+
+	if (roleIds.length === 0) {
+		console.info("[ABAC] No role IDs resolved, denying", {
+			userId,
+			workspaceId,
+			teamId,
+			permissionKey,
+		});
+		return false;
+	}
 
 	// 2) Collect candidate permissions for these roles
 	// We want:
@@ -122,28 +151,74 @@ export async function isAllowed({
 		totalCandidates: perms.length,
 	});
 
+	const hasGlobalAllow = perms.some((candidate) => {
+		if (candidate.rp.effect !== "allow") return false;
+		if (candidate.rp.constraintId !== null) return false;
+
+		const keyIsGlobal = candidate.pc?.key === "*";
+		const columnsAreGlobal =
+			candidate.pc?.resourceType === "*" && candidate.pc?.action === "*";
+
+		return keyIsGlobal || columnsAreGlobal;
+	});
+
+	if (hasGlobalAllow) {
+		console.debug("[ABAC] Global wildcard allow matched, granting access", {
+			userId,
+			workspaceId,
+			teamId,
+			permissionKey,
+		});
+		return true;
+	}
+
 	// Filter candidate permissions that match either:
 	//  - exact key
 	//  - wildcard key ('*')
 	//  - resource/action wildcards: resource='*' or action='*'
 	const matchingCandidates = perms.filter((row) => {
 		const permKey = row.pc?.key;
-		if (!permKey) return false;
+		const permResourceColumn = row.pc?.resourceType;
+		const permActionColumn = row.pc?.action;
 
-		if (permKey === permissionKey) return true;
-		if (permKey === "*") return true;
+		const matchesByKey = (() => {
+			if (!permKey) return false;
 
-		const [permResource, permAction] = permKey.split(":");
-		if (!permAction) {
-			// if permission key doesn't follow resource:action, fallback to exact only
-			return false;
-		}
+			if (permKey === permissionKey) return true;
+			if (permKey === "*") return true;
 
-		if (permResource === "*" && permAction === "*") return true;
-		if (permResource === "*" && permAction === reqAction) return true;
-		if (permAction === "*" && permResource === reqResource) return true;
+			if (!permKey.includes(":")) {
+				return false;
+			}
 
-		return false;
+			const [permResourceFromKey, permActionFromKey] = permKey.split(":");
+
+			if (permResourceFromKey === "*" && permActionFromKey === "*") return true;
+			if (permResourceFromKey === "*" && permActionFromKey === reqAction)
+				return true;
+			if (permActionFromKey === "*" && permResourceFromKey === reqResource)
+				return true;
+
+			return (
+				permResourceFromKey === reqResource && permActionFromKey === reqAction
+			);
+		})();
+
+		const matchesByColumns = (() => {
+			if (!permResourceColumn || !permActionColumn) return false;
+
+			if (permResourceColumn === "*" && permActionColumn === "*") return true;
+			if (permResourceColumn === "*" && permActionColumn === reqAction)
+				return true;
+			if (permActionColumn === "*" && permResourceColumn === reqResource)
+				return true;
+
+			return (
+				permResourceColumn === reqResource && permActionColumn === reqAction
+			);
+		})();
+
+		return matchesByKey || matchesByColumns;
 	});
 
 	console.debug("[ABAC] Matching candidates after filter", {
@@ -238,17 +313,6 @@ export async function isAllowed({
 	// Fetch user and membership rows; Drizzle returns arrays from `.all()`.
 	const userRows = await db.select().from(user).where(eq(user.id, userId));
 	const userRow = userRows?.[0] ?? null;
-
-	const membershipRows = await db
-		.select()
-		.from(workspaceMembership)
-		.where(
-			and(
-				eq(workspaceMembership.userId, userId),
-				eq(workspaceMembership.workspaceId, workspaceId),
-			),
-		);
-	const membershipRow = membershipRows?.[0] ?? null;
 
 	// Fetch entity attributes for the user, workspace, and team via (entity_type, entity_id)
 	const userAttributes = await db
