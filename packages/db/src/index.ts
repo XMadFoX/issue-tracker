@@ -2,12 +2,18 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { env } from "./env";
 import * as schema from "./schema";
 
-export const db = drizzle({
-	connection: {
-		connectionString: env.DATABASE_URL,
-	},
-	schema,
-});
+export let db: ReturnType<typeof drizzle>;
+
+function init(url?: string) {
+	db = drizzle({
+		connection: {
+			connectionString: url ?? env.DATABASE_URL,
+		},
+		schema,
+	});
+}
+
+init();
 
 export type DB = typeof db;
-export { schema };
+export { schema, init };
