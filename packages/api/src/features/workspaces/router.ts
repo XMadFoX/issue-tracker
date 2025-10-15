@@ -15,6 +15,8 @@ import { createInsertSchema } from "drizzle-zod";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 
+export const workspaceInsertSchema = createInsertSchema(workspace);
+
 export const list = authedRouter.handler(async ({ context }) => {
 	const userWorkspaces = await db
 		.select({ workspace })
@@ -26,7 +28,7 @@ export const list = authedRouter.handler(async ({ context }) => {
 });
 
 export const create = authedRouter
-	.input(createInsertSchema(workspace).omit({ id: true }))
+	.input(workspaceInsertSchema.omit({ id: true }))
 	.handler(async ({ context, input }) => {
 		return await db.transaction(async (tx) => {
 			const [createdWorkspace] = await tx
@@ -101,7 +103,7 @@ const unauthorizedMessage = (action: "update" | "delete") =>
 	`You don't have permission to ${action} this workspace or the workspace doesn't exist`;
 
 const update = authedRouter
-	.input(createInsertSchema(workspace).partial().required({ id: true }))
+	.input(workspaceInsertSchema.partial().required({ id: true }))
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({
@@ -121,7 +123,7 @@ const update = authedRouter
 	});
 
 const deleteWorkspace = authedRouter
-	.input(createInsertSchema(workspace).pick({ id: true }))
+	.input(workspaceInsertSchema.pick({ id: true }))
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({
