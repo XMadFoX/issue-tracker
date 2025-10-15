@@ -74,8 +74,100 @@ export const listByWorkspace = authedRouter
 		return list;
 	});
 
+export const create = authedRouter
+	.input(createInsertSchema(team).omit({ id: true }))
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "team:create",
+		});
+		if (!allowed) {
+			throw new ORPCError("Unauthorized to create team in this workspace");
+		}
+
+		const [createdTeam] = await db
+			.insert(team)
+			.values({
+				id: createId(),
+				...input,
+			})
+			.returning({ id: team.id });
+
+		if (!createdTeam) {
+			throw new ORPCError("Failed to create team");
+		}
+
+		return createdTeam;
+	});
+
+const commonErrors = { UNAUTHORIZED: {} };
+const unauthorizedMessage = (action: "update" | "delete") =>
+	`You don't have permission to ${action} this team or the team doesn't exist`;
+
+const update = authedRouter
+	.input(
+		createInsertSchema(team)
+			.partial()
+			.required({ id: true, workspaceId: true }),
+	)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "team:update",
+		});
+		if (!allowed)
+			throw errors.UNAUTHORIZED({
+				message: unauthorizedMessage("update"),
+			});
+
+		const [existingTeam] = await db
+			.select({ workspaceId: team.workspaceId })
+			.from(team)
+			.where(eq(team.id, input.id));
+
+		if (!existingTeam) {
+			throw new ORPCError("Team not found");
+		}
+
+		// TODO: remove workspaceId, id from input, so that they can't be updated
+		return await db.update(team).set(input).where(eq(team.id, input.id));
+	});
+
+const deleteTeam = authedRouter
+	.input(createInsertSchema(team).pick({ id: true, workspaceId: true }))
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "team:delete",
+		});
+
+		const [existingTeam] = await db
+			.select({ workspaceId: team.workspaceId })
+			.from(team)
+			.where(eq(team.id, input.id));
+
+		if (!existingTeam) {
+			throw new ORPCError("Team not found");
+		}
+
+		if (!allowed)
+			throw errors.UNAUTHORIZED({
+				message: unauthorizedMessage("delete"),
+			});
+
+		return await db.delete(team).where(eq(team.id, input.id));
+	});
+
 export const teamRouter = {
 	listUserTeams,
 	listUserTeamsByWorkspace,
 	listByWorkspace,
+	create,
+	update,
+	delete: deleteTeam,
 };
