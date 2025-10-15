@@ -3,7 +3,6 @@ import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import {
 	team,
-	teamMembership,
 	workspace,
 	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
@@ -13,7 +12,7 @@ import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import { workspaceInsertSchema } from "../workspaces/router";
 
-const teamInsertSchema = createInsertSchema(team);
+export const teamInsertSchema = createInsertSchema(team);
 
 export const listUserTeams = authedRouter.handler(async ({ context }) => {
 	const userTeams = await db
@@ -75,7 +74,7 @@ export const listByWorkspace = authedRouter
 	});
 
 export const create = authedRouter
-	.input(createInsertSchema(team).omit({ id: true }))
+	.input(teamInsertSchema.omit({ id: true }))
 	.handler(async ({ context, input }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
@@ -106,11 +105,7 @@ const unauthorizedMessage = (action: "update" | "delete") =>
 	`You don't have permission to ${action} this team or the team doesn't exist`;
 
 const update = authedRouter
-	.input(
-		createInsertSchema(team)
-			.partial()
-			.required({ id: true, workspaceId: true }),
-	)
+	.input(teamInsertSchema.partial().required({ id: true, workspaceId: true }))
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({
@@ -137,7 +132,7 @@ const update = authedRouter
 	});
 
 const deleteTeam = authedRouter
-	.input(createInsertSchema(team).pick({ id: true, workspaceId: true }))
+	.input(teamInsertSchema.pick({ id: true, workspaceId: true }))
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({
