@@ -8,6 +8,7 @@ import {
 } from "db/features/tracker/tracker.schema";
 import { and, eq } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
+import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import { workspaceInsertSchema } from "../workspaces/router";
@@ -127,8 +128,8 @@ const update = authedRouter
 			throw new ORPCError("Team not found");
 		}
 
-		// TODO: remove workspaceId, id from input, so that they can't be updated
-		return await db.update(team).set(input).where(eq(team.id, input.id));
+		const values = omit(input, ["id", "workspaceId"]);
+		return await db.update(team).set(values).where(eq(team.id, input.id));
 	});
 
 const deleteTeam = authedRouter
