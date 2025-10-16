@@ -3,8 +3,8 @@ import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import {
 	team,
+	teamMembership,
 	workspace,
-	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
 import { and, eq } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -19,12 +19,8 @@ export const listUserTeams = authedRouter.handler(async ({ context }) => {
 	const userTeams = await db
 		.select({ team })
 		.from(team)
-		.innerJoin(workspace, eq(team.workspaceId, workspace.id))
-		.innerJoin(
-			workspaceMembership,
-			eq(workspace.id, workspaceMembership.workspaceId),
-		)
-		.where(eq(workspaceMembership.userId, context.auth.session.userId));
+		.innerJoin(teamMembership, eq(team.id, teamMembership.teamId))
+		.where(eq(teamMembership.userId, context.auth.session.userId));
 
 	return userTeams.map((item) => item.team);
 });
@@ -35,14 +31,11 @@ export const listUserTeamsByWorkspace = authedRouter
 		const [list] = await db
 			.select({ team })
 			.from(team)
+			.innerJoin(teamMembership, eq(team.id, teamMembership.teamId))
 			.innerJoin(workspace, eq(team.workspaceId, workspace.id))
-			.innerJoin(
-				workspaceMembership,
-				eq(workspace.id, workspaceMembership.workspaceId),
-			)
 			.where(
 				and(
-					eq(workspaceMembership.userId, context.auth.session.userId),
+					eq(teamMembership.userId, context.auth.session.userId),
 					eq(workspace.id, input.id),
 				),
 			);
