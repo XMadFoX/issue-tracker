@@ -7,6 +7,94 @@ import {
 import { workspaceMembership } from "db/features/tracker/tracker.schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod/v4";
+
+const DEFAULT_MAX_DEPTH = 2;
+const DEFAULT_MAX_ARRAY_LENGTH = 10;
+
+// Schema for sanitized attributes
+const attributesSchema = z.record(z.string(), z.unknown());
+
+/**
+ * Sanitizes attributes by stripping functions, limiting depth and array sizes to prevent abuse.
+ * Ensures safe handling of untrusted input for permissions or ABAC contexts.
+ * @param attrs - Input attributes to sanitize
+ * @param maxDepth - Maximum recursion depth (default: 2)
+ * @param maxArrayLength - Maximum array length (default: 10)
+ * @returns Sanitized record with primitives, limited objects, and arrays
+ */
+export function sanitizeAttributes(
+	attrs: Record<string, unknown> | undefined,
+	maxDepth: number = DEFAULT_MAX_DEPTH,
+	maxArrayLength: number = DEFAULT_MAX_ARRAY_LENGTH,
+): Record<string, unknown> {
+	attrs = attrs || {};
+	const sanitized: Record<string, unknown> = {};
+	const visited = new WeakSet<object>();
+
+	for (const [key, value] of Object.entries(attrs)) {
+		if (typeof value === "function") continue; // Strip functions
+		// Limit depth: only primitive or simple objects/arrays
+		if (typeof value === "object" && value !== null) {
+			if (Array.isArray(value)) {
+				const limitedArray =
+					value.length > maxArrayLength
+						? value.slice(0, maxArrayLength)
+						: value;
+				sanitized[key] = limitedArray.map((v) =>
+					sanitizeValue(v, maxDepth, maxArrayLength, visited),
+				);
+			} else {
+				// Recursive sanitization for objects
+				sanitized[key] = sanitizeValue(
+					value,
+					maxDepth,
+					maxArrayLength,
+					visited,
+				);
+			}
+		} else {
+			sanitized[key] = value;
+		}
+	}
+
+	return attributesSchema.parse(sanitized);
+}
+
+/**
+ * Recursively sanitizes a value with depth limits and cycle detection.
+ * @param value - Value to sanitize
+ * @param depth - Remaining depth allowance
+ * @param maxArrayLength - Maximum array length
+ * @param visited - Set of visited objects to detect cycles
+ * @returns Sanitized value
+ */
+function sanitizeValue(
+	value: unknown,
+	depth: number,
+	maxArrayLength: number,
+	visited: WeakSet<object>,
+): unknown {
+	if (depth <= 0 || typeof value !== "object" || value === null) return value;
+	if (visited.has(value as object)) return null; // Break cycle
+	visited.add(value as object);
+
+	if (Array.isArray(value)) {
+		const limitedArray =
+			value.length > maxArrayLength ? value.slice(0, maxArrayLength) : value;
+		return limitedArray.map((v) =>
+			sanitizeValue(v, depth - 1, maxArrayLength, visited),
+		);
+	}
+
+	const obj = Object.create(null); // Prevent prototype pollution
+	for (const [k, v] of Object.entries(value)) {
+		if (typeof k === "string") {
+			obj[k] = sanitizeValue(v, depth - 1, maxArrayLength, visited);
+		}
+	}
+	return obj;
+}
+
 // TODO: cover with tests
 // ! high severity
 /**
