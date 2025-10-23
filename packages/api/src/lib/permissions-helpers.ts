@@ -95,6 +95,24 @@ function sanitizeValue(
 	return obj;
 }
 
+// Helper for building where clauses in role perm ops
+export function buildRolePermWhere(
+	roleId: string,
+	permissionId: string,
+	constraintId?: string,
+) {
+	const conditions = [
+		eq(rolePermissions.roleId, roleId),
+		eq(rolePermissions.permissionId, permissionId),
+	];
+	if (constraintId) {
+		conditions.push(eq(rolePermissions.constraintId, constraintId));
+	} else {
+		conditions.push(isNull(rolePermissions.constraintId));
+	}
+	return and(...conditions);
+}
+
 // TODO: cover with tests
 // ! high severity
 /**
