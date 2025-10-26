@@ -15,6 +15,8 @@ import {
 	sanitizeAttributes,
 } from "../../lib/permissions-helpers";
 
+// TODO: implement type-safe errors using the .errors() method on the routes
+
 /**
  * Assigns a permission to a role in a workspace.
  * @throws ORPCError if unauthorized, role not found, permission not found, or cycle detected
@@ -108,3 +110,56 @@ export const create = authedRouter
 
 		return created;
 	});
+
+/**
+ * Lists permissions for a role in a workspace with pagination.
+ * @throws ORPCError if unauthorized or role not found
+ */
+export const list = authedRouter
+	.input(
+		z.object({
+			roleId: z.string(),
+			workspaceId: z.string(),
+			limit: z.number().min(1).max(100).default(50),
+			offset: z.number().min(0).default(0),
+		}),
+	)
+	.handler(async ({ context, input }) => {
+		await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "role:read",
+		});
+
+		// Validate role
+		const [role] = await db
+			.select({ id: roleDefinitions.id })
+			.from(roleDefinitions)
+			.where(
+				and(
+					eq(roleDefinitions.id, input.roleId),
+					eq(roleDefinitions.workspaceId, input.workspaceId),
+				),
+			);
+		if (!role) {
+			throw new ORPCError("BAD_REQUEST", { message: "Role not found" });
+		}
+
+		const perms = await db
+			.select()
+			.from(rolePermissions)
+			.innerJoin(
+				permissionsCatalog,
+				eq(rolePermissions.permissionId, permissionsCatalog.id),
+			)
+			.where(eq(rolePermissions.roleId, input.roleId))
+			.limit(input.limit)
+			.offset(input.offset);
+
+		return perms;
+	});
+
+export const rolePermissionsRouter = {
+	create,
+	list,
+};
