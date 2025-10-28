@@ -36,11 +36,16 @@ export const create = authedRouter
 		}),
 	)
 	.handler(async ({ context, input }) => {
-		isAllowed({
+		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
 			permissionKey: "role:manage_permissions",
 		});
+		if (!allowed) {
+			throw new ORPCError("FORBIDDEN", {
+				message: "Unauthorized",
+			});
+		}
 
 		// Validate role exists in the workspace
 		const [role] = await db
@@ -125,11 +130,16 @@ export const list = authedRouter
 		}),
 	)
 	.handler(async ({ context, input }) => {
-		await isAllowed({
+		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
 			permissionKey: "role:read",
 		});
+		if (!allowed) {
+			throw new ORPCError("FORBIDDEN", {
+				message: "Unauthorized",
+			});
+		}
 
 		// Validate role
 		const [role] = await db
