@@ -169,7 +169,71 @@ export const list = authedRouter
 		return perms;
 	});
 
+/**
+ * Retrieves a specific role permission.
+ * @throws ORPCError if unauthorized or not found
+ */
+export const get = authedRouter
+	.input(
+		z.object({
+			roleId: z.string(),
+			workspaceId: z.string(),
+			permissionId: z.string(),
+			constraintId: z.string().optional(),
+		}),
+	)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "role:read",
+		});
+		if (!allowed) {
+			throw new ORPCError("FORBIDDEN", {
+				message: "Unauthorized",
+			});
+		}
+
+		// Validate role
+		const [role] = await db
+			.select({ id: roleDefinitions.id })
+			.from(roleDefinitions)
+			.where(
+				and(
+					eq(roleDefinitions.id, input.roleId),
+					eq(roleDefinitions.workspaceId, input.workspaceId),
+				),
+			);
+		if (!role) {
+			throw new ORPCError("BAD_REQUEST", { message: "Role not found" });
+		}
+
+		const [joined] = await db
+			.select()
+			.from(rolePermissions)
+			.innerJoin(
+				permissionsCatalog,
+				eq(rolePermissions.permissionId, permissionsCatalog.id),
+			)
+			.where(
+				buildRolePermWhere(
+					input.roleId,
+					input.permissionId,
+					input.constraintId,
+				),
+			);
+
+		if (!joined) {
+			throw new ORPCError("NOT_FOUND", {
+				message: "Role permission not found",
+			});
+		}
+
+		return joined;
+	});
+
 export const rolePermissionsRouter = {
 	create,
 	list,
+	get,
 };
