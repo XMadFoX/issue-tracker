@@ -232,8 +232,94 @@ export const get = authedRouter
 		return joined;
 	});
 
+/**
+ * Updates a role permission.
+ * @throws ORPCError if unauthorized or not found
+ */
+export const update = authedRouter
+	.input(
+		z.object({
+			roleId: z.string(),
+			workspaceId: z.string(),
+			permissionId: z.string(),
+			constraintId: z.string().optional(),
+			effect: z.enum(["allow", "deny"]).optional(),
+			attributes: z
+				.record(z.string(), z.unknown())
+				.optional()
+				.transform((val) => sanitizeAttributes(val || {})),
+		}),
+	)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "role:manage_permissions",
+		});
+		if (!allowed) {
+			throw new ORPCError("FORBIDDEN", {
+				message: "Unauthorized",
+			});
+		}
+
+		// Validate role
+		const [role] = await db
+			.select({ id: roleDefinitions.id })
+			.from(roleDefinitions)
+			.where(
+				and(
+					eq(roleDefinitions.id, input.roleId),
+					eq(roleDefinitions.workspaceId, input.workspaceId),
+				),
+			);
+		if (!role) {
+			throw new ORPCError("BAD_REQUEST", { message: "Role not found" });
+		}
+
+		// Validate existing (fetches the current row for potential rollback if needed, but cycle check not required for updates as permissionId doesn't change)
+		const existingQuery = await db
+			.select()
+			.from(rolePermissions)
+			.where(
+				buildRolePermWhere(
+					input.roleId,
+					input.permissionId,
+					input.constraintId,
+				),
+			);
+		if (existingQuery.length === 0) {
+			throw new ORPCError("NOT_FOUND", {
+				message: "Role permission not found",
+			});
+		}
+
+		const values = {
+			...(input.effect && { effect: input.effect }),
+			...(input.attributes && { attributes: input.attributes }),
+		};
+
+		if (Object.keys(values).length === 0) {
+			return existingQuery[0];
+		}
+
+		const [updated] = await db
+			.update(rolePermissions)
+			.set(values)
+			.where(
+				buildRolePermWhere(
+					input.roleId,
+					input.permissionId,
+					input.constraintId,
+				),
+			)
+			.returning();
+
+		return updated;
+	});
+
 export const rolePermissionsRouter = {
 	create,
 	list,
 	get,
+	update,
 };
