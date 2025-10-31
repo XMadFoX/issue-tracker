@@ -317,9 +317,78 @@ export const update = authedRouter
 		return updated;
 	});
 
+/**
+ * Deletes a role permission.
+ * @throws ORPCError if unauthorized or not found
+ */
+export const deletePerm = authedRouter
+	.input(
+		z.object({
+			roleId: z.string(),
+			workspaceId: z.string(),
+			permissionId: z.string(),
+			constraintId: z.string().optional(),
+		}),
+	)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "role:manage_permissions",
+		});
+		if (!allowed) {
+			throw new ORPCError("FORBIDDEN", {
+				message: "Unauthorized",
+			});
+		}
+
+		// Validate role
+		const [role] = await db
+			.select({ id: roleDefinitions.id })
+			.from(roleDefinitions)
+			.where(
+				and(
+					eq(roleDefinitions.id, input.roleId),
+					eq(roleDefinitions.workspaceId, input.workspaceId),
+				),
+			);
+		if (!role) {
+			throw new ORPCError("BAD_REQUEST", { message: "Role not found" });
+		}
+
+		const [existing] = await db
+			.select()
+			.from(rolePermissions)
+			.where(
+				buildRolePermWhere(
+					input.roleId,
+					input.permissionId,
+					input.constraintId,
+				),
+			);
+		if (!existing) {
+			throw new ORPCError("NOT_FOUND", {
+				message: "Role permission not found",
+			});
+		}
+
+		await db
+			.delete(rolePermissions)
+			.where(
+				buildRolePermWhere(
+					input.roleId,
+					input.permissionId,
+					input.constraintId,
+				),
+			);
+
+		return { success: true };
+	});
+
 export const rolePermissionsRouter = {
 	create,
 	list,
 	get,
 	update,
+	delete: deletePerm,
 };
