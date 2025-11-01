@@ -4,6 +4,7 @@ import { workspaceRouter } from "./features/workspaces/router";
 
 export const router = {
 	role: {
+		...roleRouter,
 		permissions: rolePermissionsRouter,
 	},
 	workspaceMembership: workspaceMembershipRouter,
