@@ -89,6 +89,38 @@ export const create = authedRouter
 		return createdRole;
 	});
 
+export const list = authedRouter
+	.input(z.object({ workspaceId: z.string(), teamId: z.string().optional() }))
+	.handler(async ({ context, input }) => {
+		const { teamId } = input;
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId: teamId || undefined,
+			permissionKey: "role:read",
+		});
+		if (!allowed) {
+			throw new ORPCError("Unauthorized to read roles in this workspace/team");
+		}
+
+		const whereClause: SQL[] = [];
+		if (teamId) {
+			whereClause.push(eq(roleDefinitions.teamId, teamId));
+			whereClause.push(eq(roleDefinitions.workspaceId, input.workspaceId));
+		} else {
+			whereClause.push(isNull(roleDefinitions.teamId));
+			whereClause.push(eq(roleDefinitions.workspaceId, input.workspaceId));
+		}
+
+		const roles = await db
+			.select()
+			.from(roleDefinitions)
+			.where(and(...whereClause));
+
+		return roles;
+	});
+
 export const roleRouter = {
 	create,
+	list,
 };
