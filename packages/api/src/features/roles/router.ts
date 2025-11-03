@@ -120,7 +120,40 @@ export const list = authedRouter
 		return roles;
 	});
 
+export const get = authedRouter
+	.input(
+		roleInsertSchema
+			.pick({ id: true, workspaceId: true })
+			.extend({ teamId: z.string().optional() }),
+	)
+	.handler(async ({ context, input }) => {
+		const { teamId } = input;
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId: teamId || undefined,
+			permissionKey: "role:read",
+		});
+		if (!allowed) {
+			throw new ORPCError("Unauthorized to read roles in this workspace/team");
+		}
+
+		const whereRole = eq(roleDefinitions.id, input.id);
+		const [role] = await db.select().from(roleDefinitions).where(whereRole);
+
+		if (!role || role.workspaceId !== input.workspaceId) {
+			throw new ORPCError("Role not found");
+		}
+
+		if (teamId && role.teamId !== teamId) {
+			throw new ORPCError("Role not found in specified team");
+		}
+
+		return role;
+	});
+
 export const roleRouter = {
 	create,
 	list,
+	get,
 };
