@@ -152,8 +152,61 @@ export const get = authedRouter
 		return role;
 	});
 
+const commonErrors = { UNAUTHORIZED: {} };
+const unauthorizedMessage = (action: "update" | "delete") =>
+	`You don't have permission to ${action} this role or the role doesn't exist`;
+
+const update = authedRouter
+	.input(
+		roleInsertSchema
+			.partial()
+			.required({ id: true, workspaceId: true })
+			.extend({ teamId: z.string().optional() }),
+	)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const { teamId } = input;
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId: teamId || undefined,
+			permissionKey: "role:update",
+		});
+		if (!allowed)
+			throw errors.UNAUTHORIZED({
+				message: unauthorizedMessage("update"),
+			});
+
+		const whereRole = eq(roleDefinitions.id, input.id);
+		const [existingRole] = await db
+			.select({
+				workspaceId: roleDefinitions.workspaceId,
+				teamId: roleDefinitions.teamId,
+			})
+			.from(roleDefinitions)
+			.where(whereRole);
+
+		if (!existingRole || existingRole.workspaceId !== input.workspaceId) {
+			throw new ORPCError("Role not found");
+		}
+
+		if (teamId && existingRole.teamId !== teamId) {
+			throw new ORPCError("Cannot update role across teams");
+		}
+
+		const values = omit(input, ["id", "workspaceId", "teamId"]);
+		const [updated] = await db
+			.update(roleDefinitions)
+			.set(values)
+			.where(whereRole)
+			.returning({ id: roleDefinitions.id });
+
+		return updated;
+	});
+
 export const roleRouter = {
 	create,
 	list,
 	get,
+	update,
 };
