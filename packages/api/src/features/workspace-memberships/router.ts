@@ -172,7 +172,44 @@ export const list = authedRouter
 		return memberships;
 	});
 
+export const get = authedRouter
+	.input(z.object({ id: z.string(), workspaceId: z.string() }))
+	.handler(async ({ context, input }) => {
+		const { id, workspaceId } = input;
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId,
+			permissionKey: "workspace:read_members",
+		});
+		if (!allowed) {
+			throw new ORPCError("Unauthorized to read workspace members");
+		}
+
+		const [membership] = await db
+			.select()
+			.from(workspaceMembership)
+			.innerJoin(user, eq(workspaceMembership.userId, user.id))
+			.innerJoin(
+				roleDefinitions,
+				eq(workspaceMembership.roleId, roleDefinitions.id),
+			)
+			.where(
+				and(
+					eq(workspaceMembership.id, id),
+					eq(workspaceMembership.workspaceId, workspaceId),
+				),
+			);
+
+		if (!membership) {
+			throw new ORPCError("Membership not found");
+		}
+
+		return membership;
+	});
+
 export const workspaceMembershipRouter = {
 	create,
 	list,
+	get,
 };
