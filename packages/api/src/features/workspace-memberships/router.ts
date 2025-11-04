@@ -144,6 +144,35 @@ export const create = authedRouter
 		return fullMembership;
 	});
 
+export const list = authedRouter
+	.input(z.object({ workspaceId: z.string() }))
+	.handler(async ({ context, input }) => {
+		const { workspaceId } = input;
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId,
+			permissionKey: "workspace:read_members",
+		});
+		if (!allowed) {
+			throw new ORPCError("Unauthorized to read workspace members");
+		}
+
+		const memberships = await db
+			.select()
+			.from(workspaceMembership)
+			.innerJoin(user, eq(workspaceMembership.userId, user.id))
+			.innerJoin(
+				roleDefinitions,
+				eq(workspaceMembership.roleId, roleDefinitions.id),
+			)
+			.where(eq(workspaceMembership.workspaceId, workspaceId))
+			.orderBy(asc(workspaceMembership.joinedAt)); // Ascending for chronological order
+
+		return memberships;
+	});
+
 export const workspaceMembershipRouter = {
 	create,
+	list,
 };
