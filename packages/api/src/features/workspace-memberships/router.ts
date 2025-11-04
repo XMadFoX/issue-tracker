@@ -302,9 +302,88 @@ const update = authedRouter
 		return fullMembership;
 	});
 
+const deleteMembership = authedRouter
+	.input(z.object({ id: z.string(), workspaceId: z.string() }))
+	.handler(async ({ context, input }) => {
+		const { id, workspaceId } = input;
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId,
+			permissionKey: "workspace:manage_members",
+		});
+		if (!allowed) {
+			throw new ORPCError("Unauthorized to delete workspace membership");
+		}
+
+		// Fetch to validate and prevent self-deletion
+		const [existing] = await db
+			.select({
+				userId: workspaceMembership.userId,
+				roleName: roleDefinitions.name,
+				status: workspaceMembership.status,
+			})
+			.from(workspaceMembership)
+			.innerJoin(
+				roleDefinitions,
+				eq(workspaceMembership.roleId, roleDefinitions.id),
+			)
+			.where(
+				and(
+					eq(workspaceMembership.id, id),
+					eq(workspaceMembership.workspaceId, workspaceId),
+				),
+			);
+
+		if (!existing) {
+			throw new ORPCError("Membership not found");
+		}
+
+		if (existing.userId === context.auth.session.userId) {
+			throw new ORPCError("Cannot delete own membership");
+		}
+
+		// Prevent deleting the last active admin to avoid locking out the workspace
+		// role name is not really reliable tho
+		if (existing.roleName === "admin" && existing.status === "active") {
+			const result = await db
+				.select({ count: count() })
+				.from(workspaceMembership)
+				.innerJoin(
+					roleDefinitions,
+					eq(workspaceMembership.roleId, roleDefinitions.id),
+				)
+				.where(
+					and(
+						eq(workspaceMembership.workspaceId, workspaceId),
+						eq(roleDefinitions.name, "admin"),
+						eq(workspaceMembership.status, "active"),
+						ne(workspaceMembership.id, id),
+					),
+				);
+
+			const remainingAdmins = result[0]?.count ?? 0;
+
+			if (remainingAdmins === 0) {
+				throw new ORPCError("Cannot delete the last admin of the workspace");
+			}
+		}
+
+		await db
+			.delete(workspaceMembership)
+			.where(
+				and(
+					eq(workspaceMembership.id, id),
+					eq(workspaceMembership.workspaceId, workspaceId),
+				),
+			);
+
+		return { success: true };
+	});
 export const workspaceMembershipRouter = {
 	create,
 	list,
 	get,
 	update,
+	delete: deleteMembership,
 };
