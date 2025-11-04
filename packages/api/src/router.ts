@@ -1,5 +1,6 @@
 import { rolePermissionsRouter } from "./features/permissions/router";
 import { teamRouter } from "./features/teams/router";
+import { workspaceMembershipRouter } from "./features/workspace-memberships/router";
 import { workspaceRouter } from "./features/workspaces/router";
 
 export const router = {
