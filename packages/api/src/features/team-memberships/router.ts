@@ -175,4 +175,46 @@ export const create = authedRouter
 		return fullMembership;
 	});
 
+/**
+ * Lists team memberships.
+ * @param input - Filter by teamId
+ * @returns Array of memberships with joined user, role, and team details
+ */
+export const list = authedRouter
+	.input(teamMembershipListSchema)
+	.handler(async ({ context, input }) => {
+		const { teamId } = input;
+
+		// Derive workspaceId from team
+		const [teamData] = await db
+			.select({ workspaceId: team.workspaceId })
+			.from(team)
+			.where(eq(team.id, teamId));
+		if (!teamData) {
+			throw new ORPCError("Team not found");
+		}
+		const workspaceId = teamData.workspaceId;
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId,
+			teamId,
+			permissionKey: "team:read_members",
+		});
+		if (!allowed) {
+			throw new ORPCError("Unauthorized to read team members");
+		}
+
+		const memberships = await db
+			.select()
+			.from(teamMembership)
+			.innerJoin(user, eq(teamMembership.userId, user.id))
+			.innerJoin(roleDefinitions, eq(teamMembership.roleId, roleDefinitions.id))
+			.innerJoin(team, eq(teamMembership.teamId, team.id))
+			.where(eq(teamMembership.teamId, teamId))
+			.orderBy(desc(teamMembership.joinedAt)); // Descending for recency
+
+		return memberships;
+	});
+
 export const teamMembershipRouter = {};
