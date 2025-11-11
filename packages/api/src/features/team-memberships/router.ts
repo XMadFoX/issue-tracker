@@ -217,4 +217,49 @@ export const list = authedRouter
 		return memberships;
 	});
 
+/**
+ * Gets a specific team membership.
+ * @param input - Membership id and teamId
+ * @returns The membership with joined user, role, and team details
+ */
+export const get = authedRouter
+	.input(teamMembershipGetSchema)
+	.handler(async ({ context, input }) => {
+		const { id, teamId } = input;
+
+		// Derive workspaceId from team
+		const [teamData] = await db
+			.select({ workspaceId: team.workspaceId })
+			.from(team)
+			.where(eq(team.id, teamId));
+		if (!teamData) {
+			throw new ORPCError("Team not found");
+		}
+		const workspaceId = teamData.workspaceId;
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId,
+			teamId,
+			permissionKey: "team:read_members",
+		});
+		if (!allowed) {
+			throw new ORPCError("Unauthorized to read team members");
+		}
+
+		const [membership] = await db
+			.select()
+			.from(teamMembership)
+			.innerJoin(user, eq(teamMembership.userId, user.id))
+			.innerJoin(roleDefinitions, eq(teamMembership.roleId, roleDefinitions.id))
+			.innerJoin(team, eq(teamMembership.teamId, team.id))
+			.where(and(eq(teamMembership.id, id), eq(teamMembership.teamId, teamId)));
+
+		if (!membership) {
+			throw new ORPCError("Membership not found");
+		}
+
+		return membership;
+	});
+
 export const teamMembershipRouter = {};
