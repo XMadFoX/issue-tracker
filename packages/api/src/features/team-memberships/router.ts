@@ -262,4 +262,104 @@ export const get = authedRouter
 		return membership;
 	});
 
+const commonErrors = { UNAUTHORIZED: {} };
+const unauthorizedMessage = (action: "update" | "delete") =>
+	`You don't have permission to ${action} this team membership`;
+
+/**
+ * Updates a team membership.
+ * @param input - Partial updates for membership
+ * @returns The updated membership with joined details
+ */
+const update = authedRouter
+	.input(teamMembershipUpdateSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const { id, teamId, roleId, status, attributes } = input;
+
+		// Derive workspaceId from team
+		const [teamData] = await db
+			.select({ workspaceId: team.workspaceId })
+			.from(team)
+			.where(eq(team.id, teamId));
+		if (!teamData) {
+			throw new ORPCError("Team not found");
+		}
+		const workspaceId = teamData.workspaceId;
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId,
+			teamId,
+			permissionKey: "team:manage_members",
+		});
+		if (!allowed)
+			throw errors.UNAUTHORIZED({
+				message: unauthorizedMessage("update"),
+			});
+
+		// Fetch existing to validate
+		const [existing] = await db
+			.select({ userId: teamMembership.userId })
+			.from(teamMembership)
+			.where(and(eq(teamMembership.id, id), eq(teamMembership.teamId, teamId)));
+
+		if (!existing) {
+			throw new ORPCError("Membership not found");
+		}
+
+		// Prevent updating own membership to inactive
+		if (
+			status === "inactive" &&
+			existing.userId === context.auth.session.userId
+		) {
+			throw new ORPCError("Cannot deactivate own membership");
+		}
+
+		// Validate new role if changing
+		if (roleId) {
+			const [role] = await db
+				.select({ id: roleDefinitions.id })
+				.from(roleDefinitions)
+				.where(
+					and(
+						eq(roleDefinitions.id, roleId),
+						eq(roleDefinitions.workspaceId, workspaceId),
+						eq(roleDefinitions.teamId, teamId),
+					),
+				);
+			if (!role) {
+				throw new ORPCError("Invalid role for this team");
+			}
+		}
+
+		const values = {
+			...(roleId && { roleId }),
+			...(status && { status }),
+			...(attributes && { attributes: sanitizeAttributes(attributes) }),
+			...(status === "active" && { lastSeenAt: new Date() }),
+		};
+
+		const [updated] = await db
+			.update(teamMembership)
+			.set(values)
+			.where(and(eq(teamMembership.id, id), eq(teamMembership.teamId, teamId)))
+			.returning();
+
+		if (!updated) {
+			throw new ORPCError("Failed to update team membership");
+		}
+
+		// Return full updated membership with joins
+		const [fullMembership] = await db
+			.select()
+			.from(teamMembership)
+			.innerJoin(user, eq(teamMembership.userId, user.id))
+			.innerJoin(roleDefinitions, eq(teamMembership.roleId, roleDefinitions.id))
+			.innerJoin(team, eq(teamMembership.teamId, team.id))
+			.where(eq(teamMembership.id, id));
+
+		return fullMembership;
+	});
+
 export const teamMembershipRouter = {};
