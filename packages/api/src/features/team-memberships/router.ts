@@ -362,4 +362,90 @@ const update = authedRouter
 		return fullMembership;
 	});
 
-export const teamMembershipRouter = {};
+/**
+ * Deletes a team membership.
+ * @param input - Membership id and teamId
+ * @returns Success confirmation
+ */
+const deleteMembership = authedRouter
+	.input(teamMembershipDeleteSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const { id, teamId } = input;
+
+		// Derive workspaceId from team
+		const [teamData] = await db
+			.select({ workspaceId: team.workspaceId })
+			.from(team)
+			.where(eq(team.id, teamId));
+		if (!teamData) {
+			throw new ORPCError("Team not found");
+		}
+		const workspaceId = teamData.workspaceId;
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId,
+			teamId,
+			permissionKey: "team:manage_members",
+		});
+		if (!allowed)
+			throw errors.UNAUTHORIZED({
+				message: unauthorizedMessage("delete"),
+			});
+
+		// Fetch to validate and prevent self-deletion
+		const [existing] = await db
+			.select({
+				userId: teamMembership.userId,
+				roleName: roleDefinitions.name,
+				status: teamMembership.status,
+			})
+			.from(teamMembership)
+			.innerJoin(roleDefinitions, eq(teamMembership.roleId, roleDefinitions.id))
+			.where(and(eq(teamMembership.id, id), eq(teamMembership.teamId, teamId)));
+
+		if (!existing) {
+			throw new ORPCError("Membership not found");
+		}
+
+		if (existing.userId === context.auth.session.userId) {
+			throw new ORPCError("Cannot delete own membership");
+		}
+
+		// Prevent deleting last active lead/admin if applicable (assuming 'lead' role or similar)
+		if (existing.roleName === "lead" && existing.status === "active") {
+			const [leadCount] = await db
+				.select({ count: count() })
+				.from(teamMembership)
+				.innerJoin(
+					roleDefinitions,
+					eq(teamMembership.roleId, roleDefinitions.id),
+				)
+				.where(
+					and(
+						eq(teamMembership.teamId, teamId),
+						eq(roleDefinitions.name, "lead"),
+						eq(teamMembership.status, "active"),
+						ne(teamMembership.id, id),
+					),
+				);
+			if (Number(leadCount?.count) === 0) {
+				throw new ORPCError("Cannot delete the last lead of the team");
+			}
+		}
+
+		await db
+			.delete(teamMembership)
+			.where(and(eq(teamMembership.id, id), eq(teamMembership.teamId, teamId)));
+
+		return { success: true, message: "Team membership deleted successfully" };
+	});
+
+export const teamMembershipRouter = {
+	create,
+	list,
+	get,
+	update,
+	delete: deleteMembership,
+};
