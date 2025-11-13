@@ -52,7 +52,7 @@ export const workspaceMembership = pgTable(
 		userId: text("user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		roleId: uuid("role_id") // changed to roleId referencing roleDefinitions
+		roleId: text("role_id")
 			.notNull()
 			.references(() => roleDefinitions.id, { onDelete: "cascade" }),
 		attributes: jsonb("attributes")
@@ -154,15 +154,21 @@ export const teamMembership = pgTable(
 		userId: text("user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		role: text("role").notNull(),
+		roleId: text("role_id")
+			.notNull()
+			.references(() => roleDefinitions.id, { onDelete: "cascade" }),
+		status: text("status").default("active").notNull(),
+		invitedBy: text("invited_by").references(() => user.id, {
+			onDelete: "set null",
+		}),
 		attributes: jsonb("attributes")
 			.$type<Record<string, unknown>>()
 			.default({})
 			.notNull(),
-		isDefault: boolean("is_default").notNull().default(false),
 		joinedAt: timestamp("joined_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
+		lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
 	},
 	(table) => [
 		uniqueIndex("team_membership_team_user_key").on(table.teamId, table.userId),
@@ -177,5 +183,13 @@ export const teamMembershipRelations = relations(teamMembership, ({ one }) => ({
 	user: one(user, {
 		fields: [teamMembership.userId],
 		references: [user.id],
+	}),
+	invitedBy: one(user, {
+		fields: [teamMembership.invitedBy],
+		references: [user.id],
+	}),
+	role: one(roleDefinitions, {
+		fields: [teamMembership.roleId],
+		references: [roleDefinitions.id],
 	}),
 }));
