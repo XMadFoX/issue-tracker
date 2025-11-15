@@ -16,13 +16,53 @@ import { isAllowed } from "../../lib/abac";
 import { teamInsertSchema } from "../teams/router";
 
 export const roleScopeLevelEnumSchema = createSelectSchema(roleScopeLevelEnum);
-export const roleInsertSchema = createInsertSchema(roleDefinitions).extend({
-	teamId: teamInsertSchema.shape.id.optional(),
-	scopeLevel: roleScopeLevelEnumSchema.optional(),
-});
+export const roleInsertSchema = createInsertSchema(roleDefinitions);
+
+export const roleCreateSchema = roleInsertSchema
+	.omit({
+		id: true,
+		createdBy: true,
+	})
+	.extend({
+		teamId: teamInsertSchema.shape.id.optional(),
+		scopeLevel: roleScopeLevelEnumSchema.optional(),
+	});
+
+export const roleListSchema = roleInsertSchema
+	.pick({
+		workspaceId: true,
+	})
+	.extend({
+		teamId: z.string().optional(),
+	});
+
+export const roleGetSchema = roleInsertSchema
+	.pick({
+		id: true,
+		workspaceId: true,
+	})
+	.extend({
+		teamId: z.string().optional(),
+	});
+
+export const roleUpdateSchema = roleInsertSchema
+	.partial()
+	.required({ id: true, workspaceId: true })
+	.extend({
+		teamId: z.string().optional(),
+	});
+
+export const roleDeleteSchema = roleInsertSchema
+	.pick({
+		id: true,
+		workspaceId: true,
+	})
+	.extend({
+		teamId: z.string().optional(),
+	});
 
 export const create = authedRouter
-	.input(roleInsertSchema.omit({ id: true, createdBy: true }))
+	.input(roleCreateSchema)
 	.handler(async ({ context, input }) => {
 		const { teamId, scopeLevel, ...rest } = input;
 		if (teamId && scopeLevel !== "team") {
@@ -90,7 +130,7 @@ export const create = authedRouter
 	});
 
 export const list = authedRouter
-	.input(z.object({ workspaceId: z.string(), teamId: z.string().optional() }))
+	.input(roleListSchema)
 	.handler(async ({ context, input }) => {
 		const { teamId } = input;
 		const allowed = await isAllowed({
@@ -121,11 +161,7 @@ export const list = authedRouter
 	});
 
 export const get = authedRouter
-	.input(
-		roleInsertSchema
-			.pick({ id: true, workspaceId: true })
-			.extend({ teamId: z.string().optional() }),
-	)
+	.input(roleGetSchema)
 	.handler(async ({ context, input }) => {
 		const { teamId } = input;
 		const allowed = await isAllowed({
@@ -157,12 +193,7 @@ const unauthorizedMessage = (action: "update" | "delete") =>
 	`You don't have permission to ${action} this role or the role doesn't exist`;
 
 const update = authedRouter
-	.input(
-		roleInsertSchema
-			.partial()
-			.required({ id: true, workspaceId: true })
-			.extend({ teamId: z.string().optional() }),
-	)
+	.input(roleUpdateSchema)
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
 		const { teamId } = input;
@@ -205,11 +236,7 @@ const update = authedRouter
 	});
 
 const deleteRole = authedRouter
-	.input(
-		roleInsertSchema
-			.pick({ id: true, workspaceId: true })
-			.extend({ teamId: z.string().optional() }),
-	)
+	.input(roleDeleteSchema)
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
 		const { teamId } = input;

@@ -16,6 +16,11 @@ import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 
 export const workspaceInsertSchema = createInsertSchema(workspace);
+export const workspaceCreateSchema = workspaceInsertSchema.omit({ id: true });
+export const workspaceUpdateSchema = workspaceInsertSchema
+	.partial()
+	.required({ id: true });
+export const workspaceDeleteSchema = workspaceInsertSchema.pick({ id: true });
 
 export const list = authedRouter.handler(async ({ context }) => {
 	const userWorkspaces = await db
@@ -28,7 +33,7 @@ export const list = authedRouter.handler(async ({ context }) => {
 });
 
 export const create = authedRouter
-	.input(workspaceInsertSchema.omit({ id: true }))
+	.input(workspaceCreateSchema)
 	.handler(async ({ context, input }) => {
 		return await db.transaction(async (tx) => {
 			const [createdWorkspace] = await tx
@@ -103,7 +108,7 @@ const unauthorizedMessage = (action: "update" | "delete") =>
 	`You don't have permission to ${action} this workspace or the workspace doesn't exist`;
 
 const update = authedRouter
-	.input(workspaceInsertSchema.partial().required({ id: true }))
+	.input(workspaceUpdateSchema)
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({
@@ -123,7 +128,7 @@ const update = authedRouter
 	});
 
 const deleteWorkspace = authedRouter
-	.input(workspaceInsertSchema.pick({ id: true }))
+	.input(workspaceDeleteSchema)
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({

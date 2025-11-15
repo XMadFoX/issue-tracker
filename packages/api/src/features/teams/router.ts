@@ -15,6 +15,19 @@ import { workspaceInsertSchema } from "../workspaces/router";
 
 export const teamInsertSchema = createInsertSchema(team);
 
+export const teamCreateSchema = teamInsertSchema.omit({ id: true });
+
+export const teamListSchema = workspaceInsertSchema.pick({ id: true });
+
+export const teamUpdateSchema = teamInsertSchema
+	.partial()
+	.required({ id: true, workspaceId: true });
+
+export const teamDeleteSchema = teamInsertSchema.pick({
+	id: true,
+	workspaceId: true,
+});
+
 export const listUserTeams = authedRouter.handler(async ({ context }) => {
 	const userTeams = await db
 		.select({ team })
@@ -26,7 +39,7 @@ export const listUserTeams = authedRouter.handler(async ({ context }) => {
 });
 
 export const listUserTeamsByWorkspace = authedRouter
-	.input(workspaceInsertSchema.pick({ id: true }))
+	.input(teamListSchema)
 	.handler(async ({ context, input }) => {
 		const [list] = await db
 			.select({ team })
@@ -44,7 +57,7 @@ export const listUserTeamsByWorkspace = authedRouter
 	});
 
 export const listByWorkspace = authedRouter
-	.input(workspaceInsertSchema.pick({ id: true }))
+	.input(teamListSchema)
 	.handler(async ({ context, input }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
@@ -68,7 +81,7 @@ export const listByWorkspace = authedRouter
 	});
 
 export const create = authedRouter
-	.input(teamInsertSchema.omit({ id: true }))
+	.input(teamCreateSchema)
 	.handler(async ({ context, input }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
@@ -99,7 +112,7 @@ const unauthorizedMessage = (action: "update" | "delete") =>
 	`You don't have permission to ${action} this team or the team doesn't exist`;
 
 const update = authedRouter
-	.input(teamInsertSchema.partial().required({ id: true, workspaceId: true }))
+	.input(teamUpdateSchema)
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({
@@ -126,7 +139,7 @@ const update = authedRouter
 	});
 
 const deleteTeam = authedRouter
-	.input(teamInsertSchema.pick({ id: true, workspaceId: true }))
+	.input(teamDeleteSchema)
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({

@@ -6,6 +6,7 @@ import {
 	rolePermissions,
 } from "db/features/abac/abac.schema";
 import { and, eq } from "drizzle-orm";
+import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
@@ -17,24 +18,59 @@ import {
 
 // TODO: implement type-safe errors using the .errors() method on the routes
 
+export const rolePermissionsInsertSchema = createInsertSchema(rolePermissions);
+
+export const rolePermissionsCreateSchema = z.object({
+	roleId: z.string(),
+	workspaceId: z.string(),
+	permissionId: z.string(),
+	effect: z.enum(["allow", "deny"]),
+	constraintId: z.string().optional(),
+	attributes: z
+		.record(z.string(), z.unknown())
+		.optional()
+		.transform((val) => sanitizeAttributes(val || {})),
+});
+
+export const rolePermissionsListSchema = z.object({
+	roleId: z.string(),
+	workspaceId: z.string(),
+	limit: z.number().min(1).max(100).default(50),
+	offset: z.number().min(0).default(0),
+});
+
+export const rolePermissionsGetSchema = z.object({
+	roleId: z.string(),
+	workspaceId: z.string(),
+	permissionId: z.string(),
+	constraintId: z.string().optional(),
+});
+
+export const rolePermissionsUpdateSchema = z.object({
+	roleId: z.string(),
+	workspaceId: z.string(),
+	permissionId: z.string(),
+	constraintId: z.string().optional(),
+	effect: z.enum(["allow", "deny"]).optional(),
+	attributes: z
+		.record(z.string(), z.unknown())
+		.optional()
+		.transform((val) => sanitizeAttributes(val || {})),
+});
+
+export const rolePermissionsDeleteSchema = z.object({
+	roleId: z.string(),
+	workspaceId: z.string(),
+	permissionId: z.string(),
+	constraintId: z.string().optional(),
+});
+
 /**
  * Assigns a permission to a role in a workspace.
  * @throws ORPCError if unauthorized, role not found, permission not found, or cycle detected
  */
 export const create = authedRouter
-	.input(
-		z.object({
-			roleId: z.string(),
-			workspaceId: z.string(),
-			permissionId: z.string(),
-			effect: z.enum(["allow", "deny"]),
-			constraintId: z.string().optional(),
-			attributes: z
-				.record(z.string(), z.unknown())
-				.optional()
-				.transform((val) => sanitizeAttributes(val || {})),
-		}),
-	)
+	.input(rolePermissionsCreateSchema)
 	.handler(async ({ context, input }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
@@ -121,14 +157,7 @@ export const create = authedRouter
  * @throws ORPCError if unauthorized or role not found
  */
 export const list = authedRouter
-	.input(
-		z.object({
-			roleId: z.string(),
-			workspaceId: z.string(),
-			limit: z.number().min(1).max(100).default(50),
-			offset: z.number().min(0).default(0),
-		}),
-	)
+	.input(rolePermissionsListSchema)
 	.handler(async ({ context, input }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
@@ -174,14 +203,7 @@ export const list = authedRouter
  * @throws ORPCError if unauthorized or not found
  */
 export const get = authedRouter
-	.input(
-		z.object({
-			roleId: z.string(),
-			workspaceId: z.string(),
-			permissionId: z.string(),
-			constraintId: z.string().optional(),
-		}),
-	)
+	.input(rolePermissionsGetSchema)
 	.handler(async ({ context, input }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
@@ -237,19 +259,7 @@ export const get = authedRouter
  * @throws ORPCError if unauthorized or not found
  */
 export const update = authedRouter
-	.input(
-		z.object({
-			roleId: z.string(),
-			workspaceId: z.string(),
-			permissionId: z.string(),
-			constraintId: z.string().optional(),
-			effect: z.enum(["allow", "deny"]).optional(),
-			attributes: z
-				.record(z.string(), z.unknown())
-				.optional()
-				.transform((val) => sanitizeAttributes(val || {})),
-		}),
-	)
+	.input(rolePermissionsUpdateSchema)
 	.handler(async ({ context, input }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
@@ -322,14 +332,7 @@ export const update = authedRouter
  * @throws ORPCError if unauthorized or not found
  */
 export const deletePerm = authedRouter
-	.input(
-		z.object({
-			roleId: z.string(),
-			workspaceId: z.string(),
-			permissionId: z.string(),
-			constraintId: z.string().optional(),
-		}),
-	)
+	.input(rolePermissionsDeleteSchema)
 	.handler(async ({ context, input }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,

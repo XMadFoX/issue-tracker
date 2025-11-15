@@ -17,14 +17,32 @@ import { roleInsertSchema } from "../roles/router";
 export const workspaceMembershipInsertSchema =
 	createInsertSchema(workspaceMembership);
 
+export const workspaceMembershipCreateSchema = workspaceMembershipInsertSchema
+	.omit({ id: true, joinedAt: true, lastSeenAt: true })
+	.extend({
+		roleId: roleInsertSchema.shape.id.optional(), // Optional, can be auto-assigned
+	});
+
+export const workspaceMembershipListSchema = z.object({
+	workspaceId: z.string(),
+});
+
+export const workspaceMembershipGetSchema = z.object({
+	id: z.string(),
+	workspaceId: z.string(),
+});
+
+export const workspaceMembershipUpdateSchema = workspaceMembershipInsertSchema
+	.partial()
+	.required({ id: true, workspaceId: true });
+
+export const workspaceMembershipDeleteSchema = z.object({
+	id: z.string(),
+	workspaceId: z.string(),
+});
+
 export const create = authedRouter
-	.input(
-		workspaceMembershipInsertSchema
-			.omit({ id: true, joinedAt: true, lastSeenAt: true })
-			.extend({
-				roleId: roleInsertSchema.shape.id.optional(), // Optional, can be auto-assigned
-			}),
-	)
+	.input(workspaceMembershipCreateSchema)
 	.handler(async ({ context, input }) => {
 		const {
 			workspaceId,
@@ -145,7 +163,7 @@ export const create = authedRouter
 	});
 
 export const list = authedRouter
-	.input(z.object({ workspaceId: z.string() }))
+	.input(workspaceMembershipListSchema)
 	.handler(async ({ context, input }) => {
 		const { workspaceId } = input;
 
@@ -173,7 +191,7 @@ export const list = authedRouter
 	});
 
 export const get = authedRouter
-	.input(z.object({ id: z.string(), workspaceId: z.string() }))
+	.input(workspaceMembershipGetSchema)
 	.handler(async ({ context, input }) => {
 		const { id, workspaceId } = input;
 
@@ -209,11 +227,7 @@ export const get = authedRouter
 	});
 
 const update = authedRouter
-	.input(
-		workspaceMembershipInsertSchema
-			.partial()
-			.required({ id: true, workspaceId: true }),
-	)
+	.input(workspaceMembershipUpdateSchema)
 	.handler(async ({ context, input }) => {
 		const { id, workspaceId, roleId, status, attributes } = input;
 
@@ -303,7 +317,7 @@ const update = authedRouter
 	});
 
 const deleteMembership = authedRouter
-	.input(z.object({ id: z.string(), workspaceId: z.string() }))
+	.input(workspaceMembershipDeleteSchema)
 	.handler(async ({ context, input }) => {
 		const { id, workspaceId } = input;
 
