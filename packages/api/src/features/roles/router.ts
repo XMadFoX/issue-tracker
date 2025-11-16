@@ -1,65 +1,19 @@
 import { ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
-import {
-	roleAssignments,
-	roleDefinitions,
-	roleScopeLevelEnum,
-} from "db/features/abac/abac.schema";
+import { roleAssignments, roleDefinitions } from "db/features/abac/abac.schema";
 import { team } from "db/features/tracker/tracker.schema";
 import { and, count, eq, isNull, type SQL } from "drizzle-orm";
-import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { omit } from "remeda";
-import { z } from "zod/v4";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
-import { teamInsertSchema } from "../teams/router";
-
-export const roleScopeLevelEnumSchema = createSelectSchema(roleScopeLevelEnum);
-export const roleInsertSchema = createInsertSchema(roleDefinitions);
-
-export const roleCreateSchema = roleInsertSchema
-	.omit({
-		id: true,
-		createdBy: true,
-	})
-	.extend({
-		teamId: teamInsertSchema.shape.id.optional(),
-		scopeLevel: roleScopeLevelEnumSchema.optional(),
-	});
-
-export const roleListSchema = roleInsertSchema
-	.pick({
-		workspaceId: true,
-	})
-	.extend({
-		teamId: z.string().optional(),
-	});
-
-export const roleGetSchema = roleInsertSchema
-	.pick({
-		id: true,
-		workspaceId: true,
-	})
-	.extend({
-		teamId: z.string().optional(),
-	});
-
-export const roleUpdateSchema = roleInsertSchema
-	.partial()
-	.required({ id: true, workspaceId: true })
-	.extend({
-		teamId: z.string().optional(),
-	});
-
-export const roleDeleteSchema = roleInsertSchema
-	.pick({
-		id: true,
-		workspaceId: true,
-	})
-	.extend({
-		teamId: z.string().optional(),
-	});
+import {
+	roleCreateSchema,
+	roleDeleteSchema,
+	roleGetSchema,
+	roleListSchema,
+	roleUpdateSchema,
+} from "./schema";
 
 export const create = authedRouter
 	.input(roleCreateSchema)

@@ -7,26 +7,15 @@ import {
 	workspace,
 } from "db/features/tracker/tracker.schema";
 import { and, eq } from "drizzle-orm";
-import { createInsertSchema } from "drizzle-zod";
 import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
-import { workspaceInsertSchema } from "../workspaces/router";
-
-export const teamInsertSchema = createInsertSchema(team);
-
-export const teamCreateSchema = teamInsertSchema.omit({ id: true });
-
-export const teamListSchema = workspaceInsertSchema.pick({ id: true });
-
-export const teamUpdateSchema = teamInsertSchema
-	.partial()
-	.required({ id: true, workspaceId: true });
-
-export const teamDeleteSchema = teamInsertSchema.pick({
-	id: true,
-	workspaceId: true,
-});
+import {
+	teamCreateSchema,
+	teamDeleteSchema,
+	teamListSchema,
+	teamUpdateSchema,
+} from "./schema";
 
 export const listUserTeams = authedRouter.handler(async ({ context }) => {
 	const userTeams = await db

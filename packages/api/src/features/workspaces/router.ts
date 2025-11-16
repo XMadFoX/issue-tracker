@@ -11,16 +11,13 @@ import {
 	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
 import { eq } from "drizzle-orm";
-import { createInsertSchema } from "drizzle-zod";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
-
-export const workspaceInsertSchema = createInsertSchema(workspace);
-export const workspaceCreateSchema = workspaceInsertSchema.omit({ id: true });
-export const workspaceUpdateSchema = workspaceInsertSchema
-	.partial()
-	.required({ id: true });
-export const workspaceDeleteSchema = workspaceInsertSchema.pick({ id: true });
+import {
+	workspaceCreateSchema,
+	workspaceDeleteSchema,
+	workspaceUpdateSchema,
+} from "./schema";
 
 export const list = authedRouter.handler(async ({ context }) => {
 	const userWorkspaces = await db
