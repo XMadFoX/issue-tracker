@@ -99,7 +99,7 @@ function sanitizeValue(
 export function buildRolePermWhere(
 	roleId: string,
 	permissionId: string,
-	constraintId?: string,
+	constraintId?: string | null,
 ) {
 	const conditions = [
 		eq(rolePermissions.roleId, roleId),
