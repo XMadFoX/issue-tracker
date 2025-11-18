@@ -7,7 +7,13 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!packages/db/drizzle", "!data", "!.direnv"]
+		"includes": [
+			"**",
+			"!packages/db/drizzle",
+			"!apps/tanstack-web/app/routeTree.gen.ts",
+			"!data",
+			"!.direnv"
+		]
 	},
 	"formatter": { "enabled": true, "indentStyle": "tab" },
 	"linter": {
