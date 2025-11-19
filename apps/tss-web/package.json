@@ -19,6 +19,7 @@
 		"@orpc/server": "^1.7.5",
 		"@orpc/tanstack-query": "^1.7.5",
 		"@orpc/zod": "^1.7.5",
+		"@prism/ui": "workspace:^",
 		"@radix-ui/react-label": "^2.1.8",
 		"@radix-ui/react-select": "^2.2.6",
 		"@radix-ui/react-slider": "^1.3.6",

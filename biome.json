@@ -10,6 +10,7 @@
 		"includes": [
 			"**",
 			"!packages/db/drizzle",
+			"!packages/ui/src/components",
 			"!apps/tanstack-web/app/routeTree.gen.ts",
 			"!data",
 			"!.direnv"
