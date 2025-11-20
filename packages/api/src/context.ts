@@ -5,20 +5,27 @@ import type { auth } from "./lib/auth";
 type AuthBase = Awaited<ReturnType<typeof auth.api.getSession>>;
 
 interface ORPCContext extends ResponseHeadersPluginContext {
-	auth: AuthBase;
 	headers: Headers;
+}
+
+interface AuthedORPCContext extends ORPCContext {
+	auth: AuthBase;
 }
 
 export const base = os.$context<ORPCContext>();
 
-export const authMiddleware = base.middleware(async ({ context, next }) => {
-	if (!context.auth) {
-		throw new ORPCError("UNAUTHORIZED");
-	}
+export const authMiddleware = base
+	.$context<AuthedORPCContext>()
+	.middleware(async ({ context, next }) => {
+		if (!context.auth) {
+			throw new ORPCError("UNAUTHORIZED");
+		}
 
-	return await next({
-		context: { auth: context.auth },
+		return await next({
+			context: { auth: context.auth },
+		});
 	});
-});
 
-export const authedRouter = base.use(authMiddleware);
+export const authedRouter = base
+	.$context<AuthedORPCContext>()
+	.use(authMiddleware);
