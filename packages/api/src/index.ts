@@ -34,7 +34,7 @@ const betterAuthView = (context: Context) => {
 	}
 };
 
-const port = process.env.PORT ?? 3000;
+const port = env.PORT;
 new Elysia()
 	.all(
 		"/rpc*",
