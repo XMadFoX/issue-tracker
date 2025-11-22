@@ -6,7 +6,7 @@ import {
 } from "db/features/abac/abac.schema";
 import { workspaceMembership } from "db/features/tracker/tracker.schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { z } from "zod/v4";
+import { z } from "zod";
 
 const DEFAULT_MAX_DEPTH = 2;
 const DEFAULT_MAX_ARRAY_LENGTH = 10;
