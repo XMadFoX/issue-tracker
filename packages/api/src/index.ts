@@ -8,6 +8,7 @@ import { Elysia } from "elysia";
 import { env } from "./env";
 import { auth } from "./lib/auth";
 import { router } from "./router";
+export { router };
 
 const handler = new OpenAPIHandler(router, {
 	plugins: [

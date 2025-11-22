@@ -12,7 +12,11 @@ const config = defineConfig({
 		nitro(),
 		// this is the plugin that enables path aliases
 		viteTsConfigPaths({
-			projects: ["./tsconfig.json", "../../packages/ui/tsconfig.json"],
+			projects: [
+				"./tsconfig.json",
+				"../../packages/ui/tsconfig.json",
+				"../../packages/api/tsconfig.json",
+			],
 		}),
 		tailwindcss(),
 		tanstackStart(),
