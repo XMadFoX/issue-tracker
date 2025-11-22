@@ -1,9 +1,11 @@
+import { cors } from "@elysiajs/cors";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import type { Context } from "@orpc/server";
 import { CORSPlugin, ResponseHeadersPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod";
 import { Elysia } from "elysia";
+import { env } from "./env";
 import { auth } from "./lib/auth";
 import { router } from "./router";
 
@@ -36,6 +38,7 @@ const betterAuthView = (context: Context) => {
 
 const port = env.PORT;
 new Elysia()
+	.use(cors({ origin: env.CORS_ORIGINS }))
 	.all(
 		"/rpc*",
 		async ({ request }: { request: Request }) => {

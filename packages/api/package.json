@@ -12,6 +12,7 @@
 	"license": "ISC",
 	"packageManager": "pnpm@10.17.1",
 	"dependencies": {
+		"@elysiajs/cors": "^1.4.0",
 		"@orpc/openapi": "^1.9.3",
 		"@orpc/server": "^1.9.3",
 		"@orpc/zod": "^1.9.3",
