@@ -10,6 +10,10 @@ const schema = z.object({
 	password: z.string().min(8),
 });
 
+const signUpSchema = schema.extend({
+	name: z.string().min(1),
+});
+
 export function SignInForm() {
 	const form = useAppForm({
 		defaultValues: {
@@ -54,6 +58,44 @@ export function SignInForm() {
 						) : null
 					}
 				</form.Subscribe>
+			</form>
+		</div>
+	);
+}
+export function SignUpForm() {
+	const form = useAppForm({
+		defaultValues: {
+			name: "",
+			email: "",
+			password: "",
+		},
+		validators: {
+			onSubmit: signUpSchema,
+		},
+		onSubmit: async ({ value: values }) => {
+			await signUp.email({ ...values });
+		},
+	});
+
+	return (
+		<div>
+			<form
+				onSubmit={(e) => {
+					e.preventDefault();
+					form.handleSubmit();
+				}}
+				className="flex flex-col gap-4"
+			>
+				<form.AppField name="email">
+					{(field) => <field.Input label="Email" type="email" />}
+				</form.AppField>
+				<form.AppField name="name">
+					{(field) => <field.Input label="Name" />}
+				</form.AppField>
+				<form.AppField name="password">
+					{(field) => <field.Input label="Password" type="password" />}
+				</form.AppField>
+				<Button type="submit">Sign Up</Button>
 			</form>
 		</div>
 	);
