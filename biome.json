@@ -11,7 +11,7 @@
 			"**",
 			"!packages/db/drizzle",
 			"!packages/ui/src/components",
-			"!apps/tanstack-web/app/routeTree.gen.ts",
+			"!apps/tss-web/src/routeTree.gen.ts",
 			"!data",
 			"!.direnv"
 		]
