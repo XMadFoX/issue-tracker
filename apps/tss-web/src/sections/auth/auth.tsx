@@ -112,7 +112,12 @@ export function SignUpForm() {
 			onSubmit: signUpSchema,
 		},
 		onSubmit: async ({ value: values }) => {
-			await signUp.email({ ...values });
+			const res = await signUp.email({ ...values });
+			if (res.error) {
+				const errMsg = res.error.message;
+				form.setErrorMap({ onSubmit: { form: errMsg, fields: {} } });
+				return { form: errMsg };
+			}
 			navigate({ to: "/" });
 		},
 	});
