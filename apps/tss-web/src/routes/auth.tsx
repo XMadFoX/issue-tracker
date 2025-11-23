@@ -15,7 +15,7 @@ function RouteComponent() {
 	const { initialMode } = Route.useSearch();
 
 	return (
-		<div>
+		<div className="flex flex-col items-center justify-center max-w-md mx-auto my-auto">
 			<AuthForm initialMode={initialMode} />
 		</div>
 	);
