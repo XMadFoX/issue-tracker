@@ -14,24 +14,27 @@ const signUpSchema = schema.extend({
 	name: z.string().min(1),
 });
 
-export default function AuthForm() {
-	const [mode, setMode] = useState<"login" | "register">("login");
+export const modeSchema = z.enum(["signin", "signup"]);
+type AuthMode = z.infer<typeof modeSchema>;
+
+export default function AuthForm({ initialMode }: { initialMode?: AuthMode }) {
+	const [mode, setMode] = useState<AuthMode>(initialMode || "signin");
 
 	return (
 		<div className="flex flex-col gap-">
-			{mode === "login" ? <SignInForm /> : <SignUpForm />}
+			{mode === "signin" ? <SignInForm /> : <SignUpForm />}
 			<div className="h-px bg-muted/50 my-3 w-full" />
 			<div className="text-center text-sm text-muted-foreground">
-				{mode === "login"
+				{mode === "signin"
 					? "Don't have an account? "
 					: "Already have an account? "}
 				<Button
 					variant="link"
 					type="button"
 					className="p-0 h-auto"
-					onClick={() => setMode(mode === "login" ? "register" : "login")}
+					onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
 				>
-					{mode === "login" ? "Sign up" : "Sign in"}
+					{mode === "signin" ? "Sign up" : "Sign in"}
 				</Button>
 			</div>
 		</div>
