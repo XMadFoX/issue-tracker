@@ -1,4 +1,3 @@
-import { cors } from "@elysiajs/cors";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import type { Context } from "@orpc/server";
@@ -12,7 +11,7 @@ export { router };
 
 const handler = new OpenAPIHandler(router, {
 	plugins: [
-		new CORSPlugin(),
+		new CORSPlugin({ origin: env.CORS_ORIGINS, credentials: true }),
 		new ResponseHeadersPlugin(),
 		new OpenAPIReferencePlugin({
 			docsProvider: "scalar",
@@ -39,7 +38,6 @@ const betterAuthView = (context: Context) => {
 
 const port = env.PORT;
 new Elysia()
-	.use(cors({ origin: env.CORS_ORIGINS }))
 	.all(
 		"/rpc*",
 		async ({ request }: { request: Request }) => {
