@@ -1,6 +1,7 @@
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import type { Context } from "@orpc/server";
+import { RPCHandler } from "@orpc/server/fetch";
 import { CORSPlugin, ResponseHeadersPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod";
 import { Elysia } from "elysia";
@@ -26,6 +27,13 @@ const handler = new OpenAPIHandler(router, {
 	],
 });
 
+const handlerRPC = new RPCHandler(router, {
+	plugins: [
+		new CORSPlugin({ origin: env.CORS_ORIGINS, credentials: true }),
+		new ResponseHeadersPlugin(),
+	],
+});
+
 const betterAuthView = (context: Context) => {
 	const BETTER_AUTH_ACCEPT_METHODS = ["POST", "GET"];
 	// validate request method
@@ -41,11 +49,30 @@ new Elysia()
 	.all(
 		"/rpc*",
 		async ({ request }: { request: Request }) => {
-			const { response } = await handler.handle(request, {
+			const session = await auth.api.getSession({ headers: request.headers });
+			const { response } = await handlerRPC.handle(request, {
 				prefix: "/rpc",
 				context: {
 					headers: request.headers,
-					auth: await auth.api.getSession({ headers: request.headers }),
+					auth: session,
+				},
+			});
+
+			return response ?? new Response("Not Found", { status: 404 });
+		},
+		{
+			parse: "none", // Disable Elysia body parser to prevent "body already used" error
+		},
+	)
+	.all(
+		"/api*",
+		async ({ request }: { request: Request }) => {
+			const session = await auth.api.getSession({ headers: request.headers });
+			const { response } = await handler.handle(request, {
+				prefix: "/api",
+				context: {
+					headers: request.headers,
+					auth: session,
 				},
 			});
 
