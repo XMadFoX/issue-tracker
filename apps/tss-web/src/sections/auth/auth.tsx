@@ -1,8 +1,9 @@
 import { Button } from "@prism/ui/components/button";
 import { FieldError } from "@prism/ui/components/field";
 import { useAppForm } from "@prism/ui/components/form/form-hooks";
-import { useState } from "react";
-import { signIn, signUp } from "src/lib/auth";
+import { useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { signIn, signUp, useSession } from "src/lib/auth";
 import z from "zod";
 
 const schema = z.object({
@@ -19,6 +20,14 @@ type AuthMode = z.infer<typeof modeSchema>;
 
 export default function AuthForm({ initialMode }: { initialMode?: AuthMode }) {
 	const [mode, setMode] = useState<AuthMode>(initialMode || "signin");
+	const session = useSession();
+	const navigate = useNavigate();
+
+	useEffect(() => {
+		if (!session.isPending && !session.data?.user) {
+			navigate({ to: "/auth" });
+		}
+	}, [session, navigate]);
 
 	return (
 		<div className="flex flex-col gap-">
@@ -41,6 +50,8 @@ export default function AuthForm({ initialMode }: { initialMode?: AuthMode }) {
 	);
 }
 export function SignInForm() {
+	const navigate = useNavigate();
+
 	const form = useAppForm({
 		defaultValues: {
 			email: "",
@@ -56,6 +67,7 @@ export function SignInForm() {
 				form.setErrorMap({ onSubmit: { form: errMsg, fields: {} } });
 				return { form: errMsg };
 			}
+			navigate({ to: "/" });
 		},
 	});
 
@@ -89,6 +101,7 @@ export function SignInForm() {
 	);
 }
 export function SignUpForm() {
+	const navigate = useNavigate();
 	const form = useAppForm({
 		defaultValues: {
 			name: "",
@@ -100,6 +113,7 @@ export function SignUpForm() {
 		},
 		onSubmit: async ({ value: values }) => {
 			await signUp.email({ ...values });
+			navigate({ to: "/" });
 		},
 	});
 
