@@ -22,7 +22,6 @@ export const workspace = pgTable(
 		id: text("id").primaryKey(),
 		name: text("name").notNull(),
 		slug: text("slug").notNull(),
-		plan: text("plan").notNull(),
 		timezone: text("timezone").notNull(),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
