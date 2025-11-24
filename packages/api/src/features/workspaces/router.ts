@@ -36,7 +36,7 @@ export const create = authedRouter
 			const [createdWorkspace] = await tx
 				.insert(workspace)
 				.values({ id: createId(), ...input })
-				.returning({ id: workspace.id });
+				.returning({ id: workspace.id, slug: workspace.slug });
 
 			if (!createdWorkspace) {
 				throw new ORPCError("Failed to create workspace");
