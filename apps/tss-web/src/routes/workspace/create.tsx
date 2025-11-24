@@ -54,6 +54,7 @@ function RouteComponent() {
 						/>
 					)}
 				</form.AppField>
+				{/* TODO: add combobox (select with search) */}
 				<form.AppField name="timezone">
 					{(field) => <field.Input label="Timezone" />}
 				</form.AppField>
