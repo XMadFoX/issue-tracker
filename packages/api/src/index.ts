@@ -1,8 +1,9 @@
+import { cors } from "@elysiajs/cors";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import type { Context } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
-import { CORSPlugin, ResponseHeadersPlugin } from "@orpc/server/plugins";
+import { ResponseHeadersPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod";
 import { Elysia } from "elysia";
 import { env } from "./env";
@@ -12,7 +13,6 @@ export { router };
 
 const handler = new OpenAPIHandler(router, {
 	plugins: [
-		new CORSPlugin({ origin: env.CORS_ORIGINS, credentials: true }),
 		new ResponseHeadersPlugin(),
 		new OpenAPIReferencePlugin({
 			docsProvider: "scalar",
@@ -28,10 +28,7 @@ const handler = new OpenAPIHandler(router, {
 });
 
 const handlerRPC = new RPCHandler(router, {
-	plugins: [
-		new CORSPlugin({ origin: env.CORS_ORIGINS, credentials: true }),
-		new ResponseHeadersPlugin(),
-	],
+	plugins: [new ResponseHeadersPlugin()],
 });
 
 const betterAuthView = (context: Context) => {
@@ -46,6 +43,7 @@ const betterAuthView = (context: Context) => {
 
 const port = env.PORT;
 new Elysia()
+	.use(cors({ origin: env.CORS_ORIGINS }))
 	.all(
 		"/rpc*",
 		async ({ request }: { request: Request }) => {
