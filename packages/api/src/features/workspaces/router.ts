@@ -23,10 +23,10 @@ export const list = authedRouter.handler(async ({ context }) => {
 	const userWorkspaces = await db
 		.select({ workspace })
 		.from(workspaceMembership)
-		.leftJoin(workspace, eq(workspaceMembership.workspaceId, workspace.id))
+		.innerJoin(workspace, eq(workspaceMembership.workspaceId, workspace.id))
 		.where(eq(workspaceMembership.userId, context.auth.session.userId));
 
-	return userWorkspaces.map((item) => item);
+	return userWorkspaces.map(({ workspace }) => workspace);
 });
 
 export const create = authedRouter
