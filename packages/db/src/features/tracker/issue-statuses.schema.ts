@@ -1,15 +1,28 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
 	boolean,
 	integer,
+	pgEnum,
 	pgTable,
 	text,
+	timestamp,
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { team, workspace } from "./tracker.schema";
 
+export const canonicalCategoryEnum = pgEnum("canonical_category", [
+	"backlog",
+	"planned",
+	"in_progress",
+	"completed",
+	"canceled",
+]);
+
 /**
- * ISSUE_STATUS_GROUP – groups of statuses (e.g., Backlog, Todo, In Progress, Done)
+ * ISSUE_STATUS_GROUP
+ * Each group defines a logical bucket and maps to a canonical category (Backlog, Planned, In Progress, Completed, Canceled).
+ *
+ * @param isEditable - whenever users can edit the group. Needed to lock editing of base seeded groups like "backlog", "planned" etc.
  */
 export const issueStatusGroup = pgTable(
 	"issue_status_group",
@@ -18,15 +31,22 @@ export const issueStatusGroup = pgTable(
 		workspaceId: text("workspace_id")
 			.notNull()
 			.references(() => workspace.id, { onDelete: "cascade" }),
+		key: text("key").notNull(),
 		name: text("name").notNull(),
-		category: text("category").notNull(),
+		canonicalCategory: canonicalCategoryEnum("canonical_category").notNull(),
+		description: text("description"),
 		orderIndex: integer("order_index").notNull(),
+		isEditable: boolean("is_editable").default(true).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => sql`now()`),
 	},
 	(t) => [
-		// Ensure a workspace cannot have duplicate group names
-		uniqueIndex("issue_status_group_workspace_name_key").on(
+		uniqueIndex("issue_status_group_workspace_key_key").on(
 			t.workspaceId,
-			t.name,
+			t.key,
 		),
 	],
 );
@@ -39,8 +59,12 @@ export const issueStatusGroupRelations = relations(
 );
 
 /**
- * ISSUE_STATUS – individual status columns within a group.
+ * ISSUE_STATUS
+ * Statuses just reference a group and store user-facing properties.
  * Teams can override workspace defaults by providing a teamId.
+ * Behaviors like “is this status terminal?” or “is it backlog?” are derived from the group’s canonical_category.
+ * For example: is_terminal → status.group.canonical_category IN ('completed','canceled')
+ * is_backlog → … == 'backlog'
  */
 export const issueStatus = pgTable(
 	"issue_status",
@@ -50,20 +74,21 @@ export const issueStatus = pgTable(
 			.notNull()
 			.references(() => workspace.id, { onDelete: "cascade" }),
 		teamId: text("team_id").references(() => team.id, { onDelete: "set null" }),
-		groupId: text("group_id")
+		statusGroupId: text("status_group_id")
 			.notNull()
 			.references(() => issueStatusGroup.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
-		key: text("key").notNull(),
 		color: text("color"),
+		description: text("description"),
 		orderIndex: integer("order_index").notNull(),
-		defaultForNew: boolean("default_for_new").default(false).notNull(),
-		isTerminal: boolean("is_terminal").default(false).notNull(),
-		isBacklog: boolean("is_backlog").default(false).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => sql`now()`),
 	},
 	(t) => [
-		// Unique key per workspace (team overrides can reuse the same key)
-		uniqueIndex("issue_status_workspace_key_key").on(t.workspaceId, t.key),
+		uniqueIndex("issue_status_workspace_name_key").on(t.workspaceId, t.name),
 	],
 );
 
@@ -76,8 +101,8 @@ export const issueStatusRelations = relations(issueStatus, ({ one }) => ({
 		fields: [issueStatus.teamId],
 		references: [team.id],
 	}),
-	group: one(issueStatusGroup, {
-		fields: [issueStatus.groupId],
+	statusGroup: one(issueStatusGroup, {
+		fields: [issueStatus.statusGroupId],
 		references: [issueStatusGroup.id],
 	}),
 }));
