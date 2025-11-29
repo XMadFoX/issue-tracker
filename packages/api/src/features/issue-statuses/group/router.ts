@@ -37,6 +37,26 @@ export const listStatusGroups = authedRouter
 		return groups;
 	});
 
+export const createStatusGroup = authedRouter
+	.input(issueStatusGroupCreateSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue_status_group:create",
+		});
+		if (!allowed) throw new ORPCError("Unauthorized to create status group");
+
+		const [created] = await db
+			.insert(issueStatusGroup)
+			.values({
+				id: createId(),
+				...input,
+			})
+			.returning();
+		return created;
+	});
 export const issueStatusGroupRouter = {
 	listStatusGroups,
+	createStatusGroup,
 };
