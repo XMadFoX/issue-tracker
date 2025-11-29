@@ -80,8 +80,27 @@ export const updateStatusGroup = authedRouter
 			.returning();
 		return updated;
 	});
+
+export const deleteStatusGroup = authedRouter
+	.input(issueStatusGroupDeleteSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue_status_group:delete",
+		});
+		if (!allowed) throw new ORPCError("Unauthorized to delete status group");
+
+		const [deleted] = await db
+			.delete(issueStatusGroup)
+			.where(and(eq(issueStatusGroup.id, input.id), eq(isEditable, true)))
+			.returning();
+		return deleted;
+	});
+
 export const issueStatusGroupRouter = {
 	list: listStatusGroups,
 	create: createStatusGroup,
 	update: updateStatusGroup,
+	deleteStatusGroup,
 };
