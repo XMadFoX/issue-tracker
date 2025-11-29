@@ -2,7 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import { issueStatusGroup } from "db/features/tracker/issue-statuses.schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { omit } from "remeda";
 import { authedRouter } from "../../../context";
 import { isAllowed } from "../../../lib/abac";
@@ -56,7 +56,32 @@ export const createStatusGroup = authedRouter
 			.returning();
 		return created;
 	});
+
+export const updateStatusGroup = authedRouter
+	.input(issueStatusGroupUpdateSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue_status_group:update",
+		});
+		if (!allowed) throw new ORPCError("Unauthorized to update status group");
+
+		const values = omit(input, ["id", "workspaceId"]);
+		const [updated] = await db
+			.update(issueStatusGroup)
+			.set(values)
+			.where(
+				and(
+					eq(issueStatusGroup.id, input.id),
+					eq(issueStatusGroup.isEditable, true),
+				),
+			)
+			.returning();
+		return updated;
+	});
 export const issueStatusGroupRouter = {
-	listStatusGroups,
-	createStatusGroup,
+	list: listStatusGroups,
+	create: createStatusGroup,
+	update: updateStatusGroup,
 };
