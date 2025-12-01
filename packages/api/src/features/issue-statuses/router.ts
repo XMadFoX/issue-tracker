@@ -1,0 +1,37 @@
+import { ORPCError } from "@orpc/server";
+import { createId } from "@paralleldrive/cuid2";
+import { db } from "db";
+import { issueStatus } from "db/features/tracker/issue-statuses.schema";
+import { eq } from "drizzle-orm";
+import { omit } from "remeda";
+import { authedRouter } from "../../context";
+import { isAllowed } from "../../lib/abac";
+import { workspaceInsertSchema } from "../workspaces/schema";
+import { issueStatusGroupRouter } from "./group/router";
+import {
+	issueStatusCreateSchema,
+	issueStatusDeleteSchema,
+	issueStatusUpdateSchema,
+} from "./issue-status.schema";
+
+export const listStatuses = authedRouter
+	.input(workspaceInsertSchema.pick({ id: true }))
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.id,
+			permissionKey: "issue_status:read",
+		});
+		if (!allowed) throw new ORPCError("Unauthorized to read statuses");
+
+		const statuses = await db
+			.select()
+			.from(issueStatus)
+			.where(eq(issueStatus.workspaceId, input.id))
+			.orderBy(issueStatus.orderIndex);
+		return statuses;
+	});
+
+export const issueStatusRouter = {
+	listStatuses,
+};
