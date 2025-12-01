@@ -71,8 +71,26 @@ export const updateStatus = authedRouter
 		return updated;
 	});
 
+export const deleteStatus = authedRouter
+	.input(issueStatusDeleteSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue_status:delete",
+		});
+		if (!allowed) throw new ORPCError("Unauthorized to delete status");
+
+		const [deleted] = await db
+			.delete(issueStatus)
+			.where(eq(issueStatus.id, input.id))
+			.returning();
+		return deleted;
+	});
+
 export const issueStatusRouter = {
 	listStatuses,
 	createStatus,
 	updateStatus,
+	deleteStatus,
 };
