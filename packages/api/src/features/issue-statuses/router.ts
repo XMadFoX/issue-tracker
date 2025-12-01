@@ -32,6 +32,27 @@ export const listStatuses = authedRouter
 		return statuses;
 	});
 
+export const createStatus = authedRouter
+	.input(issueStatusCreateSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue_status:create",
+		});
+		if (!allowed) throw new ORPCError("Unauthorized to create status");
+
+		const [created] = await db
+			.insert(issueStatus)
+			.values({
+				id: createId(),
+				...input,
+			})
+			.returning();
+		return created;
+	});
+
 export const issueStatusRouter = {
 	listStatuses,
+	createStatus,
 };
