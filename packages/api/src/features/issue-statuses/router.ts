@@ -52,7 +52,27 @@ export const createStatus = authedRouter
 		return created;
 	});
 
+export const updateStatus = authedRouter
+	.input(issueStatusUpdateSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue_status:update",
+		});
+		if (!allowed) throw new ORPCError("Unauthorized to update status");
+
+		const values = omit(input, ["id", "workspaceId"]);
+		const [updated] = await db
+			.update(issueStatus)
+			.set(values)
+			.where(eq(issueStatus.id, input.id))
+			.returning();
+		return updated;
+	});
+
 export const issueStatusRouter = {
 	listStatuses,
 	createStatus,
+	updateStatus,
 };
