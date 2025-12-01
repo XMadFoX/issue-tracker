@@ -93,7 +93,12 @@ export const deleteStatusGroup = authedRouter
 
 		const [deleted] = await db
 			.delete(issueStatusGroup)
-			.where(and(eq(issueStatusGroup.id, input.id), eq(isEditable, true)))
+			.where(
+				and(
+					eq(issueStatusGroup.id, input.id),
+					eq(issueStatusGroup.isEditable, true),
+				),
+			)
 			.returning();
 		return deleted;
 	});
