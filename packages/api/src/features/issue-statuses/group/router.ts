@@ -7,6 +7,7 @@ import { omit } from "remeda";
 import { authedRouter } from "../../../context";
 import { isAllowed } from "../../../lib/abac";
 import { workspaceInsertSchema } from "../../workspaces/schema";
+import { reorderStatusGroupsSchema } from "../reorder.schema";
 import {
 	issueStatusGroupCreateSchema,
 	issueStatusGroupDeleteSchema,
@@ -35,6 +36,36 @@ export const listStatusGroups = authedRouter
 			.where(eq(issueStatusGroup.workspaceId, input.id))
 			.orderBy(issueStatusGroup.orderIndex);
 		return groups;
+	});
+
+export const reorderStatusGroups = authedRouter
+	.input(reorderStatusGroupsSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue_status_group:reorder",
+		});
+		if (!allowed) throw new ORPCError("Unauthorized to reorder status groups");
+
+		await db.transaction(async (tx) => {
+			for (const [i, id] of input.orderedIds.entries()) {
+				// id is guaranteed to be a string by the schema; still validate emptiness
+				if (id.trim() === "") {
+					throw new ORPCError(`Invalid status group ID at index ${i}`);
+				}
+				const [updated] = await tx
+					.update(issueStatusGroup)
+					.set({ orderIndex: i })
+					.where(eq(issueStatusGroup.id, id))
+					.returning();
+				if (!updated) {
+					throw new ORPCError(`Status group ID ${id} not found`);
+				}
+			}
+		});
+
+		return { success: true };
 	});
 
 export const createStatusGroup = authedRouter
@@ -108,4 +139,5 @@ export const issueStatusGroupRouter = {
 	create: createStatusGroup,
 	update: updateStatusGroup,
 	deleteStatusGroup,
+	reorderStatusGroups,
 };
