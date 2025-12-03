@@ -116,9 +116,10 @@ export const deleteStatus = authedRouter
 	});
 
 export const issueStatusRouter = {
-	listStatuses,
-	createStatus,
-	updateStatus,
-	deleteStatus,
-	reorderStatuses,
+	create: createStatus,
+	list: listStatuses,
+	update: updateStatus,
+	reorder: reorderStatuses,
+	delete: deleteStatus,
+	group: issueStatusGroupRouter,
 };

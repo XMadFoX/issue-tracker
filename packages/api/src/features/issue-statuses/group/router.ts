@@ -135,9 +135,9 @@ export const deleteStatusGroup = authedRouter
 	});
 
 export const issueStatusGroupRouter = {
-	list: listStatusGroups,
 	create: createStatusGroup,
+	list: listStatusGroups,
 	update: updateStatusGroup,
-	deleteStatusGroup,
-	reorderStatusGroups,
+	reorder: reorderStatusGroups,
+	delete: deleteStatusGroup,
 };
