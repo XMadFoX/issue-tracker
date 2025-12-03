@@ -13,6 +13,7 @@ import {
 	issueStatusDeleteSchema,
 	issueStatusUpdateSchema,
 } from "./issue-status.schema";
+import { reorderStatusesSchema } from "./reorder.schema";
 
 export const listStatuses = authedRouter
 	.input(workspaceInsertSchema.pick({ id: true }))
@@ -30,6 +31,32 @@ export const listStatuses = authedRouter
 			.where(eq(issueStatus.workspaceId, input.id))
 			.orderBy(issueStatus.orderIndex);
 		return statuses;
+	});
+
+export const reorderStatuses = authedRouter
+	.input(reorderStatusesSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue_status:reorder",
+		});
+		if (!allowed) throw new ORPCError("Unauthorized to reorder statuses");
+
+		await db.transaction(async (tx) => {
+			for (const [i, id] of input.orderedIds.entries()) {
+				const [updated] = await tx
+					.update(issueStatus)
+					.set({ orderIndex: i })
+					.where(eq(issueStatus.id, id))
+					.returning();
+				if (!updated) {
+					throw new ORPCError(`Status ID ${id} not found`);
+				}
+			}
+		});
+
+		return { success: true };
 	});
 
 export const createStatus = authedRouter
@@ -93,4 +120,5 @@ export const issueStatusRouter = {
 	createStatus,
 	updateStatus,
 	deleteStatus,
+	reorderStatuses,
 };
