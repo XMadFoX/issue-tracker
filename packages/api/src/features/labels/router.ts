@@ -61,6 +61,25 @@ export const listLabels = authedRouter
 		return rows;
 	});
 
+export const createLabel = authedRouter
+	.input(labelCreateSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId: input.teamId ?? undefined,
+			permissionKey: "label:create",
+		});
+		if (!allowed) throw new ORPCError("Unauthorized to create label");
+
+		const [created] = await db
+			.insert(label)
+			.values({ id: createId(), ...input })
+			.returning();
+		return created;
+	});
+
 export const labelRouter = {
 	list: listLabels,
+	create: createLabel,
 };
