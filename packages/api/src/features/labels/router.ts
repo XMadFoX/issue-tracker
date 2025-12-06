@@ -32,8 +32,6 @@ export const listLabels = authedRouter
 				);
 			}
 			if (input.scope === "team") {
-				if (!input.teamId)
-					throw new ORPCError("teamId required for team scope");
 				return and(
 					eq(label.workspaceId, input.workspaceId),
 					eq(label.teamId, input.teamId),
