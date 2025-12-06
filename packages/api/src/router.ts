@@ -1,4 +1,5 @@
 import { issueStatusRouter } from "./features/issue-statuses/router";
+import { labelRouter } from "./features/labels/router";
 import { rolePermissionsRouter } from "./features/permissions/router";
 import { roleRouter } from "./features/roles/router";
 import { teamMembershipRouter } from "./features/team-memberships/router";
@@ -12,6 +13,7 @@ export const router = {
 	issue: {
 		status: issueStatusRouter,
 	},
+	label: labelRouter,
 	role: {
 		...roleRouter,
 		permissions: rolePermissionsRouter,
