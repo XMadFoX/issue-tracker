@@ -100,8 +100,26 @@ export const updateLabel = authedRouter
 		return updated;
 	});
 
+export const deleteLabel = authedRouter
+	.input(labelDeleteSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "label:delete",
+		});
+		if (!allowed) throw new ORPCError("Unauthorized to delete label");
+
+		const [deleted] = await db
+			.delete(label)
+			.where(eq(label.id, input.id))
+			.returning();
+		return deleted;
+	});
+
 export const labelRouter = {
 	list: listLabels,
 	create: createLabel,
 	update: updateLabel,
+	delete: deleteLabel,
 };
