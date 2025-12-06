@@ -11,4 +11,39 @@ await db.transaction(async (tx) => {
 		resourceType: "*",
 		description: "Wildcard permission",
 	});
+
+	// add label permissions
+	const labelPerms = [
+		{
+			key: "label:read",
+			resourceType: "label",
+			action: "read",
+			description: "Read labels",
+		},
+		{
+			key: "label:create",
+			resourceType: "label",
+			action: "create",
+			description: "Create labels",
+		},
+		{
+			key: "label:update",
+			resourceType: "label",
+			action: "update",
+			description: "Update labels",
+		},
+		{
+			key: "label:delete",
+			resourceType: "label",
+			action: "delete",
+			description: "Delete labels",
+		},
+	];
+
+	for (const v of labelPerms) {
+		await tx
+			.insert(permissionsCatalog)
+			.values({ id: createId(), ...v })
+			.onConflictDoNothing?.();
+	}
 });
