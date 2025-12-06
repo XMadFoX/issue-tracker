@@ -79,7 +79,29 @@ export const createLabel = authedRouter
 		return created;
 	});
 
+export const updateLabel = authedRouter
+	.input(labelUpdateSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId: input.teamId ?? undefined,
+			permissionKey: "label:update",
+		});
+		if (!allowed) throw new ORPCError("Unauthorized to update label");
+
+		const values = omit(input, ["id", "workspaceId"]);
+		const [updated] = await db
+			.update(label)
+			.set(values)
+			.where(eq(label.id, input.id))
+			.returning();
+		if (!updated) throw new ORPCError("Label not found");
+		return updated;
+	});
+
 export const labelRouter = {
 	list: listLabels,
 	create: createLabel,
+	update: updateLabel,
 };
