@@ -1,4 +1,3 @@
-import { ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import { label } from "db/features/tracker/labels.schema";
@@ -13,16 +12,21 @@ import {
 	labelUpdateSchema,
 } from "./schema";
 
+const commonErrors = {
+	UNAUTHORIZED: {},
+};
+
 export const listLabels = authedRouter
 	.input(labelListSchema)
-	.handler(async ({ context, input }) => {
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
 			teamId: input.scope === "team" ? (input.teamId ?? undefined) : undefined,
 			permissionKey: "label:read",
 		});
-		if (!allowed) throw new ORPCError("Unauthorized to read labels");
+		if (!allowed) throw errors.UNAUTHORIZED;
 
 		const where = (() => {
 			if (input.scope === "workspace") {
@@ -61,14 +65,15 @@ export const listLabels = authedRouter
 
 export const createLabel = authedRouter
 	.input(labelCreateSchema)
-	.handler(async ({ context, input }) => {
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
 			teamId: input.teamId ?? undefined,
 			permissionKey: "label:create",
 		});
-		if (!allowed) throw new ORPCError("Unauthorized to create label");
+		if (!allowed) throw errors.UNAUTHORIZED;
 
 		const [created] = await db
 			.insert(label)
@@ -79,14 +84,15 @@ export const createLabel = authedRouter
 
 export const updateLabel = authedRouter
 	.input(labelUpdateSchema)
-	.handler(async ({ context, input }) => {
+	.errors({ ...commonErrors, NOT_FOUND: {} })
+	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
 			teamId: input.teamId ?? undefined,
 			permissionKey: "label:update",
 		});
-		if (!allowed) throw new ORPCError("Unauthorized to update label");
+		if (!allowed) throw errors.UNAUTHORIZED;
 
 		const values = omit(input, ["id", "workspaceId"]);
 		const [updated] = await db
@@ -94,19 +100,20 @@ export const updateLabel = authedRouter
 			.set(values)
 			.where(eq(label.id, input.id))
 			.returning();
-		if (!updated) throw new ORPCError("Label not found");
+		if (!updated) throw errors.NOT_FOUND;
 		return updated;
 	});
 
 export const deleteLabel = authedRouter
 	.input(labelDeleteSchema)
-	.handler(async ({ context, input }) => {
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
 			permissionKey: "label:delete",
 		});
-		if (!allowed) throw new ORPCError("Unauthorized to delete label");
+		if (!allowed) throw errors.UNAUTHORIZED;
 
 		const [deleted] = await db
 			.delete(label)
