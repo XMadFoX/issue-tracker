@@ -1,6 +1,7 @@
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import { permissionsCatalog } from "db/features/abac/abac.schema";
+import { issuePriorityPerms } from "./features/issue-priorities/perms";
 
 await db.transaction(async (tx) => {
 	// add wildcard permission
@@ -41,6 +42,14 @@ await db.transaction(async (tx) => {
 	];
 
 	for (const v of labelPerms) {
+		await tx
+			.insert(permissionsCatalog)
+			.values({ id: createId(), ...v })
+			.onConflictDoNothing?.();
+	}
+
+	// add issue priority permissions
+	for (const v of issuePriorityPerms) {
 		await tx
 			.insert(permissionsCatalog)
 			.values({ id: createId(), ...v })
