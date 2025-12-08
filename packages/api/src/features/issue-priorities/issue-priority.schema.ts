@@ -9,6 +9,12 @@ export const issuePriorityCreateSchema = issuePriorityInsertSchema.omit({
 	id: true,
 });
 
+export const issuePriorityListSchema = z.object({
+	workspaceId: workspaceInsertSchema.shape.id,
+	limit: z.number().min(1).max(200).default(100),
+	offset: z.number().min(0).default(0),
+});
+
 export const issuePriorityUpdateSchema = issuePriorityInsertSchema
 	.partial()
 	.required({ id: true, workspaceId: true });
