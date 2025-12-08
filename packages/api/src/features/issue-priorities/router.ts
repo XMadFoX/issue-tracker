@@ -39,6 +39,24 @@ export const listPriorities = authedRouter
 		return rows;
 	});
 
+export const createPriority = authedRouter
+	.input(issuePriorityCreateSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue_priority:create",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		const [created] = await db
+			.insert(issuePriority)
+			.values({ id: createId(), ...input })
+			.returning();
+		return created;
+	});
 export const issuePriorityRouter = {
 	list: listPriorities,
+	create: createPriority,
 };
