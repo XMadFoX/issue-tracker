@@ -78,8 +78,27 @@ export const updatePriority = authedRouter
 		return updated;
 	});
 
+export const deletePriority = authedRouter
+	.input(issuePriorityDeleteSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue_priority:delete",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		const [deleted] = await db
+			.delete(issuePriority)
+			.where(eq(issuePriority.id, input.id))
+			.returning();
+		return deleted;
+	});
+
 export const issuePriorityRouter = {
 	list: listPriorities,
 	create: createPriority,
 	update: updatePriority,
+	delete: deletePriority,
 };
