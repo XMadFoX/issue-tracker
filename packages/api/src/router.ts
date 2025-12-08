@@ -1,3 +1,4 @@
+import { issuePriorityRouter } from "./features/issue-priorities/router";
 import { issueStatusRouter } from "./features/issue-statuses/router";
 import { labelRouter } from "./features/labels/router";
 import { rolePermissionsRouter } from "./features/permissions/router";
@@ -13,6 +14,7 @@ export const router = {
 	issue: {
 		status: issueStatusRouter,
 	},
+	priority: issuePriorityRouter,
 	label: labelRouter,
 	role: {
 		...roleRouter,
