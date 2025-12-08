@@ -23,4 +23,10 @@ export const issuePriorityPerms = [
 		action: "delete",
 		description: "Delete issue priorities",
 	},
+	{
+		key: "issue_priority:reorder",
+		resourceType: "issue_priority",
+		action: "reorder",
+		description: "Reorder issue priorities",
+	},
 ] as const;

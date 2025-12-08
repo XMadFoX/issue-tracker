@@ -1,7 +1,7 @@
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import { issuePriority } from "db/features/tracker/issue-priorities.schema";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
@@ -10,8 +10,8 @@ import {
 	issuePriorityDeleteSchema,
 	issuePriorityListSchema,
 	issuePriorityUpdateSchema,
+	reorderPrioritiesSchema,
 } from "./issue-priority.schema";
-import { reorderPrioritiesSchema } from "./reorder.schema";
 
 const commonErrors = {
 	UNAUTHORIZED: {},
@@ -96,9 +96,67 @@ export const deletePriority = authedRouter
 		return deleted;
 	});
 
+export const reorderPriorities = authedRouter
+	.input(reorderPrioritiesSchema)
+	.errors({ ...commonErrors, NOT_FOUND: {} })
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue_priority:reorder",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		// verify all ordered IDs exist in the workspace
+		const existingPriorities = await db
+			.select({ id: issuePriority.id })
+			.from(issuePriority)
+			.where(
+				and(
+					eq(issuePriority.workspaceId, input.workspaceId),
+					inArray(issuePriority.id, input.orderedIds),
+				),
+			);
+
+		if (existingPriorities.length !== input.orderedIds.length) {
+			throw errors.NOT_FOUND;
+		}
+
+		const TEMP_RANK_OFFSET = 1000000;
+
+		await db.transaction(async (tx) => {
+			// temporarily bump ranks to avoid unique constraint violations during reassignment
+			await tx
+				.update(issuePriority)
+				.set({ rank: sql`${issuePriority.rank} + ${TEMP_RANK_OFFSET}` })
+				.where(
+					and(
+						eq(issuePriority.workspaceId, input.workspaceId),
+						inArray(issuePriority.id, input.orderedIds),
+					),
+				);
+
+			// Phase 2: Assign new sequential ranks using type-safe updates
+			for (const [i, id] of input.orderedIds.entries()) {
+				await tx
+					.update(issuePriority)
+					.set({ rank: i })
+					.where(
+						and(
+							eq(issuePriority.id, id),
+							eq(issuePriority.workspaceId, input.workspaceId),
+						),
+					);
+			}
+		});
+
+		return { success: true };
+	});
+
 export const issuePriorityRouter = {
 	list: listPriorities,
 	create: createPriority,
 	update: updatePriority,
 	delete: deletePriority,
+	reorder: reorderPriorities,
 };
