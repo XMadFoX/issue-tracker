@@ -56,7 +56,30 @@ export const createPriority = authedRouter
 			.returning();
 		return created;
 	});
+
+export const updatePriority = authedRouter
+	.input(issuePriorityUpdateSchema)
+	.errors({ ...commonErrors, NOT_FOUND: {} })
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue_priority:update",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		const values = omit(input, ["id", "workspaceId"]);
+		const [updated] = await db
+			.update(issuePriority)
+			.set(values)
+			.where(eq(issuePriority.id, input.id))
+			.returning();
+		if (!updated) throw errors.NOT_FOUND;
+		return updated;
+	});
+
 export const issuePriorityRouter = {
 	list: listPriorities,
 	create: createPriority,
+	update: updatePriority,
 };
