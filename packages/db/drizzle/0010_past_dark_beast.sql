@@ -1,0 +1,2 @@
+CREATE INDEX "issue_priority_workspace_idx" ON "issue_priority" USING btree ("workspace_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "issue_priority_ws_rank_key" ON "issue_priority" USING btree ("workspace_id","rank");

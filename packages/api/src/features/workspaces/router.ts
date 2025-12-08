@@ -6,6 +6,7 @@ import {
 	roleDefinitions,
 	rolePermissions,
 } from "db/features/abac/abac.schema";
+import { issuePriority } from "db/features/tracker/issue-priorities.schema";
 import {
 	issueStatus,
 	issueStatusGroup,
@@ -17,6 +18,7 @@ import {
 import { eq } from "drizzle-orm";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
+import { buildDefaultIssuePrioritySeed } from "../issue-priorities/defaults";
 import { buildDefaultIssueStatusSeed } from "../issue-statuses/defaults";
 import {
 	workspaceCreateSchema,
@@ -47,6 +49,7 @@ export const create = authedRouter
 				throw new ORPCError("Failed to create workspace");
 			}
 
+			// seed issue statuses & status groups
 			const { groups, statuses } = buildDefaultIssueStatusSeed(
 				createdWorkspace.id,
 			);
@@ -55,6 +58,10 @@ export const create = authedRouter
 			if (statuses.length > 0) {
 				await tx.insert(issueStatus).values(statuses);
 			}
+
+			// seed issue priorities
+			const { priorities } = buildDefaultIssuePrioritySeed(createdWorkspace.id);
+			await tx.insert(issuePriority).values(priorities);
 
 			// Create a default 'Admin' role for the new workspace
 			const [defaultAdminRole] = await tx
