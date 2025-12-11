@@ -43,6 +43,40 @@ const listIssues = authedRouter
 		return rows;
 	});
 
+const createIssue = authedRouter
+	.input(issueCreateSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const { workspaceId, teamId } = input;
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId,
+			permissionKey: "issue:create",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		const [maxRow] = await db
+			.select({ maxNumber: sql<number>`max(${issue.number})` })
+			.from(issue)
+			.where(and(eq(issue.teamId, teamId), eq(issue.workspaceId, workspaceId)))
+			.limit(1);
+
+		const nextNumber = (maxRow?.maxNumber ?? 0) + 1;
+
+		const [created] = await db
+			.insert(issue)
+			.values({
+				id: createId(),
+				number: nextNumber,
+				creatorId: context.auth.session.userId,
+				...input,
+			})
+			.returning();
+
+		return created;
+	});
+
 export const issueRouter = {
 	list: listIssues,
+	create: createIssue,
 };
