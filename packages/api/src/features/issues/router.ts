@@ -1,0 +1,48 @@
+import { createId } from "@paralleldrive/cuid2";
+import { db } from "db";
+import { issue } from "db/features/tracker/issues.schema";
+import { and, desc, eq, is, sql } from "drizzle-orm";
+import { omit } from "remeda";
+import { authedRouter } from "../../context";
+import { isAllowed } from "../../lib/abac";
+import {
+	issueCreateSchema,
+	issueDeleteSchema,
+	issueListSchema,
+	issueUpdateSchema,
+} from "./schema";
+
+const commonErrors = {
+	UNAUTHORIZED: {},
+};
+
+const updateDeleteErrors = {
+	...commonErrors,
+	NOT_FOUND: {},
+};
+
+const listIssues = authedRouter
+	.input(issueListSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue:read",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		const rows = await db
+			.select()
+			.from(issue)
+			.where(eq(issue.workspaceId, input.workspaceId))
+			.orderBy(issue.sortOrder, desc(issue.createdAt))
+			.limit(input.limit)
+			.offset(input.offset);
+
+		return rows;
+	});
+
+export const issueRouter = {
+	list: listIssues,
+};
