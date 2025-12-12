@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import {
+	type AnyPgColumn,
 	doublePrecision,
 	index,
 	integer,
@@ -49,9 +50,12 @@ export const issue = pgTable(
 		creatorId: text("creator_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "restrict" }),
-		parentIssueId: text("parent_issue_id").references(() => issue.id, {
-			onDelete: "set null",
-		}),
+		parentIssueId: text("parent_issue_id").references(
+			(): AnyPgColumn => issue.id,
+			{
+				onDelete: "set null",
+			},
+		),
 		archivedAt: timestamp("archived_at", { withTimezone: true }),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
