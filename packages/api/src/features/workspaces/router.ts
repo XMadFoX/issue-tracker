@@ -23,6 +23,7 @@ import { buildDefaultIssueStatusSeed } from "../issue-statuses/defaults";
 import {
 	workspaceCreateSchema,
 	workspaceDeleteSchema,
+	workspaceGetBySlugSchema,
 	workspaceUpdateSchema,
 } from "./schema";
 
@@ -35,6 +36,33 @@ export const list = authedRouter.handler(async ({ context }) => {
 
 	return userWorkspaces.map(({ workspace }) => workspace);
 });
+
+export const getBySlug = authedRouter
+	.input(workspaceGetBySlugSchema)
+	.errors({
+		NOT_FOUND: {
+			message:
+				"Workspace not found or you are not authorized to view this workspace.",
+		},
+	})
+	.handler(async ({ context, errors, input }) => {
+		const [res] = await db
+			.select()
+			.from(workspace)
+			.where(eq(workspace.slug, input.slug));
+
+		if (!res) throw errors.NOT_FOUND;
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: res.id,
+			permissionKey: "workspace:read",
+		});
+		if (!allowed) {
+			throw errors.NOT_FOUND;
+		}
+
+		return res;
+	});
 
 export const create = authedRouter
 	.input(workspaceCreateSchema)
@@ -164,6 +192,7 @@ const deleteWorkspace = authedRouter
 
 export const workspaceRouter = {
 	list,
+	getBySlug,
 	create,
 	update,
 	delete: deleteWorkspace,

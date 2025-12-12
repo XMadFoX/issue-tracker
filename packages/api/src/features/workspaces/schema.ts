@@ -10,6 +10,9 @@ export const workspaceInsertSchema = createInsertSchema(workspace)
 		// TODO: enforce timezone validation
 		timezone: z.string().regex(/^[a-zA-Z/]+$/),
 	});
+export const workspaceGetBySlugSchema = z.object({
+	slug: workspaceInsertSchema.shape.slug,
+});
 export const workspaceCreateSchema = workspaceInsertSchema.omit({ id: true });
 export const workspaceUpdateSchema = workspaceInsertSchema
 	.partial()
