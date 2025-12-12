@@ -12,7 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WorkspaceCreateRouteImport } from './routes/workspace/create'
-import { Route as WorkspaceSlugRouteImport } from './routes/workspace/$slug'
+import { Route as WorkspaceSlugRouteRouteImport } from './routes/workspace/$slug/route'
+import { Route as WorkspaceSlugIndexRouteImport } from './routes/workspace/$slug/index'
+import { Route as WorkspaceSlugTeamsIndexRouteImport } from './routes/workspace/$slug/teams/index'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -29,43 +31,76 @@ const WorkspaceCreateRoute = WorkspaceCreateRouteImport.update({
   path: '/workspace/create',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WorkspaceSlugRoute = WorkspaceSlugRouteImport.update({
+const WorkspaceSlugRouteRoute = WorkspaceSlugRouteRouteImport.update({
   id: '/workspace/$slug',
   path: '/workspace/$slug',
   getParentRoute: () => rootRouteImport,
+} as any)
+const WorkspaceSlugIndexRoute = WorkspaceSlugIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => WorkspaceSlugRouteRoute,
+} as any)
+const WorkspaceSlugTeamsIndexRoute = WorkspaceSlugTeamsIndexRouteImport.update({
+  id: '/teams/',
+  path: '/teams/',
+  getParentRoute: () => WorkspaceSlugRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/workspace/$slug': typeof WorkspaceSlugRoute
+  '/workspace/$slug': typeof WorkspaceSlugRouteRouteWithChildren
   '/workspace/create': typeof WorkspaceCreateRoute
+  '/workspace/$slug/': typeof WorkspaceSlugIndexRoute
+  '/workspace/$slug/teams': typeof WorkspaceSlugTeamsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/workspace/$slug': typeof WorkspaceSlugRoute
   '/workspace/create': typeof WorkspaceCreateRoute
+  '/workspace/$slug': typeof WorkspaceSlugIndexRoute
+  '/workspace/$slug/teams': typeof WorkspaceSlugTeamsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/workspace/$slug': typeof WorkspaceSlugRoute
+  '/workspace/$slug': typeof WorkspaceSlugRouteRouteWithChildren
   '/workspace/create': typeof WorkspaceCreateRoute
+  '/workspace/$slug/': typeof WorkspaceSlugIndexRoute
+  '/workspace/$slug/teams/': typeof WorkspaceSlugTeamsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/workspace/$slug' | '/workspace/create'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/workspace/$slug'
+    | '/workspace/create'
+    | '/workspace/$slug/'
+    | '/workspace/$slug/teams'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/workspace/$slug' | '/workspace/create'
-  id: '__root__' | '/' | '/auth' | '/workspace/$slug' | '/workspace/create'
+  to:
+    | '/'
+    | '/auth'
+    | '/workspace/create'
+    | '/workspace/$slug'
+    | '/workspace/$slug/teams'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/workspace/$slug'
+    | '/workspace/create'
+    | '/workspace/$slug/'
+    | '/workspace/$slug/teams/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
-  WorkspaceSlugRoute: typeof WorkspaceSlugRoute
+  WorkspaceSlugRouteRoute: typeof WorkspaceSlugRouteRouteWithChildren
   WorkspaceCreateRoute: typeof WorkspaceCreateRoute
 }
 
@@ -96,16 +131,43 @@ declare module '@tanstack/react-router' {
       id: '/workspace/$slug'
       path: '/workspace/$slug'
       fullPath: '/workspace/$slug'
-      preLoaderRoute: typeof WorkspaceSlugRouteImport
+      preLoaderRoute: typeof WorkspaceSlugRouteRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/workspace/$slug/': {
+      id: '/workspace/$slug/'
+      path: '/'
+      fullPath: '/workspace/$slug/'
+      preLoaderRoute: typeof WorkspaceSlugIndexRouteImport
+      parentRoute: typeof WorkspaceSlugRouteRoute
+    }
+    '/workspace/$slug/teams/': {
+      id: '/workspace/$slug/teams/'
+      path: '/teams'
+      fullPath: '/workspace/$slug/teams'
+      preLoaderRoute: typeof WorkspaceSlugTeamsIndexRouteImport
+      parentRoute: typeof WorkspaceSlugRouteRoute
     }
   }
 }
 
+interface WorkspaceSlugRouteRouteChildren {
+  WorkspaceSlugIndexRoute: typeof WorkspaceSlugIndexRoute
+  WorkspaceSlugTeamsIndexRoute: typeof WorkspaceSlugTeamsIndexRoute
+}
+
+const WorkspaceSlugRouteRouteChildren: WorkspaceSlugRouteRouteChildren = {
+  WorkspaceSlugIndexRoute: WorkspaceSlugIndexRoute,
+  WorkspaceSlugTeamsIndexRoute: WorkspaceSlugTeamsIndexRoute,
+}
+
+const WorkspaceSlugRouteRouteWithChildren =
+  WorkspaceSlugRouteRoute._addFileChildren(WorkspaceSlugRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
-  WorkspaceSlugRoute: WorkspaceSlugRoute,
+  WorkspaceSlugRouteRoute: WorkspaceSlugRouteRouteWithChildren,
   WorkspaceCreateRoute: WorkspaceCreateRoute,
 }
 export const routeTree = rootRouteImport
