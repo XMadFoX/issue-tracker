@@ -60,13 +60,13 @@ export const listByWorkspace = authedRouter
 			throw new ORPCError("Unauthorized to read workspace");
 		}
 
-		const [list] = await db
+		const list = await db
 			.select({ team })
 			.from(team)
 			.innerJoin(workspace, eq(team.workspaceId, workspace.id))
 			.where(eq(workspace.id, input.id));
 
-		return list;
+		return list.map((t) => t.team);
 	});
 
 export const create = authedRouter
