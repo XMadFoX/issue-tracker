@@ -1,7 +1,7 @@
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import { issue } from "db/features/tracker/issues.schema";
-import { and, desc, eq, is, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
@@ -99,8 +99,30 @@ const updateIssue = authedRouter
 		return updated;
 	});
 
+const deleteIssue = authedRouter
+	.input(issueDeleteSchema)
+	.errors(updateDeleteErrors)
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue:delete",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		const [deleted] = await db
+			.delete(issue)
+			.where(
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			)
+			.returning();
+		if (!deleted) throw errors.NOT_FOUND;
+		return deleted;
+	});
+
 export const issueRouter = {
 	list: listIssues,
 	create: createIssue,
 	update: updateIssue,
+	delete: deleteIssue,
 };
