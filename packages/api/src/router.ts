@@ -1,3 +1,9 @@
+import type {
+	InferRouterCurrentContexts,
+	InferRouterInitialContexts,
+	InferRouterInputs,
+	InferRouterOutputs,
+} from "@orpc/server";
 import { issuePriorityRouter } from "./features/issue-priorities/router";
 import { issueStatusRouter } from "./features/issue-statuses/router";
 import { issueRouter } from "./features/issues/router";
@@ -25,3 +31,8 @@ export const router = {
 	workspaceMembership: workspaceMembershipRouter,
 	teamMembership: teamMembershipRouter,
 };
+
+export type Inputs = InferRouterInputs<typeof router>;
+export type Outputs = InferRouterOutputs<typeof router>;
+export type InitialContexts = InferRouterInitialContexts<typeof router>;
+export type CurrentContexts = InferRouterCurrentContexts<typeof router>;
