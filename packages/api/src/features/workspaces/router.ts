@@ -12,6 +12,7 @@ import {
 	issueStatusGroup,
 } from "db/features/tracker/issue-statuses.schema";
 import {
+	team,
 	workspace,
 	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
@@ -143,6 +144,23 @@ export const create = authedRouter
 			} catch (e) {
 				console.error(e);
 				throw new ORPCError("Failed to create workspace membership");
+			}
+
+			// Create a default team
+			const [defaultTeam] = await tx
+				.insert(team)
+				.values({
+					id: createId(),
+					workspaceId: createdWorkspace.id,
+					name: "Default Team",
+					key: "default",
+					privacy: "private",
+				})
+				.returning({ id: team.id });
+			if (!defaultTeam) {
+				throw new ORPCError(
+					"Failed to create default team for the new workspace",
+				);
 			}
 
 			return createdWorkspace;
