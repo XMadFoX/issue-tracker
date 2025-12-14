@@ -1,14 +1,7 @@
 import { issueCreateSchema } from "@prism/api/src/features/issues/schema";
 import { Button } from "@prism/ui/components/button";
-import { Field, FieldError, FieldLabel } from "@prism/ui/components/field";
+import { FieldError } from "@prism/ui/components/field";
 import { useAppForm } from "@prism/ui/components/form/form-hooks";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@prism/ui/components/select";
 import {
 	useMutation,
 	useQuery,
@@ -52,8 +45,8 @@ function RouteComponent() {
 			title: "",
 			description: undefined, // no support for rich text yet
 			workspaceId: workspace?.data?.id,
-			teamId: team.data?.[0]?.id ?? "",
-			statusId: statuses.data?.[0]?.id ?? "",
+			teamId: team.data?.[0]?.id,
+			statusId: statuses.data?.[0]?.id,
 			priorityId: undefined,
 		} as z.input<typeof issueCreateSchema>,
 		validators: {
@@ -87,68 +80,28 @@ function RouteComponent() {
 				<form.AppField name="description">
 					{(field) => <field.Input label="Description" />}
 				</form.AppField>
-				<form.Field name="statusId">
-					{(field) => {
-						const isInvalid =
-							field.state.meta.isTouched && !field.state.meta.isValid;
-						return (
-							<Field data-invalid={isInvalid}>
-								<FieldLabel htmlFor={field.name}>Status</FieldLabel>
-								<Select
-									onValueChange={(e) =>
-										field.handleChange(
-											e as NonNullable<typeof statuses.data>[number]["id"],
-										)
-									}
-									value={field.state.value}
-								>
-									<SelectTrigger aria-invalid={isInvalid} id={field.name}>
-										<SelectValue onBlur={field.handleBlur} />
-									</SelectTrigger>
-									<SelectContent>
-										{statuses.data?.map((status) => (
-											<SelectItem key={status.id} value={status.id}>
-												{status.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								{isInvalid && <FieldError errors={field.state.meta.errors} />}
-							</Field>
-						);
-					}}
-				</form.Field>
-				<form.Field name="priorityId">
-					{(field) => {
-						const isInvalid =
-							field.state.meta.isTouched && !field.state.meta.isValid;
-						return (
-							<Field data-invalid={isInvalid}>
-								<FieldLabel htmlFor={field.name}>Priority</FieldLabel>
-								<Select
-									onValueChange={(e) =>
-										field.handleChange(
-											e as NonNullable<typeof priorities.data>[number]["id"],
-										)
-									}
-									value={field.state.value ?? undefined} // fallbacks null to undefined
-								>
-									<SelectTrigger aria-invalid={isInvalid} id={field.name}>
-										<SelectValue onBlur={field.handleBlur} />
-									</SelectTrigger>
-									<SelectContent>
-										{priorities.data?.map((priority) => (
-											<SelectItem key={priority.id} value={priority.id}>
-												{priority.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								{isInvalid && <FieldError errors={field.state.meta.errors} />}
-							</Field>
-						);
-					}}
-				</form.Field>
+				<form.AppField name="statusId">
+					{(field) => (
+						<field.Select
+							label="Status"
+							placeholder="Select a status"
+							items={statuses.data ?? []}
+							getItemValue={(status) => status.id}
+							getItemLabel={(status) => status.name}
+						/>
+					)}
+				</form.AppField>
+				<form.AppField name="priorityId">
+					{(field) => (
+						<field.Select
+							label="Priority"
+							placeholder="Select a priority"
+							items={priorities.data ?? []}
+							getItemValue={(priority) => priority.id}
+							getItemLabel={(priority) => priority.name}
+						/>
+					)}
+				</form.AppField>
 				<form.Subscribe selector={(state) => [state.errorMap]}>
 					{([errorMap]) =>
 						errorMap.onSubmit ? (
