@@ -1,3 +1,4 @@
+import { Toaster } from "@prism/ui/components/sonner";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -46,6 +47,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 			</head>
 			<body className="min-h-screen flex flex-col">
 				{children}
+				<Toaster />
 				<TanStackDevtools
 					config={{
 						position: "bottom-right",
