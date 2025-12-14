@@ -6,6 +6,7 @@ import {
 	SidebarGroup,
 	SidebarGroupContent,
 	SidebarGroupLabel,
+	SidebarHeader,
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
@@ -36,37 +37,38 @@ function WorkspaceLayout() {
 	);
 }
 
-const items = [
-	{
-		title: "Teams",
-		url: "teams",
-		icon: Contact,
-	},
-] as const;
-
 export function WorkspaceSidebar({
 	workspace,
 }: {
 	workspace: undefined | Outputs["workspace"]["getBySlug"];
 }) {
+	const teams = useQuery(
+		orpc.team.listByWorkspace.queryOptions({
+			input: { id: workspace?.id ?? "" },
+			enabled: !!workspace?.id,
+		}),
+	);
+
 	return (
 		<Sidebar>
+			<SidebarHeader>{workspace?.name || "Loading..."}</SidebarHeader>
 			<SidebarContent>
 				<SidebarGroup>
-					<SidebarGroupLabel>
-						{workspace?.name || "Loading..."}
-					</SidebarGroupLabel>
+					<SidebarGroupLabel>Teams</SidebarGroupLabel>
 					<SidebarGroupContent>
 						<SidebarMenu>
-							{items.map((item) => (
-								<SidebarMenuItem key={item.title}>
+							{teams?.data?.map((team) => (
+								<SidebarMenuItem key={team.name}>
 									<SidebarMenuButton asChild>
 										<Link
-											to={`/workspace/$slug/${item.url}`}
-											params={{ slug: workspace?.slug ?? "" }}
+											to={`/workspace/$slug/teams/$teamSlug`}
+											params={{
+												slug: workspace?.slug ?? "",
+												teamSlug: team.key ?? "",
+											}}
 										>
-											<item.icon />
-											<span>{item.title}</span>
+											<Contact />
+											<span>{team.name}</span>
 										</Link>
 									</SidebarMenuButton>
 								</SidebarMenuItem>
