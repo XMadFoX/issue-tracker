@@ -1,0 +1,16 @@
+{
+	"name": "@prism/blocks",
+	"version": "0.0.0",
+	"packageManager": "pnpm@10.17.1",
+	"dependencies": {
+		"@prism/api": "workspace:*",
+		"@prism/ui": "workspace:*",
+		"@tanstack/react-form": "^1.25.0",
+		"@types/react": "^19.2.7",
+		"@types/react-dom": "^19.2.3",
+		"react": "^19.2.3",
+		"react-dom": "^19.2.3",
+		"sonner": "^2.0.7",
+		"zod": "^4.1.12"
+	}
+}
