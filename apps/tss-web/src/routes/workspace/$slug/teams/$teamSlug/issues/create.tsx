@@ -1,4 +1,5 @@
-import { issueCreateSchema } from "@prism/api/src/features/issues/schema";
+import type { issueCreateSchema } from "@prism/api/src/features/issues/schema";
+import { IssueCreateForm } from "@prism/blocks/src/features/issues/form/create";
 import { Button } from "@prism/ui/components/button";
 import { FieldError } from "@prism/ui/components/field";
 import { useAppForm } from "@prism/ui/components/form/form-hooks";
@@ -67,58 +68,13 @@ function RouteComponent() {
 
 	return (
 		<div className="w-full flex flex-col items-center justify-center">
-			<form
-				className="flex flex-col gap-4"
-				onSubmit={(e) => {
-					e.preventDefault();
-					form.handleSubmit();
-				}}
-			>
-				<form.AppField name="title">
-					{(field) => <field.Input label="Title" />}
-				</form.AppField>
-				<form.AppField name="description">
-					{(field) => <field.Input label="Description" />}
-				</form.AppField>
-				<form.AppField name="statusId">
-					{(field) => (
-						<field.Select
-							label="Status"
-							placeholder="Select a status"
-							items={statuses.data ?? []}
-							getItemValue={(status) => status.id}
-							getItemLabel={(status) => status.name}
-						/>
-					)}
-				</form.AppField>
-				<form.AppField name="priorityId">
-					{(field) => (
-						<field.Select
-							label="Priority"
-							placeholder="Select a priority"
-							items={priorities.data ?? []}
-							getItemValue={(priority) => priority.id}
-							getItemLabel={(priority) => priority.name}
-						/>
-					)}
-				</form.AppField>
-				<form.Subscribe selector={(state) => [state.errorMap]}>
-					{([errorMap]) =>
-						errorMap.onSubmit ? (
-							<FieldError className="form-error">
-								{errorMap.onSubmit.toString()}
-							</FieldError>
-						) : null
-					}
-				</form.Subscribe>
-				<form.Subscribe selector={(state) => [state.isSubmitting]}>
-					{([isSubmitting]) => (
-						<Button type="submit" disabled={isSubmitting}>
-							Create
-						</Button>
-					)}
-				</form.Subscribe>
-			</form>
+			<IssueCreateForm
+				workspaceId={workspace.data.id}
+				teamId={team?.data?.id ?? ""}
+				statuses={statuses.data ?? []}
+				priorities={priorities.data ?? []}
+				onSubmit={onSubmit}
+			/>
 		</div>
 	);
 }
