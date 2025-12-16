@@ -20,6 +20,8 @@ export const Route = createFileRoute(
 	component: RouteComponent,
 });
 
+type SubmitResult = { success: true } | { error: unknown };
+
 function RouteComponent() {
 	const { slug } = Route.useParams();
 	const workspace = useSuspenseQuery(
@@ -39,32 +41,22 @@ function RouteComponent() {
 		orpc.issue.status.list.queryOptions({ input: { id: workspace?.data?.id } }),
 	);
 	const qc = useQueryClient();
-
 	const createIssue = useMutation(orpc.issue.create.mutationOptions());
-	const form = useAppForm({
-		defaultValues: {
-			title: "",
-			description: undefined, // no support for rich text yet
-			workspaceId: workspace?.data?.id,
-			teamId: team.data?.[0]?.id,
-			statusId: statuses.data?.[0]?.id,
-			priorityId: undefined,
-		} as z.input<typeof issueCreateSchema>,
-		validators: {
-			onSubmit: issueCreateSchema,
-		},
-		onSubmit: async ({ value }) => {
-			await createIssue.mutateAsync(value, {
-				onError: (err) => {
-					const errMsg = err;
-					form.setErrorMap({ onSubmit: { form: errMsg, fields: {} } });
-					return { form: errMsg };
-				},
-			});
+
+	const onSubmit = async (
+		issue: z.input<typeof issueCreateSchema>,
+	): Promise<SubmitResult> => {
+		try {
+			await createIssue.mutateAsync(issue);
+			// TODO: optimistic mutation, no full refetch
 			qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
 			toast.success("Issue created successfully");
-		},
-	});
+			return { success: true } as const;
+		} catch (err) {
+			toast.error("Issue creation failed");
+			return { error: err };
+		}
+	};
 
 	return (
 		<div className="w-full flex flex-col items-center justify-center">

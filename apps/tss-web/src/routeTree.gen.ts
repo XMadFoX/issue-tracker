@@ -15,6 +15,7 @@ import { Route as WorkspaceCreateRouteImport } from './routes/workspace/create'
 import { Route as WorkspaceSlugRouteRouteImport } from './routes/workspace/$slug/route'
 import { Route as WorkspaceSlugIndexRouteImport } from './routes/workspace/$slug/index'
 import { Route as WorkspaceSlugTeamsIndexRouteImport } from './routes/workspace/$slug/teams/index'
+import { Route as WorkspaceSlugTeamsTeamSlugIssuesCreateRouteImport } from './routes/workspace/$slug/teams/$teamSlug/issues/create'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -46,6 +47,12 @@ const WorkspaceSlugTeamsIndexRoute = WorkspaceSlugTeamsIndexRouteImport.update({
   path: '/teams/',
   getParentRoute: () => WorkspaceSlugRouteRoute,
 } as any)
+const WorkspaceSlugTeamsTeamSlugIssuesCreateRoute =
+  WorkspaceSlugTeamsTeamSlugIssuesCreateRouteImport.update({
+    id: '/teams/$teamSlug/issues/create',
+    path: '/teams/$teamSlug/issues/create',
+    getParentRoute: () => WorkspaceSlugRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +61,7 @@ export interface FileRoutesByFullPath {
   '/workspace/create': typeof WorkspaceCreateRoute
   '/workspace/$slug/': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams': typeof WorkspaceSlugTeamsIndexRoute
+  '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -61,6 +69,7 @@ export interface FileRoutesByTo {
   '/workspace/create': typeof WorkspaceCreateRoute
   '/workspace/$slug': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams': typeof WorkspaceSlugTeamsIndexRoute
+  '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -70,6 +79,7 @@ export interface FileRoutesById {
   '/workspace/create': typeof WorkspaceCreateRoute
   '/workspace/$slug/': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams/': typeof WorkspaceSlugTeamsIndexRoute
+  '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -80,6 +90,7 @@ export interface FileRouteTypes {
     | '/workspace/create'
     | '/workspace/$slug/'
     | '/workspace/$slug/teams'
+    | '/workspace/$slug/teams/$teamSlug/issues/create'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -87,6 +98,7 @@ export interface FileRouteTypes {
     | '/workspace/create'
     | '/workspace/$slug'
     | '/workspace/$slug/teams'
+    | '/workspace/$slug/teams/$teamSlug/issues/create'
   id:
     | '__root__'
     | '/'
@@ -95,6 +107,7 @@ export interface FileRouteTypes {
     | '/workspace/create'
     | '/workspace/$slug/'
     | '/workspace/$slug/teams/'
+    | '/workspace/$slug/teams/$teamSlug/issues/create'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -148,17 +161,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceSlugTeamsIndexRouteImport
       parentRoute: typeof WorkspaceSlugRouteRoute
     }
+    '/workspace/$slug/teams/$teamSlug/issues/create': {
+      id: '/workspace/$slug/teams/$teamSlug/issues/create'
+      path: '/teams/$teamSlug/issues/create'
+      fullPath: '/workspace/$slug/teams/$teamSlug/issues/create'
+      preLoaderRoute: typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRouteImport
+      parentRoute: typeof WorkspaceSlugRouteRoute
+    }
   }
 }
 
 interface WorkspaceSlugRouteRouteChildren {
   WorkspaceSlugIndexRoute: typeof WorkspaceSlugIndexRoute
   WorkspaceSlugTeamsIndexRoute: typeof WorkspaceSlugTeamsIndexRoute
+  WorkspaceSlugTeamsTeamSlugIssuesCreateRoute: typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
 }
 
 const WorkspaceSlugRouteRouteChildren: WorkspaceSlugRouteRouteChildren = {
   WorkspaceSlugIndexRoute: WorkspaceSlugIndexRoute,
   WorkspaceSlugTeamsIndexRoute: WorkspaceSlugTeamsIndexRoute,
+  WorkspaceSlugTeamsTeamSlugIssuesCreateRoute:
+    WorkspaceSlugTeamsTeamSlugIssuesCreateRoute,
 }
 
 const WorkspaceSlugRouteRouteWithChildren =

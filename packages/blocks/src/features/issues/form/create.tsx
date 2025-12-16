@@ -10,7 +10,9 @@ type Props = {
 	teamId: string;
 	priorities: Outputs["priority"]["list"];
 	statuses: Outputs["issue"]["status"]["list"];
-	onSubmit: (issue: z.input<typeof issueCreateSchema>) => void;
+	onSubmit: (
+		issue: z.input<typeof issueCreateSchema>,
+	) => Promise<{ success: true } | { error: unknown }>;
 };
 
 export function IssueCreateForm({
@@ -33,7 +35,15 @@ export function IssueCreateForm({
 			onSubmit: issueCreateSchema,
 		},
 		onSubmit: async ({ value }) => {
-			onSubmit(value);
+			const res = await onSubmit(value);
+			if ("error" in res) {
+				const errMsg =
+					(res.error instanceof Error && res?.error?.message) ??
+					"Request failed. Please try again.";
+				form.setErrorMap({ onSubmit: { form: errMsg, fields: {} } });
+				console.error("submit error: res.error", res.error);
+				return { form: errMsg };
+			}
 		},
 	});
 
