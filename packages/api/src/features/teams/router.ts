@@ -1,5 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
+import { error } from "console";
 import { db } from "db";
 import {
 	team,
@@ -13,9 +14,12 @@ import { isAllowed } from "../../lib/abac";
 import {
 	teamCreateSchema,
 	teamDeleteSchema,
+	teamGetBySlugSchema,
 	teamListSchema,
 	teamUpdateSchema,
 } from "./schema";
+
+const commonErrors = { UNAUTHORIZED: {}, NOT_FOUND: {} };
 
 export const listUserTeams = authedRouter.handler(async ({ context }) => {
 	const userTeams = await db
@@ -69,6 +73,28 @@ export const listByWorkspace = authedRouter
 		return list.map((t) => t.team);
 	});
 
+export const getBySlug = authedRouter
+	.input(teamGetBySlugSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const [res] = await db
+			.select({ team })
+			.from(team)
+			.innerJoin(teamMembership, eq(team.id, teamMembership.teamId))
+			.where(
+				and(
+					eq(teamMembership.userId, context.auth.session.userId),
+					eq(team.key, input.slug),
+				),
+			);
+
+		if (!res) {
+			throw errors.NOT_FOUND;
+		}
+
+		return res.team;
+	});
+
 export const create = authedRouter
 	.input(teamCreateSchema)
 	.handler(async ({ context, input }) => {
@@ -96,7 +122,6 @@ export const create = authedRouter
 		return createdTeam;
 	});
 
-const commonErrors = { UNAUTHORIZED: {} };
 const unauthorizedMessage = (action: "update" | "delete") =>
 	`You don't have permission to ${action} this team or the team doesn't exist`;
 
@@ -158,6 +183,7 @@ export const teamRouter = {
 	listUserTeams,
 	listUserTeamsByWorkspace,
 	listByWorkspace,
+	getBySlug,
 	create,
 	update,
 	delete: deleteTeam,
