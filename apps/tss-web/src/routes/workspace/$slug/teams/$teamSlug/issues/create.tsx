@@ -1,9 +1,7 @@
 import type { issueCreateSchema } from "@prism/api/src/features/issues/schema";
 import { IssueCreateForm } from "@prism/blocks/src/features/issues/form/create";
-import { Button } from "@prism/ui/components/button";
-import { FieldError } from "@prism/ui/components/field";
-import { useAppForm } from "@prism/ui/components/form/form-hooks";
 import {
+	skipToken,
 	useMutation,
 	useQuery,
 	useQueryClient,
@@ -27,18 +25,25 @@ function RouteComponent() {
 	const workspace = useSuspenseQuery(
 		orpc.workspace.getBySlug.queryOptions({ input: { slug } }),
 	);
+	const workspaceId = workspace.data?.id;
+
 	const team = useQuery(
 		orpc.team.getBySlug.queryOptions({
-			input: { slug: teamSlug },
+			input: workspaceId
+				? { slug: teamSlug, workspaceId: workspace?.data?.id }
+				: skipToken,
+			enabled: !!workspace?.data?.id,
 		}),
 	);
 	const priorities = useQuery(
 		orpc.priority.list.queryOptions({
-			input: { workspaceId: workspace?.data?.id },
+			input: workspaceId ? { workspaceId: workspace.data.id } : skipToken,
 		}),
 	);
 	const statuses = useQuery(
-		orpc.issue.status.list.queryOptions({ input: { id: workspace?.data?.id } }),
+		orpc.issue.status.list.queryOptions({
+			input: workspaceId ? { id: workspace.data.id } : skipToken,
+		}),
 	);
 	const qc = useQueryClient();
 	const createIssue = useMutation(orpc.issue.create.mutationOptions());
