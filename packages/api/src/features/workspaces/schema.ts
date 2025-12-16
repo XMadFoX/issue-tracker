@@ -5,6 +5,7 @@ import z from "zod";
 export const workspaceInsertSchema = createInsertSchema(workspace)
 	.omit({ createdAt: true, updatedAt: true })
 	.extend({
+		id: z.cuid2(),
 		name: z.string().min(1),
 		slug: z.string().regex(/^[a-z0-9-]+$/),
 		// TODO: enforce timezone validation

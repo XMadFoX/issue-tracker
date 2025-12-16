@@ -1,8 +1,11 @@
 import { team } from "db/features/tracker/tracker.schema";
 import { createInsertSchema } from "drizzle-zod";
+import z from "zod";
 import { workspaceInsertSchema } from "../workspaces/schema";
 
-export const teamInsertSchema = createInsertSchema(team);
+export const teamInsertSchema = createInsertSchema(team).extend({
+	id: z.cuid2(),
+});
 
 export const teamCreateSchema = teamInsertSchema.omit({ id: true });
 
