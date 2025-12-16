@@ -1,6 +1,5 @@
 import { ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
-import { error } from "console";
 import { db } from "db";
 import {
 	team,
@@ -78,17 +77,24 @@ export const getBySlug = authedRouter
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
 		const [res] = await db
-			.select({ team })
+			.select({ team, teamMembership })
 			.from(team)
-			.innerJoin(teamMembership, eq(team.id, teamMembership.teamId))
+			.leftJoin(teamMembership, eq(team.id, teamMembership.teamId))
 			.where(
-				and(
-					eq(teamMembership.userId, context.auth.session.userId),
-					eq(team.key, input.slug),
-				),
+				and(eq(team.key, input.slug), eq(team.workspaceId, input.workspaceId)),
 			);
-
 		if (!res) {
+			throw errors.NOT_FOUND;
+		}
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId: res.team.id,
+			permissionKey: "team:read",
+		});
+
+		if (!allowed) {
 			throw errors.NOT_FOUND;
 		}
 

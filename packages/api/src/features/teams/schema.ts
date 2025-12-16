@@ -11,9 +11,11 @@ export const teamCreateSchema = teamInsertSchema.omit({ id: true });
 
 export const teamListSchema = workspaceInsertSchema.pick({ id: true });
 
-export const teamGetBySlugSchema = workspaceInsertSchema.pick({
-	slug: true,
-});
+export const teamGetBySlugSchema = workspaceInsertSchema
+	.pick({
+		slug: true,
+	})
+	.extend({ workspaceId: workspaceInsertSchema.shape.id });
 
 export const teamUpdateSchema = teamInsertSchema
 	.partial()
