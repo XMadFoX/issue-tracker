@@ -23,13 +23,13 @@ export const Route = createFileRoute(
 type SubmitResult = { success: true } | { error: unknown };
 
 function RouteComponent() {
-	const { slug } = Route.useParams();
+	const { slug, teamSlug } = Route.useParams();
 	const workspace = useSuspenseQuery(
 		orpc.workspace.getBySlug.queryOptions({ input: { slug } }),
 	);
 	const team = useQuery(
-		orpc.team.listByWorkspace.queryOptions({
-			input: { id: workspace?.data?.id },
+		orpc.team.getBySlug.queryOptions({
+			input: { slug: teamSlug },
 		}),
 	);
 	const priorities = useQuery(
