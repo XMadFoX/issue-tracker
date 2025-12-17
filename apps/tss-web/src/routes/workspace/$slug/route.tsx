@@ -61,7 +61,7 @@ export function WorkspaceSidebar({
 								<SidebarMenuItem key={team.name}>
 									<SidebarMenuButton asChild>
 										<Link
-											to={`/workspace/$slug/teams/$teamSlug`}
+											to={`/workspace/$slug/teams/$teamSlug/issues`}
 											params={{
 												slug: workspace?.slug ?? "",
 												teamSlug: team.key ?? "",
