@@ -32,13 +32,36 @@ const listIssues = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED;
 
-		const rows = await db
-			.select()
-			.from(issue)
-			.where(eq(issue.workspaceId, input.workspaceId))
-			.orderBy(issue.sortOrder, desc(issue.createdAt))
-			.limit(input.limit)
-			.offset(input.offset);
+		const rows = await db.query.issue.findMany({
+			where: (issue, { eq }) => eq(issue.workspaceId, input.workspaceId),
+			with: {
+				status: {
+					with: {
+						statusGroup: true,
+					},
+				},
+				priority: true,
+				assignee: true,
+				team: true,
+				labelLinks: {
+					with: {
+						label: true,
+					},
+				},
+			},
+			orderBy: (issue, { asc, desc }) => [
+				asc(
+					sql`(select order_index from issue_status_group where id = (select status_group_id from issue_status where id = ${issue.statusId}))`,
+				),
+				asc(
+					sql`(select order_index from issue_status where id = ${issue.statusId})`,
+				),
+				asc(issue.sortOrder),
+				desc(issue.createdAt),
+			],
+			limit: input.limit,
+			offset: input.offset,
+		});
 
 		return rows;
 	});
