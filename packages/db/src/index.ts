@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { env } from "./env";
 import * as schema from "./schema";
 
-export let db: ReturnType<typeof drizzle>;
+export let db: ReturnType<typeof drizzle<typeof schema>>;
 
 function init(url?: string) {
 	db = drizzle({
