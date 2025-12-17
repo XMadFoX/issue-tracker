@@ -1,0 +1,120 @@
+import type { Outputs } from "@prism/api/src/router";
+import { Badge } from "@prism/ui/components/badge";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@prism/ui/components/table";
+import { useMemo } from "react";
+
+type Props = {
+	issues: Outputs["issue"]["list"];
+	statuses: Outputs["issue"]["status"]["list"];
+};
+
+export function IssueList({ issues, statuses }: Props) {
+	const groupedIssues = useMemo(() => {
+		const groups: Record<string, typeof issues> = {};
+		for (const status of statuses) {
+			groups[status.id] = issues.filter((i) => i.statusId === status.id);
+		}
+		return groups;
+	}, [issues, statuses]);
+
+	return (
+		<div className="space-y-10">
+			{statuses.map((status) => {
+				const statusIssues = groupedIssues[status.id] || [];
+				return (
+					<div key={status.id} className="space-y-4">
+						<div className="flex items-center gap-2 px-1">
+							<div
+								className="w-2.5 h-2.5 rounded-full"
+								style={{ backgroundColor: status.color ?? "#ccc" }}
+							/>
+							<h2 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">
+								{status.name}
+							</h2>
+							<Badge variant="secondary" className="ml-1 px-1.5 py-0 h-5">
+								{statusIssues.length}
+							</Badge>
+						</div>
+
+						<div className="rounded-md border">
+							<Table>
+								<TableHeader>
+									<TableRow className="hover:bg-transparent">
+										<TableHead className="w-[100px]">ID</TableHead>
+										<TableHead>Title</TableHead>
+										<TableHead>Priority</TableHead>
+										<TableHead>Assignee</TableHead>
+										<TableHead className="text-right">Created</TableHead>
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									{statusIssues.length === 0 ? (
+										<TableRow>
+											<TableCell
+												colSpan={5}
+												className="text-center text-muted-foreground h-16"
+											>
+												No issues
+											</TableCell>
+										</TableRow>
+									) : (
+										statusIssues.map((issue) => (
+											<TableRow key={issue.id}>
+												<TableCell className="font-medium text-muted-foreground">
+													{issue.team?.key}-{issue.number}
+												</TableCell>
+												<TableCell className="font-medium">
+													{issue.title}
+												</TableCell>
+												<TableCell>
+													{issue.priority ? (
+														<Badge
+															variant="outline"
+															className="font-normal"
+															style={{
+																borderColor: issue.priority.color ?? undefined,
+																color: issue.priority.color ?? undefined,
+															}}
+														>
+															{issue.priority.name}
+														</Badge>
+													) : (
+														<span className="text-muted-foreground">-</span>
+													)}
+												</TableCell>
+												<TableCell>
+													{issue.assignee ? (
+														<div className="flex items-center gap-2">
+															<div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[10px]">
+																{issue.assignee.name?.[0]}
+															</div>
+															<span>{issue.assignee.name}</span>
+														</div>
+													) : (
+														<span className="text-muted-foreground">
+															Unassigned
+														</span>
+													)}
+												</TableCell>
+												<TableCell className="text-right text-muted-foreground">
+													{new Date(issue.createdAt).toLocaleDateString()}
+												</TableCell>
+											</TableRow>
+										))
+									)}
+								</TableBody>
+							</Table>
+						</div>
+					</div>
+				);
+			})}
+		</div>
+	);
+}
