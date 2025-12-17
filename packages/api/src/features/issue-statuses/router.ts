@@ -1,7 +1,10 @@
 import { ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
-import { issueStatus } from "db/features/tracker/issue-statuses.schema";
+import {
+	issueStatus,
+	issueStatusGroup,
+} from "db/features/tracker/issue-statuses.schema";
 import { eq } from "drizzle-orm";
 import { omit } from "remeda";
 import { authedRouter } from "../../context";
@@ -25,12 +28,19 @@ export const listStatuses = authedRouter
 		});
 		if (!allowed) throw new ORPCError("Unauthorized to read statuses");
 
-		const statuses = await db
-			.select()
-			.from(issueStatus)
-			.where(eq(issueStatus.workspaceId, input.id))
-			.orderBy(issueStatus.orderIndex);
-		return statuses;
+		const statuses = await db.query.issueStatus.findMany({
+			where: (issueStatus, { eq }) => eq(issueStatus.workspaceId, input.id),
+			with: {
+				statusGroup: true,
+			},
+		});
+
+		return statuses.sort((a, b) => {
+			if (a.statusGroup.orderIndex !== b.statusGroup.orderIndex) {
+				return a.statusGroup.orderIndex - b.statusGroup.orderIndex;
+			}
+			return a.orderIndex - b.orderIndex;
+		});
 	});
 
 export const reorderStatuses = authedRouter
