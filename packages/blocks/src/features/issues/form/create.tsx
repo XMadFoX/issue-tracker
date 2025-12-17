@@ -3,6 +3,7 @@ import type { Outputs } from "@prism/api/src/router";
 import { Button } from "@prism/ui/components/button";
 import { FieldError } from "@prism/ui/components/field";
 import { useAppForm } from "@prism/ui/components/form/form-hooks";
+import { cn } from "@prism/ui/lib/utils";
 import type z from "zod";
 
 type Props = {
@@ -13,6 +14,7 @@ type Props = {
 	onSubmit: (
 		issue: z.input<typeof issueCreateSchema>,
 	) => Promise<{ success: true } | { error: unknown }>;
+	className?: string;
 };
 
 export function IssueCreateForm({
@@ -21,6 +23,7 @@ export function IssueCreateForm({
 	statuses,
 	priorities,
 	onSubmit,
+	className,
 }: Props) {
 	const form = useAppForm({
 		defaultValues: {
@@ -48,59 +51,57 @@ export function IssueCreateForm({
 	});
 
 	return (
-		<div className="w-full flex flex-col items-center justify-center">
-			<form
-				className="flex flex-col gap-4"
-				onSubmit={(e) => {
-					e.preventDefault();
-					form.handleSubmit();
-				}}
-			>
-				<form.AppField name="title">
-					{(field) => <field.Input label="Title" />}
-				</form.AppField>
-				<form.AppField name="description">
-					{(field) => <field.Input label="Description" />}
-				</form.AppField>
-				<form.AppField name="statusId">
-					{(field) => (
-						<field.Select
-							label="Status"
-							placeholder="Select a status"
-							items={statuses ?? []}
-							getItemValue={(status) => status.id}
-							getItemLabel={(status) => status.name}
-						/>
-					)}
-				</form.AppField>
-				<form.AppField name="priorityId">
-					{(field) => (
-						<field.Select
-							label="Priority"
-							placeholder="Select a priority"
-							items={priorities ?? []}
-							getItemValue={(priority) => priority.id}
-							getItemLabel={(priority) => priority.name}
-						/>
-					)}
-				</form.AppField>
-				<form.Subscribe selector={(state) => [state.errorMap]}>
-					{([errorMap]) =>
-						errorMap.onSubmit ? (
-							<FieldError className="form-error">
-								{errorMap.onSubmit.toString()}
-							</FieldError>
-						) : null
-					}
-				</form.Subscribe>
-				<form.Subscribe selector={(state) => [state.isSubmitting]}>
-					{([isSubmitting]) => (
-						<Button type="submit" disabled={isSubmitting}>
-							Create
-						</Button>
-					)}
-				</form.Subscribe>
-			</form>
-		</div>
+		<form
+			className={cn("flex w-full flex-col gap-4", className)}
+			onSubmit={(e) => {
+				e.preventDefault();
+				form.handleSubmit();
+			}}
+		>
+			<form.AppField name="title">
+				{(field) => <field.Input label="Title" />}
+			</form.AppField>
+			<form.AppField name="description">
+				{(field) => <field.Input label="Description" />}
+			</form.AppField>
+			<form.AppField name="statusId">
+				{(field) => (
+					<field.Select
+						label="Status"
+						placeholder="Select a status"
+						items={statuses ?? []}
+						getItemValue={(status) => status.id}
+						getItemLabel={(status) => status.name}
+					/>
+				)}
+			</form.AppField>
+			<form.AppField name="priorityId">
+				{(field) => (
+					<field.Select
+						label="Priority"
+						placeholder="Select a priority"
+						items={priorities ?? []}
+						getItemValue={(priority) => priority.id}
+						getItemLabel={(priority) => priority.name}
+					/>
+				)}
+			</form.AppField>
+			<form.Subscribe selector={(state) => [state.errorMap]}>
+				{([errorMap]) =>
+					errorMap.onSubmit ? (
+						<FieldError className="form-error">
+							{errorMap.onSubmit.toString()}
+						</FieldError>
+					) : null
+				}
+			</form.Subscribe>
+			<form.Subscribe selector={(state) => [state.isSubmitting]}>
+				{([isSubmitting]) => (
+					<Button type="submit" disabled={isSubmitting}>
+						Create
+					</Button>
+				)}
+			</form.Subscribe>
+		</form>
 	);
 }
