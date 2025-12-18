@@ -1,5 +1,6 @@
 import type { Outputs } from "@prism/api/src/router";
 import { Badge } from "@prism/ui/components/badge";
+import { Button } from "@prism/ui/components/button";
 import {
 	Table,
 	TableBody,
@@ -8,14 +9,35 @@ import {
 	TableHeader,
 	TableRow,
 } from "@prism/ui/components/table";
-import { useMemo } from "react";
+import { Plus } from "lucide-react";
+import { type ComponentProps, useMemo } from "react";
+import { IssueCreateModal } from "../modal/issue-create-modal";
 
 type Props = {
 	issues: Outputs["issue"]["list"];
 	statuses: Outputs["issue"]["status"]["list"];
+	priorities: Outputs["priority"]["list"];
+	teamId: string;
+	workspaceId: string;
+	onIssueSubmit: ComponentProps<typeof IssueCreateModal>["onSubmit"];
 };
 
-export function IssueList({ issues, statuses }: Props) {
+function CreateIssueButton() {
+	return (
+		<Button variant="ghost" size="icon" type="button" className="p-2 ml-auto">
+			<Plus className="size-3" />
+		</Button>
+	);
+}
+
+export function IssueList({
+	issues,
+	statuses,
+	workspaceId,
+	teamId,
+	priorities,
+	onIssueSubmit,
+}: Props) {
 	const groupedIssues = useMemo(() => {
 		const groups: Record<string, typeof issues> = {};
 		for (const status of statuses) {
@@ -41,6 +63,14 @@ export function IssueList({ issues, statuses }: Props) {
 							<Badge variant="secondary" className="ml-1 px-1.5 py-0 h-5">
 								{statusIssues.length}
 							</Badge>
+							<IssueCreateModal
+								workspaceId={workspaceId}
+								teamId={teamId}
+								priorities={priorities}
+								statuses={statuses}
+								trigger={CreateIssueButton()}
+								onSubmit={onIssueSubmit}
+							/>
 						</div>
 
 						{statusIssues.length > 0 && (
