@@ -15,6 +15,7 @@ type Props = {
 		issue: z.input<typeof issueCreateSchema>,
 	) => Promise<{ success: true } | { error: unknown }>;
 	className?: string;
+	initialStatusId?: Outputs["issue"]["status"]["list"][0]["id"];
 };
 
 export function IssueCreateForm({
@@ -24,14 +25,16 @@ export function IssueCreateForm({
 	priorities,
 	onSubmit,
 	className,
+	initialStatusId,
 }: Props) {
+	console.log(initialStatusId);
 	const form = useAppForm({
 		defaultValues: {
 			title: "",
 			description: undefined, // no support for rich text yet
 			workspaceId: workspaceId,
 			teamId: teamId,
-			statusId: statuses[0]?.id,
+			statusId: initialStatusId ?? statuses[0]?.id,
 			priorityId: undefined,
 		} as z.input<typeof issueCreateSchema>,
 		validators: {

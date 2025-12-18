@@ -8,7 +8,7 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "@prism/ui/components/dialog";
-import * as React from "react";
+import { type ComponentProps, useState } from "react";
 import type z from "zod";
 import { IssueCreateForm } from "../form/create";
 
@@ -24,6 +24,7 @@ type IssueCreateModalProps = {
 	title?: string;
 	description?: string;
 	className?: string;
+	initialStatusId?: ComponentProps<typeof IssueCreateForm>["initialStatusId"];
 };
 
 export function IssueCreateModal({
@@ -36,8 +37,9 @@ export function IssueCreateModal({
 	title = "Create issue",
 	description = "Fill in the details below.",
 	className,
+	initialStatusId,
 }: IssueCreateModalProps) {
-	const [open, setOpen] = React.useState(false);
+	const [open, setOpen] = useState(false);
 
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
@@ -62,6 +64,7 @@ export function IssueCreateModal({
 						}
 						return res;
 					}}
+					initialStatusId={initialStatusId}
 				/>
 			</DialogContent>
 		</Dialog>
