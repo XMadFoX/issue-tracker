@@ -70,6 +70,7 @@ export function IssueList({
 								statuses={statuses}
 								trigger={CreateIssueButton()}
 								onSubmit={onIssueSubmit}
+								initialStatusId={status.id}
 							/>
 						</div>
 
