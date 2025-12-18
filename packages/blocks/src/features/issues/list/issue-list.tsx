@@ -43,7 +43,9 @@ export function IssueList({ issues, statuses }: Props) {
 							</Badge>
 						</div>
 
-						<IssuesTable statusIssues={statusIssues} />
+						{statusIssues.length > 0 && (
+							<IssuesTable statusIssues={statusIssues} />
+						)}
 					</div>
 				);
 			})}
@@ -67,56 +69,45 @@ function IssuesTable({ statusIssues }: { statusIssues: StatusIssues }) {
 					</TableRow>
 				</TableHeader>
 				<TableBody>
-					{statusIssues.length === 0 ? (
-						<TableRow>
-							<TableCell
-								colSpan={5}
-								className="text-center text-muted-foreground h-16"
-							>
-								No issues
+					{statusIssues.map((issue) => (
+						<TableRow key={issue.id}>
+							<TableCell className="font-medium text-muted-foreground">
+								{issue.team?.key}-{issue.number}
+							</TableCell>
+							<TableCell className="font-medium">{issue.title}</TableCell>
+							<TableCell>
+								{issue.priority ? (
+									<Badge
+										variant="outline"
+										className="font-normal"
+										style={{
+											borderColor: issue.priority.color ?? undefined,
+											color: issue.priority.color ?? undefined,
+										}}
+									>
+										{issue.priority.name}
+									</Badge>
+								) : (
+									<span className="text-muted-foreground">-</span>
+								)}
+							</TableCell>
+							<TableCell>
+								{issue.assignee ? (
+									<div className="flex items-center gap-2">
+										<div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[10px]">
+											{issue.assignee.name?.[0]}
+										</div>
+										<span>{issue.assignee.name}</span>
+									</div>
+								) : (
+									<span className="text-muted-foreground">Unassigned</span>
+								)}
+							</TableCell>
+							<TableCell className="text-right text-muted-foreground">
+								{new Date(issue.createdAt).toLocaleDateString()}
 							</TableCell>
 						</TableRow>
-					) : (
-						statusIssues.map((issue) => (
-							<TableRow key={issue.id}>
-								<TableCell className="font-medium text-muted-foreground">
-									{issue.team?.key}-{issue.number}
-								</TableCell>
-								<TableCell className="font-medium">{issue.title}</TableCell>
-								<TableCell>
-									{issue.priority ? (
-										<Badge
-											variant="outline"
-											className="font-normal"
-											style={{
-												borderColor: issue.priority.color ?? undefined,
-												color: issue.priority.color ?? undefined,
-											}}
-										>
-											{issue.priority.name}
-										</Badge>
-									) : (
-										<span className="text-muted-foreground">-</span>
-									)}
-								</TableCell>
-								<TableCell>
-									{issue.assignee ? (
-										<div className="flex items-center gap-2">
-											<div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[10px]">
-												{issue.assignee.name?.[0]}
-											</div>
-											<span>{issue.assignee.name}</span>
-										</div>
-									) : (
-										<span className="text-muted-foreground">Unassigned</span>
-									)}
-								</TableCell>
-								<TableCell className="text-right text-muted-foreground">
-									{new Date(issue.createdAt).toLocaleDateString()}
-								</TableCell>
-							</TableRow>
-						))
-					)}
+					))}
 				</TableBody>
 			</Table>
 		</div>
