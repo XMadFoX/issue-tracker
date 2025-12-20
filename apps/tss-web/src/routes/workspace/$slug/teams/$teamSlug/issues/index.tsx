@@ -30,7 +30,6 @@ function RouteComponent() {
 	const team = useQuery(
 		orpc.team.getBySlug.queryOptions({
 			input: workspaceId ? { slug: teamSlug, workspaceId } : skipToken,
-			enabled: !!workspace?.data?.id,
 		}),
 	);
 	const priorities = useQuery(
@@ -57,6 +56,23 @@ function RouteComponent() {
 							scope: "all",
 						}
 					: skipToken,
+		}),
+	);
+
+	const addLabels = useMutation(
+		orpc.issue.labels.bulkAdd.mutationOptions({
+			onSuccess: () => {
+				// TODO: optimistic mutation, no full refetch
+				qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
+			},
+		}),
+	);
+	const deleteLabels = useMutation(
+		orpc.issue.labels.bulkDelete.mutationOptions({
+			onSuccess: () => {
+				// TODO: no full refetch
+				qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
+			},
 		}),
 	);
 
@@ -103,8 +119,11 @@ function RouteComponent() {
 				statuses={statuses.data ?? []}
 				teamId={team?.data?.id ?? ""}
 				priorities={priorities.data ?? []}
+				labels={labels.data ?? []}
 				workspaceId={workspaceId ?? ""}
 				onIssueSubmit={onIssueSubmit}
+				addLabels={addLabels.mutateAsync}
+				deleteLabels={deleteLabels.mutateAsync}
 			/>
 		</div>
 	);

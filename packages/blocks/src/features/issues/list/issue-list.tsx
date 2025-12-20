@@ -22,6 +22,10 @@ type Props = {
 	teamId: string;
 	workspaceId: string;
 	onIssueSubmit: ComponentProps<typeof IssueCreateModal>["onSubmit"];
+	addLabels: (input: Inputs["issue"]["labels"]["bulkAdd"]) => Promise<void>;
+	deleteLabels: (
+		input: Inputs["issue"]["labels"]["bulkDelete"],
+	) => Promise<void>;
 };
 
 function CreateIssueButton() {
@@ -40,6 +44,8 @@ export function IssueList({
 	priorities,
 	labels,
 	onIssueSubmit,
+	addLabels,
+	deleteLabels,
 }: Props) {
 	const groupedIssues = useMemo(() => {
 		const groups: Record<string, typeof issues> = {};
@@ -82,6 +88,8 @@ export function IssueList({
 								statusIssues={statusIssues}
 								labels={labels}
 								workspaceId={workspaceId}
+								addLabels={addLabels}
+								deleteLabels={deleteLabels}
 							/>
 						)}
 					</div>
@@ -97,10 +105,14 @@ function IssuesTable({
 	statusIssues,
 	labels,
 	workspaceId,
+	addLabels,
+	deleteLabels,
 }: {
 	statusIssues: StatusIssues;
 	labels: Props["labels"];
 	workspaceId: string;
+	addLabels: Props["addLabels"];
+	deleteLabels: Props["deleteLabels"];
 }) {
 	return (
 		<div className="rounded-md border">
@@ -137,6 +149,45 @@ function IssuesTable({
 								) : (
 									<span className="text-muted-foreground">-</span>
 								)}
+							</TableCell>
+							<TableCell>
+								<MultiSelect
+									options={labels.map((l) => ({
+										label: l.name,
+										value: l.id,
+										style: {
+											badgeColor: l.color ?? undefined,
+										},
+									}))}
+									defaultValue={issue.labelLinks.map((link) => link.labelId)}
+									onValueChange={async (newLabelIds) => {
+										const currentLabelIds = issue.labelLinks.map(
+											(link) => link.labelId,
+										);
+										const added = newLabelIds.filter(
+											(id) => !currentLabelIds.includes(id),
+										);
+										const removed = currentLabelIds.filter(
+											(id) => !newLabelIds.includes(id),
+										);
+
+										if (added.length > 0) {
+											await addLabels({
+												issueId: issue.id,
+												workspaceId,
+												labelIds: added,
+											});
+										}
+
+										if (removed.length > 0) {
+											await deleteLabels({
+												issueId: issue.id,
+												workspaceId,
+												labelIds: removed,
+											});
+										}
+									}}
+								/>
 							</TableCell>
 							<TableCell>
 								{issue.assignee ? (
