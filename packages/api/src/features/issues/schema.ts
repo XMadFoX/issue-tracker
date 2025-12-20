@@ -1,6 +1,7 @@
 import { issue } from "db/features/tracker/issues.schema";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { labelInsertSchema } from "../labels/schema";
 import { teamInsertSchema } from "../teams/schema";
 import { workspaceInsertSchema } from "../workspaces/schema";
 
@@ -36,4 +37,10 @@ export const issueUpdateSchema = z
 export const issueDeleteSchema = z.object({
 	id: z.string(),
 	workspaceId: z.string(),
+});
+
+export const issueLabelsSchema = z.object({
+	issueId: issueInsertSchema.shape.id,
+	workspaceId: workspaceInsertSchema.shape.id,
+	labelIds: z.array(labelInsertSchema.shape.id),
 });

@@ -1,13 +1,14 @@
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
-import { issue } from "db/features/tracker/issues.schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { issue, issueLabel } from "db/features/tracker/issues.schema";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import {
 	issueCreateSchema,
 	issueDeleteSchema,
+	issueLabelsSchema,
 	issueListSchema,
 	issueUpdateSchema,
 } from "./schema";
@@ -143,9 +144,60 @@ const deleteIssue = authedRouter
 		return deleted;
 	});
 
+const bulkAddLabels = authedRouter
+	.input(issueLabelsSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue:update",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		if (input.labelIds.length === 0) return;
+
+		await db
+			.insert(issueLabel)
+			.values(
+				input.labelIds.map((labelId) => ({
+					issueId: input.issueId,
+					labelId,
+				})),
+			)
+			.onConflictDoNothing();
+	});
+
+const bulkDeleteLabels = authedRouter
+	.input(issueLabelsSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue:update",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		if (input.labelIds.length === 0) return;
+
+		await db
+			.delete(issueLabel)
+			.where(
+				and(
+					eq(issueLabel.issueId, input.issueId),
+					inArray(issueLabel.labelId, input.labelIds),
+				),
+			);
+	});
+
 export const issueRouter = {
 	list: listIssues,
 	create: createIssue,
 	update: updateIssue,
 	delete: deleteIssue,
+	labels: {
+		bulkAdd: bulkAddLabels,
+		bulkDelete: bulkDeleteLabels,
+	},
 };
