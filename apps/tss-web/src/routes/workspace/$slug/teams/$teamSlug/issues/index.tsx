@@ -47,6 +47,19 @@ function RouteComponent() {
 		}),
 	);
 
+	const labels = useQuery(
+		orpc.label.list.queryOptions({
+			input:
+				workspace.data?.id && team.data?.id
+					? {
+							workspaceId: workspace.data.id,
+							teamId: team.data.id,
+							scope: "all",
+						}
+					: skipToken,
+		}),
+	);
+
 	const statuses = useQuery(
 		orpc.issue.status.list.queryOptions({
 			input: workspace.data?.id ? { id: workspace.data.id } : skipToken,

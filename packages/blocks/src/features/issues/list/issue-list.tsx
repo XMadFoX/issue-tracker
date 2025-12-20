@@ -1,6 +1,7 @@
-import type { Outputs } from "@prism/api/src/router";
+import type { Inputs, Outputs } from "@prism/api/src/router";
 import { Badge } from "@prism/ui/components/badge";
 import { Button } from "@prism/ui/components/button";
+import { MultiSelect } from "@prism/ui/components/multi-select";
 import {
 	Table,
 	TableBody,
@@ -17,6 +18,7 @@ type Props = {
 	issues: Outputs["issue"]["list"];
 	statuses: Outputs["issue"]["status"]["list"];
 	priorities: Outputs["priority"]["list"];
+	labels: Outputs["label"]["list"];
 	teamId: string;
 	workspaceId: string;
 	onIssueSubmit: ComponentProps<typeof IssueCreateModal>["onSubmit"];
@@ -36,6 +38,7 @@ export function IssueList({
 	workspaceId,
 	teamId,
 	priorities,
+	labels,
 	onIssueSubmit,
 }: Props) {
 	const groupedIssues = useMemo(() => {
@@ -75,7 +78,11 @@ export function IssueList({
 						</div>
 
 						{statusIssues.length > 0 && (
-							<IssuesTable statusIssues={statusIssues} />
+							<IssuesTable
+								statusIssues={statusIssues}
+								labels={labels}
+								workspaceId={workspaceId}
+							/>
 						)}
 					</div>
 				);
@@ -86,7 +93,15 @@ export function IssueList({
 
 type StatusIssues = Props["issues"];
 
-function IssuesTable({ statusIssues }: { statusIssues: StatusIssues }) {
+function IssuesTable({
+	statusIssues,
+	labels,
+	workspaceId,
+}: {
+	statusIssues: StatusIssues;
+	labels: Props["labels"];
+	workspaceId: string;
+}) {
 	return (
 		<div className="rounded-md border">
 			<Table>
@@ -95,6 +110,7 @@ function IssuesTable({ statusIssues }: { statusIssues: StatusIssues }) {
 						<TableHead className="w-[100px]">ID</TableHead>
 						<TableHead>Title</TableHead>
 						<TableHead>Priority</TableHead>
+						<TableHead>Label</TableHead>
 						<TableHead>Assignee</TableHead>
 						<TableHead className="text-right">Created</TableHead>
 					</TableRow>
