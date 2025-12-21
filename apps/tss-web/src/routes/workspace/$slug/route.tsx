@@ -1,5 +1,11 @@
 import type { Outputs } from "@prism/api/src/router";
-
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@prism/ui/components/select";
 import {
 	Sidebar,
 	SidebarContent,
@@ -13,7 +19,12 @@ import {
 	SidebarProvider,
 } from "@prism/ui/components/sidebar";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	Link,
+	Outlet,
+	useNavigate,
+} from "@tanstack/react-router";
 import { Contact } from "lucide-react";
 import { orpc } from "src/orpc/client";
 
@@ -26,11 +37,15 @@ function WorkspaceLayout() {
 	const workspace = useQuery(
 		orpc.workspace.getBySlug.queryOptions({ input: { slug } }),
 	);
+	const workspaces = useQuery(orpc.workspace.list.queryOptions());
 
 	return (
 		<div>
 			<SidebarProvider defaultOpen={true}>
-				<WorkspaceSidebar workspace={workspace.data} />
+				<WorkspaceSidebar
+					workspace={workspace.data}
+					workspaces={workspaces.data}
+				/>
 				<Outlet />
 			</SidebarProvider>
 		</div>
@@ -39,9 +54,12 @@ function WorkspaceLayout() {
 
 export function WorkspaceSidebar({
 	workspace,
+	workspaces,
 }: {
 	workspace: undefined | Outputs["workspace"]["getBySlug"];
+	workspaces: undefined | Outputs["workspace"]["list"];
 }) {
+	const navigate = useNavigate();
 	const teams = useQuery(
 		orpc.team.listByWorkspace.queryOptions({
 			input: { id: workspace?.id ?? "" },
@@ -51,7 +69,30 @@ export function WorkspaceSidebar({
 
 	return (
 		<Sidebar>
-			<SidebarHeader>{workspace?.name || "Loading..."}</SidebarHeader>
+			<SidebarHeader>
+				<Select
+					value={workspace?.slug}
+					onValueChange={(slug) => {
+						navigate({
+							to: "/workspace/$slug",
+							params: { slug },
+						});
+					}}
+				>
+					<SelectTrigger className="w-full">
+						<SelectValue placeholder="Select workspace" />
+					</SelectTrigger>
+					<SelectContent>
+						{workspaces
+							?.filter((ws) => ws.slug !== "")
+							.map((ws) => (
+								<SelectItem key={ws.id} value={ws.slug}>
+									{ws.name}
+								</SelectItem>
+							))}
+					</SelectContent>
+				</Select>
+			</SidebarHeader>
 			<SidebarContent>
 				<SidebarGroup>
 					<SidebarGroupLabel>Teams</SidebarGroupLabel>
