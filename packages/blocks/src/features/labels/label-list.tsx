@@ -1,0 +1,161 @@
+import type { Inputs, Outputs } from "@prism/api/src/router";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@prism/ui/components/select";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@prism/ui/components/table";
+import {
+	type ColumnDef,
+	flexRender,
+	getCoreRowModel,
+	useReactTable,
+} from "@tanstack/react-table";
+
+type Label = Outputs["label"]["list"][0];
+type LabelListInput = Inputs["label"]["list"];
+type TeamId = Extract<LabelListInput, { scope: "team" }>["teamId"];
+export type ScopeSelectorValue = "workspace" | "all" | TeamId;
+
+interface LabelListProps {
+	labels: Label[];
+	teams: Outputs["team"]["listByWorkspace"];
+	onScopeChange: (value: ScopeSelectorValue) => void;
+	currentScopeValue: ScopeSelectorValue;
+}
+
+const rtf1 = new Intl.RelativeTimeFormat("en", { style: "short" });
+
+export const columns: ColumnDef<Label>[] = [
+	{
+		accessorKey: "name",
+		header: "Name",
+		cell: ({ row }) => {
+			const label = row.original;
+			return (
+				<div className="flex items-center gap-2">
+					<div
+						className="size-3 rounded-full border-2"
+						style={{ backgroundColor: label.color ?? "transparent" }}
+					/>
+					<span className="font-medium">{label.name}</span>
+				</div>
+			);
+		},
+	},
+	{
+		accessorKey: "description",
+		header: "Description",
+	},
+	{
+		accessorKey: "updatedAt",
+		header: "Updated At",
+		cell: ({ row }) => {
+			const label = row.original;
+			return rtf1.format(label.updatedAt.getTime() - Date.now(), "day");
+		},
+	},
+	{
+		accessorKey: "createdAt",
+		header: "Created At",
+		cell: ({ row }) => {
+			const label = row.original;
+			return new Date(label.createdAt).toLocaleDateString();
+		},
+	},
+];
+
+export function LabelList({
+	labels,
+	teams,
+	onScopeChange,
+	currentScopeValue,
+}: LabelListProps) {
+	const table = useReactTable({
+		data: labels,
+		columns,
+		getCoreRowModel: getCoreRowModel(),
+	});
+
+	return (
+		<div className="space-y-4">
+			<Select
+				value={currentScopeValue}
+				onValueChange={(value) => onScopeChange(value as ScopeSelectorValue)}
+			>
+				<SelectTrigger className="w-[200px]">
+					<SelectValue placeholder="Scope" />
+				</SelectTrigger>
+				<SelectContent>
+					<SelectItem value="workspace">Workspace</SelectItem>
+					<SelectItem value="all">Workspace & all teams</SelectItem>
+					{teams.map((team) => (
+						<SelectItem key={team.id} value={team.id}>
+							{team.name}
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
+
+			<div className="rounded-md border">
+				<Table>
+					<TableHeader>
+						{table.getHeaderGroups().map((headerGroup) => (
+							<TableRow key={headerGroup.id}>
+								{headerGroup.headers.map((header) => {
+									return (
+										<TableHead key={header.id}>
+											{header.isPlaceholder
+												? null
+												: flexRender(
+														header.column.columnDef.header,
+														header.getContext(),
+													)}
+										</TableHead>
+									);
+								})}
+							</TableRow>
+						))}
+					</TableHeader>
+					<TableBody>
+						{table.getRowModel().rows?.length ? (
+							table.getRowModel().rows.map((row) => (
+								<TableRow
+									key={row.id}
+									data-state={row.getIsSelected() && "selected"}
+								>
+									{row.getVisibleCells().map((cell) => (
+										<TableCell key={cell.id}>
+											{flexRender(
+												cell.column.columnDef.cell,
+												cell.getContext(),
+											)}
+										</TableCell>
+									))}
+								</TableRow>
+							))
+						) : (
+							<TableRow>
+								<TableCell
+									colSpan={columns.length}
+									className="h-24 text-center"
+								>
+									No results.
+								</TableCell>
+							</TableRow>
+						)}
+					</TableBody>
+				</Table>
+			</div>
+		</div>
+	);
+}

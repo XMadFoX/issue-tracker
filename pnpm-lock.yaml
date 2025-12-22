@@ -14,22 +14,22 @@ importers:
         specifier: ^10.0.0
         version: 10.1.0
       '@orpc/client':
-        specifier: ^1.13.0
+        specifier: ^1.11.3
         version: 1.13.0
       '@orpc/json-schema':
-        specifier: ^1.13.0
+        specifier: ^1.11.3
         version: 1.13.0(crossws@0.4.1(srvx@0.9.6))(ws@8.18.3)
       '@orpc/openapi':
-        specifier: ^1.13.0
+        specifier: ^1.11.3
         version: 1.13.0(crossws@0.4.1(srvx@0.9.6))(ws@8.18.3)
       '@orpc/server':
-        specifier: ^1.13.0
+        specifier: ^1.11.3
         version: 1.13.0(crossws@0.4.1(srvx@0.9.6))(ws@8.18.3)
       '@orpc/tanstack-query':
-        specifier: ^1.13.0
+        specifier: ^1.11.3
         version: 1.13.0(@orpc/client@1.13.0)(@tanstack/query-core@5.90.10)
       '@orpc/zod':
-        specifier: ^1.13.0
+        specifier: ^1.11.3
         version: 1.13.0(@orpc/contract@1.13.0)(@orpc/server@1.13.0(crossws@0.4.1(srvx@0.9.6))(ws@8.18.3))(crossws@0.4.1(srvx@0.9.6))(ws@8.18.3)(zod@4.1.12)
       '@prism/api':
         specifier: workspace:*
