@@ -1,12 +1,12 @@
 "use client";
 
 // https://github.com/vatsalpipalava/shadcn-input-color/blob/main/src/components/input-color.tsx
-import { Button } from "@/components/ui/button";
+import { Button } from "./button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
+} from "./popover";
 import { HexColorPicker, HexAlphaColorPicker } from "react-colorful";
 import {
   Select,
@@ -14,9 +14,9 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "./select";
+import { Input } from "./input";
+import { Label } from "./label";
 import { Loader2, PipetteIcon } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
