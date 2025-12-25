@@ -1,4 +1,5 @@
 import type { Inputs, Outputs } from "@prism/api/src/router";
+import ColorPicker from "@prism/ui/components/color-picker";
 import {
 	Select,
 	SelectContent,
@@ -43,9 +44,16 @@ export const columns: ColumnDef<Label>[] = [
 			const label = row.original;
 			return (
 				<div className="flex items-center gap-2">
-					<div
-						className="size-3 rounded-full border-2"
-						style={{ backgroundColor: label.color ?? "transparent" }}
+					<ColorPicker
+						value={label.color ?? "#000000"}
+						onChange={(color) => console.log(color)}
+						showControls={false}
+						trigger={
+							<div
+								className="size-3 rounded-full border-2 cursor-pointer"
+								style={{ backgroundColor: label.color ?? "transparent" }}
+							/>
+						}
 					/>
 					<span className="font-medium">{label.name}</span>
 				</div>
