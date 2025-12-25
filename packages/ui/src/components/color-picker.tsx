@@ -19,16 +19,7 @@ import { Input } from "./input";
 import { Label } from "./label";
 import { Loader2, PipetteIcon } from "lucide-react";
 import { useState, useEffect } from "react";
-import {
-  hexToRgb,
-  rgbToHsl,
-  rgbToHex,
-  hslToRgb,
-  hexToRgba,
-  rgbaToHex,
-  rgbaToHsla,
-  hslaToRgba,
-} from "@/helpers/color-converter";
+import Color from "color";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 
@@ -71,23 +62,23 @@ export default function InputColor({
 }: ColorPickerProps) {
   const [colorFormat, setColorFormat] = useState(alpha ? "HEXA" : "HEX");
   const [colorValues, setColorValues] = useState<ColorValues>(() => {
+    const color = Color(value);
+    const rgb = color.rgb().array();
+    const hsl = color.hsl().array();
+    const a = color.alpha();
     if (alpha) {
-      const rgba = hexToRgba(value);
-      const hsla = rgbaToHsla(rgba.r, rgba.g, rgba.b, rgba.a);
       return {
         hex: value.length === 9 ? value.slice(0, 7) : value,
-        rgb: { r: rgba.r, g: rgba.g, b: rgba.b },
-        hsl: rgbToHsl(rgba.r, rgba.g, rgba.b),
-        rgba,
-        hsla,
+        rgb: { r: rgb[0], g: rgb[1], b: rgb[2] },
+        hsl: { h: hsl[0], s: hsl[1], l: hsl[2] },
+        rgba: { r: rgb[0], g: rgb[1], b: rgb[2], a },
+        hsla: { h: hsl[0], s: hsl[1], l: hsl[2], a },
       };
     } else {
-      const rgb = hexToRgb(value);
-      const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
       return {
         hex: value,
-        rgb,
-        hsl,
+        rgb: { r: rgb[0], g: rgb[1], b: rgb[2] },
+        hsl: { h: hsl[0], s: hsl[1], l: hsl[2] },
       };
     }
   });
@@ -97,24 +88,24 @@ export default function InputColor({
 
   // Update all color formats when color changes
   const updateColorValues = (newColor: string) => {
+    const color = Color(newColor);
+    const rgb = color.rgb().array();
+    const hsl = color.hsl().array();
+    const a = color.alpha();
     if (alpha) {
-      const rgba = hexToRgba(newColor);
-      const hsla = rgbaToHsla(rgba.r, rgba.g, rgba.b, rgba.a);
       setColorValues({
         hex: newColor.length === 9 ? newColor.slice(0, 7) : newColor,
-        rgb: { r: rgba.r, g: rgba.g, b: rgba.b },
-        hsl: rgbToHsl(rgba.r, rgba.g, rgba.b),
-        rgba,
-        hsla,
+        rgb: { r: rgb[0], g: rgb[1], b: rgb[2] },
+        hsl: { h: hsl[0], s: hsl[1], l: hsl[2] },
+        rgba: { r: rgb[0], g: rgb[1], b: rgb[2], a },
+        hsla: { h: hsl[0], s: hsl[1], l: hsl[2], a },
       });
       setHexInputValue(newColor.toUpperCase());
     } else {
-      const rgb = hexToRgb(newColor);
-      const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
       setColorValues({
         hex: newColor.toUpperCase(),
-        rgb,
-        hsl,
+        rgb: { r: rgb[0], g: rgb[1], b: rgb[2] },
+        hsl: { h: hsl[0], s: hsl[1], l: hsl[2] },
       });
       setHexInputValue(newColor.toUpperCase());
     }
@@ -168,10 +159,15 @@ export default function InputColor({
     const numValue = Number.parseInt(value) || 0;
     const clampedValue = Math.max(0, Math.min(255, numValue));
     const newRgb = { ...colorValues.rgb, [component]: clampedValue };
-    const hex = rgbToHex(newRgb.r, newRgb.g, newRgb.b);
-    const hsl = rgbToHsl(newRgb.r, newRgb.g, newRgb.b);
+    const hex = Color(newRgb).hex();
+    const hslArray = Color(newRgb).hsl().array();
 
-    setColorValues({ ...colorValues, hex, rgb: newRgb, hsl });
+    setColorValues({
+      ...colorValues,
+      hex,
+      rgb: newRgb,
+      hsl: { h: hslArray[0], s: hslArray[1], l: hslArray[2] },
+    });
     onChange(hex);
   };
 
@@ -192,16 +188,16 @@ export default function InputColor({
     }
 
     const newRgba = { ...colorValues.rgba, [component]: clampedValue };
-    const hex = rgbaToHex(newRgba.r, newRgba.g, newRgba.b, newRgba.a);
-    const hsla = rgbaToHsla(newRgba.r, newRgba.g, newRgba.b, newRgba.a);
+    const hex = Color(newRgba).hex();
+    const hslArray = Color(newRgba).hsl().array();
 
     setColorValues({
       ...colorValues,
       hex: hex.slice(0, 7),
       rgb: { r: newRgba.r, g: newRgba.g, b: newRgba.b },
-      hsl: rgbToHsl(newRgba.r, newRgba.g, newRgba.b),
+      hsl: { h: hslArray[0], s: hslArray[1], l: hslArray[2] },
       rgba: newRgba,
-      hsla,
+      hsla: { h: hslArray[0], s: hslArray[1], l: hslArray[2], a: newRgba.a },
     });
     onChange(hex);
   };
@@ -216,10 +212,15 @@ export default function InputColor({
       clampedValue = Math.max(0, Math.min(100, numValue));
     }
     const newHsl = { ...colorValues.hsl, [component]: clampedValue };
-    const rgb = hslToRgb(newHsl.h, newHsl.s, newHsl.l);
-    const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+    const rgbArray = Color(newHsl).rgb().array();
+    const hex = Color(newHsl).hex();
 
-    setColorValues({ ...colorValues, hex, rgb, hsl: newHsl });
+    setColorValues({
+      ...colorValues,
+      hex,
+      rgb: { r: rgbArray[0], g: rgbArray[1], b: rgbArray[2] },
+      hsl: newHsl,
+    });
     onChange(hex);
   };
 
@@ -242,15 +243,15 @@ export default function InputColor({
     }
 
     const newHsla = { ...colorValues.hsla, [component]: clampedValue };
-    const rgba = hslaToRgba(newHsla.h, newHsla.s, newHsla.l, newHsla.a);
-    const hex = rgbaToHex(rgba.r, rgba.g, rgba.b, rgba.a);
+    const rgbArray = Color(newHsla).rgb().array();
+    const hex = Color(newHsla).hex();
 
     setColorValues({
       ...colorValues,
       hex: hex.slice(0, 7),
-      rgb: { r: rgba.r, g: rgba.g, b: rgba.b },
+      rgb: { r: rgbArray[0], g: rgbArray[1], b: rgbArray[2] },
       hsl: { h: newHsla.h, s: newHsla.s, l: newHsla.l },
-      rgba,
+      rgba: { r: rgbArray[0], g: rgbArray[1], b: rgbArray[2], a: newHsla.a },
       hsla: newHsla,
     });
     onChange(hex);
@@ -300,12 +301,7 @@ export default function InputColor({
       return hexInputValue;
     }
     if (alpha && colorValues.rgba) {
-      return rgbaToHex(
-        colorValues.rgba.r,
-        colorValues.rgba.g,
-        colorValues.rgba.b,
-        colorValues.rgba.a
-      );
+      return Color(colorValues.rgba).hex();
     }
     return colorValues.hex;
   };
