@@ -48,10 +48,7 @@ export const listLabels = authedRouter
 					or(isNull(label.teamId), eq(label.teamId, input.teamId)),
 				);
 			}
-			return and(
-				eq(label.workspaceId, input.workspaceId),
-				isNull(label.teamId),
-			);
+			return and(eq(label.workspaceId, input.workspaceId));
 		})();
 
 		const rows = await db
@@ -86,15 +83,22 @@ export const updateLabel = authedRouter
 	.input(labelUpdateSchema)
 	.errors({ ...commonErrors, NOT_FOUND: {} })
 	.handler(async ({ context, input, errors }) => {
+		const [existingLabel] = await db
+			.select()
+			.from(label)
+			.where(eq(label.id, input.id))
+			.limit(1);
+		if (!existingLabel) throw errors.NOT_FOUND;
+
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
-			workspaceId: input.workspaceId,
-			teamId: input.teamId ?? undefined,
+			workspaceId: existingLabel.workspaceId,
+			teamId: existingLabel.teamId ?? undefined,
 			permissionKey: "label:update",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED;
 
-		const values = omit(input, ["id", "workspaceId"]);
+		const values = omit(input, ["id"]);
 		const [updated] = await db
 			.update(label)
 			.set(values)
@@ -106,11 +110,19 @@ export const updateLabel = authedRouter
 
 export const deleteLabel = authedRouter
 	.input(labelDeleteSchema)
-	.errors(commonErrors)
+	.errors({ ...commonErrors, NOT_FOUND: {} })
 	.handler(async ({ context, input, errors }) => {
+		const [existingLabel] = await db
+			.select()
+			.from(label)
+			.where(eq(label.id, input.id))
+			.limit(1);
+		if (!existingLabel) throw errors.NOT_FOUND;
+
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
-			workspaceId: input.workspaceId,
+			workspaceId: existingLabel.workspaceId,
+			teamId: existingLabel.teamId ?? undefined,
 			permissionKey: "label:delete",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED;
@@ -119,6 +131,7 @@ export const deleteLabel = authedRouter
 			.delete(label)
 			.where(eq(label.id, input.id))
 			.returning();
+		if (!deleted) throw errors.NOT_FOUND;
 		return deleted;
 	});
 

@@ -12,14 +12,16 @@ export const labelCreateSchema = labelInsertSchema.omit({
 	updatedAt: true,
 });
 
-export const labelUpdateSchema = labelInsertSchema
-	.partial()
-	.required({ id: true, workspaceId: true });
+export const labelUpdateSchema = labelInsertSchema.pick({ id: true }).merge(
+	labelInsertSchema.partial().omit({
+		id: true,
+		workspaceId: true,
+		teamId: true,
+		createdAt: true,
+	}),
+);
 
-export const labelDeleteSchema = labelInsertSchema.pick({
-	id: true,
-	workspaceId: true,
-});
+export const labelDeleteSchema = labelInsertSchema.pick({ id: true });
 
 const commonListSchema = z.object({
 	workspaceId: workspaceInsertSchema.shape.id,
