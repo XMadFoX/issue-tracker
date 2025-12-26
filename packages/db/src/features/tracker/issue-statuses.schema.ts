@@ -41,7 +41,7 @@ export const issueStatusGroup = pgTable(
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
 			.notNull()
-			.$onUpdate(() => sql`now()`),
+			.$onUpdate(() => new Date()),
 	},
 	(t) => [
 		uniqueIndex("issue_status_group_workspace_key_key").on(
@@ -85,7 +85,7 @@ export const issueStatus = pgTable(
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
 			.notNull()
-			.$onUpdate(() => sql`now()`),
+			.$onUpdate(() => new Date()),
 	},
 	(t) => [
 		uniqueIndex("issue_status_workspace_name_key").on(t.workspaceId, t.name),

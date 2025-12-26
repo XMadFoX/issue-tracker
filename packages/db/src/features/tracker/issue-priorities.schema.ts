@@ -27,7 +27,7 @@ export const issuePriority = pgTable(
 		updatedAt: timestamp("updated_at", { withTimezone: true })
 			.defaultNow()
 			.notNull()
-			.$onUpdate(() => sql`now()`),
+			.$onUpdate(() => new Date()),
 	},
 	(t) => {
 		return {

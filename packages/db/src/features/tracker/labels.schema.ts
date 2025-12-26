@@ -19,7 +19,7 @@ export const label = pgTable(
 		updatedAt: timestamp("updated_at", { withTimezone: true })
 			.defaultNow()
 			.notNull()
-			.$onUpdate(() => sql`now()`),
+			.$onUpdateFn(() => new Date()),
 	},
 	(t) => [
 		uniqueIndex("label_workspace_name_when_global")

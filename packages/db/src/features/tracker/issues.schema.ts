@@ -63,7 +63,7 @@ export const issue = pgTable(
 		updatedAt: timestamp("updated_at", { withTimezone: true })
 			.defaultNow()
 			.notNull()
-			.$onUpdate(() => sql`now()`),
+			.$onUpdate(() => new Date()),
 	},
 	(table) => [
 		uniqueIndex("issue_team_number_key").on(table.teamId, table.number),
