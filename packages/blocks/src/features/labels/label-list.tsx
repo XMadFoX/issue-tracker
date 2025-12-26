@@ -21,6 +21,7 @@ import {
 	getCoreRowModel,
 	useReactTable,
 } from "@tanstack/react-table";
+import { useMemo } from "react";
 
 type Label = Outputs["label"]["list"][0];
 type LabelListInput = Inputs["label"]["list"];
@@ -93,12 +94,13 @@ export function LabelList({
 	currentScopeValue,
 	updateLabel,
 }: LabelListProps) {
+	const columns = useMemo(() => createColumns(updateLabel), [updateLabel]);
+
 	const table = useReactTable({
 		data: labels,
-		columns: createColumns(updateLabel),
+		columns,
 		getCoreRowModel: getCoreRowModel(),
 	});
-	const columns = createColumns(updateLabel);
 
 	return (
 		<div className="space-y-4">
