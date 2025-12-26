@@ -15,6 +15,7 @@ import { Route as WorkspaceCreateRouteImport } from './routes/workspace/create'
 import { Route as WorkspaceSlugRouteRouteImport } from './routes/workspace/$slug/route'
 import { Route as WorkspaceSlugIndexRouteImport } from './routes/workspace/$slug/index'
 import { Route as WorkspaceSlugTeamsIndexRouteImport } from './routes/workspace/$slug/teams/index'
+import { Route as WorkspaceSlugSettingsLabelsIndexRouteImport } from './routes/workspace/$slug/settings/labels/index'
 import { Route as WorkspaceSlugTeamsTeamSlugIssuesIndexRouteImport } from './routes/workspace/$slug/teams/$teamSlug/issues/index'
 import { Route as WorkspaceSlugTeamsTeamSlugIssuesCreateRouteImport } from './routes/workspace/$slug/teams/$teamSlug/issues/create'
 
@@ -48,6 +49,12 @@ const WorkspaceSlugTeamsIndexRoute = WorkspaceSlugTeamsIndexRouteImport.update({
   path: '/teams/',
   getParentRoute: () => WorkspaceSlugRouteRoute,
 } as any)
+const WorkspaceSlugSettingsLabelsIndexRoute =
+  WorkspaceSlugSettingsLabelsIndexRouteImport.update({
+    id: '/settings/labels/',
+    path: '/settings/labels/',
+    getParentRoute: () => WorkspaceSlugRouteRoute,
+  } as any)
 const WorkspaceSlugTeamsTeamSlugIssuesIndexRoute =
   WorkspaceSlugTeamsTeamSlugIssuesIndexRouteImport.update({
     id: '/teams/$teamSlug/issues/',
@@ -68,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/workspace/create': typeof WorkspaceCreateRoute
   '/workspace/$slug/': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams': typeof WorkspaceSlugTeamsIndexRoute
+  '/workspace/$slug/settings/labels': typeof WorkspaceSlugSettingsLabelsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
   '/workspace/$slug/teams/$teamSlug/issues': typeof WorkspaceSlugTeamsTeamSlugIssuesIndexRoute
 }
@@ -77,6 +85,7 @@ export interface FileRoutesByTo {
   '/workspace/create': typeof WorkspaceCreateRoute
   '/workspace/$slug': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams': typeof WorkspaceSlugTeamsIndexRoute
+  '/workspace/$slug/settings/labels': typeof WorkspaceSlugSettingsLabelsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
   '/workspace/$slug/teams/$teamSlug/issues': typeof WorkspaceSlugTeamsTeamSlugIssuesIndexRoute
 }
@@ -88,6 +97,7 @@ export interface FileRoutesById {
   '/workspace/create': typeof WorkspaceCreateRoute
   '/workspace/$slug/': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams/': typeof WorkspaceSlugTeamsIndexRoute
+  '/workspace/$slug/settings/labels/': typeof WorkspaceSlugSettingsLabelsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
   '/workspace/$slug/teams/$teamSlug/issues/': typeof WorkspaceSlugTeamsTeamSlugIssuesIndexRoute
 }
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/workspace/create'
     | '/workspace/$slug/'
     | '/workspace/$slug/teams'
+    | '/workspace/$slug/settings/labels'
     | '/workspace/$slug/teams/$teamSlug/issues/create'
     | '/workspace/$slug/teams/$teamSlug/issues'
   fileRoutesByTo: FileRoutesByTo
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/workspace/create'
     | '/workspace/$slug'
     | '/workspace/$slug/teams'
+    | '/workspace/$slug/settings/labels'
     | '/workspace/$slug/teams/$teamSlug/issues/create'
     | '/workspace/$slug/teams/$teamSlug/issues'
   id:
@@ -119,6 +131,7 @@ export interface FileRouteTypes {
     | '/workspace/create'
     | '/workspace/$slug/'
     | '/workspace/$slug/teams/'
+    | '/workspace/$slug/settings/labels/'
     | '/workspace/$slug/teams/$teamSlug/issues/create'
     | '/workspace/$slug/teams/$teamSlug/issues/'
   fileRoutesById: FileRoutesById
@@ -174,6 +187,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceSlugTeamsIndexRouteImport
       parentRoute: typeof WorkspaceSlugRouteRoute
     }
+    '/workspace/$slug/settings/labels/': {
+      id: '/workspace/$slug/settings/labels/'
+      path: '/settings/labels'
+      fullPath: '/workspace/$slug/settings/labels'
+      preLoaderRoute: typeof WorkspaceSlugSettingsLabelsIndexRouteImport
+      parentRoute: typeof WorkspaceSlugRouteRoute
+    }
     '/workspace/$slug/teams/$teamSlug/issues/': {
       id: '/workspace/$slug/teams/$teamSlug/issues/'
       path: '/teams/$teamSlug/issues'
@@ -194,6 +214,7 @@ declare module '@tanstack/react-router' {
 interface WorkspaceSlugRouteRouteChildren {
   WorkspaceSlugIndexRoute: typeof WorkspaceSlugIndexRoute
   WorkspaceSlugTeamsIndexRoute: typeof WorkspaceSlugTeamsIndexRoute
+  WorkspaceSlugSettingsLabelsIndexRoute: typeof WorkspaceSlugSettingsLabelsIndexRoute
   WorkspaceSlugTeamsTeamSlugIssuesCreateRoute: typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
   WorkspaceSlugTeamsTeamSlugIssuesIndexRoute: typeof WorkspaceSlugTeamsTeamSlugIssuesIndexRoute
 }
@@ -201,6 +222,7 @@ interface WorkspaceSlugRouteRouteChildren {
 const WorkspaceSlugRouteRouteChildren: WorkspaceSlugRouteRouteChildren = {
   WorkspaceSlugIndexRoute: WorkspaceSlugIndexRoute,
   WorkspaceSlugTeamsIndexRoute: WorkspaceSlugTeamsIndexRoute,
+  WorkspaceSlugSettingsLabelsIndexRoute: WorkspaceSlugSettingsLabelsIndexRoute,
   WorkspaceSlugTeamsTeamSlugIssuesCreateRoute:
     WorkspaceSlugTeamsTeamSlugIssuesCreateRoute,
   WorkspaceSlugTeamsTeamSlugIssuesIndexRoute:

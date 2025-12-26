@@ -3,7 +3,8 @@ import {
 	LabelList,
 	type ScopeSelectorValue,
 } from "@prism/blocks/src/features/labels/label-list";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
+
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { orpc } from "src/orpc/client";
@@ -30,6 +31,8 @@ function RouteComponent() {
 			input: labelListInput,
 		}),
 	);
+
+	const updateLabel = useMutation(orpc.label.update.mutationOptions({}));
 
 	const teams = useQuery(
 		orpc.team.listByWorkspace.queryOptions({
@@ -65,6 +68,7 @@ function RouteComponent() {
 				teams={teams.data ?? []}
 				onScopeChange={handleScopeChange}
 				currentScopeValue={currentScopeValue}
+				updateLabel={updateLabel.mutateAsync}
 			/>
 		</div>
 	);

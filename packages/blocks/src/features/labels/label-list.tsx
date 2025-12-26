@@ -25,6 +25,7 @@ import {
 type Label = Outputs["label"]["list"][0];
 type LabelListInput = Inputs["label"]["list"];
 type TeamId = Extract<LabelListInput, { scope: "team" }>["teamId"];
+type UpdateLabel = Inputs["label"]["update"];
 export type ScopeSelectorValue = "workspace" | "all" | TeamId;
 
 interface LabelListProps {
@@ -32,11 +33,14 @@ interface LabelListProps {
 	teams: Outputs["team"]["listByWorkspace"];
 	onScopeChange: (value: ScopeSelectorValue) => void;
 	currentScopeValue: ScopeSelectorValue;
+	updateLabel?: (input: UpdateLabel) => Promise<void>;
 }
 
 const rtf1 = new Intl.RelativeTimeFormat("en", { style: "short" });
 
-export const columns: ColumnDef<Label>[] = [
+export const createColumns = (
+	updateLabel?: LabelListProps["updateLabel"],
+): ColumnDef<Label>[] => [
 	{
 		accessorKey: "name",
 		header: "Name",
@@ -87,12 +91,14 @@ export function LabelList({
 	teams,
 	onScopeChange,
 	currentScopeValue,
+	updateLabel,
 }: LabelListProps) {
 	const table = useReactTable({
 		data: labels,
-		columns,
+		columns: createColumns(updateLabel),
 		getCoreRowModel: getCoreRowModel(),
 	});
+	const columns = createColumns(updateLabel);
 
 	return (
 		<div className="space-y-4">
