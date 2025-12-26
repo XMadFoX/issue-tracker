@@ -1,12 +1,18 @@
-import type { Inputs } from "@prism/api/src/router";
+import type { Inputs, Outputs } from "@prism/api/src/router";
 import {
 	LabelList,
 	type ScopeSelectorValue,
 } from "@prism/blocks/src/features/labels/label-list";
-import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useDebouncedCallback } from "@tanstack/react-pacer";
+import {
+	useMutation,
+	useQuery,
+	useQueryClient,
+	useSuspenseQuery,
+} from "@tanstack/react-query";
 
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { orpc } from "src/orpc/client";
 
 export const Route = createFileRoute("/workspace/$slug/settings/labels/")({
@@ -32,7 +38,44 @@ function RouteComponent() {
 		}),
 	);
 
+	const queryClient = useQueryClient();
 	const updateLabel = useMutation(orpc.label.update.mutationOptions({}));
+
+	const debouncedUpdateLabel = useDebouncedCallback(
+		async (input: Inputs["label"]["update"]) => {
+			await updateLabel.mutateAsync(input);
+		},
+		{ wait: 300 },
+	);
+
+	const handleUpdateLabel = useCallback(
+		async (input: Inputs["label"]["update"]) => {
+			const previousLabels = queryClient.getQueryData<Outputs["label"]["list"]>(
+				orpc.label.list.queryKey({ input: labelListInput }),
+			);
+
+			queryClient.setQueryData<Outputs["label"]["list"]>(
+				orpc.label.list.queryKey({ input: labelListInput }),
+				(old) =>
+					old?.map((label) =>
+						label.id === input.id
+							? { ...label, color: input.color ?? null }
+							: label,
+					),
+			);
+
+			try {
+				await debouncedUpdateLabel(input);
+			} catch (error) {
+				queryClient.setQueryData(
+					orpc.label.list.queryKey({ input: labelListInput }),
+					previousLabels,
+				);
+				throw error;
+			}
+		},
+		[debouncedUpdateLabel, labelListInput, queryClient],
+	);
 
 	const teams = useQuery(
 		orpc.team.listByWorkspace.queryOptions({
@@ -68,7 +111,7 @@ function RouteComponent() {
 				teams={teams.data ?? []}
 				onScopeChange={handleScopeChange}
 				currentScopeValue={currentScopeValue}
-				updateLabel={updateLabel.mutateAsync}
+				updateLabel={handleUpdateLabel}
 			/>
 		</div>
 	);
