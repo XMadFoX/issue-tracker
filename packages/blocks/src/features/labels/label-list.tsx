@@ -50,7 +50,7 @@ export const createColumns = (
 				<div className="flex items-center gap-2">
 					<ColorPicker
 						value={label.color ?? "#000000"}
-						onChange={(color) => console.log(color)}
+						onChange={(color) => updateLabel?.({ id: label.id, color })}
 						showControls={false}
 						trigger={
 							<div
