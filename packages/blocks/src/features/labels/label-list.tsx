@@ -1,5 +1,6 @@
 import type { Inputs, Outputs } from "@prism/api/src/router";
 import ColorPicker from "@prism/ui/components/color-picker";
+import { InlineEdit } from "@prism/ui/components/inline-edit";
 import {
 	Select,
 	SelectContent,
@@ -60,7 +61,11 @@ export const createColumns = (
 							/>
 						}
 					/>
-					<span className="font-medium">{label.name}</span>
+					<InlineEdit
+						value={label.name}
+						onSave={(name) => updateLabel?.({ id: label.id, name })}
+						placeholder="Unnamed label"
+					/>
 				</div>
 			);
 		},
@@ -68,6 +73,17 @@ export const createColumns = (
 	{
 		accessorKey: "description",
 		header: "Description",
+		cell: ({ row }) => {
+			const label = row.original;
+			return (
+				<InlineEdit
+					value={label.description ?? ""}
+					onSave={(description) => updateLabel?.({ id: label.id, description })}
+					multiline
+					placeholder="Add description..."
+				/>
+			);
+		},
 	},
 	{
 		accessorKey: "updatedAt",
@@ -103,7 +119,7 @@ export function LabelList({
 	});
 
 	return (
-		<div className="space-y-4">
+		<div className="space-y-4 w-full">
 			<Select
 				value={currentScopeValue}
 				onValueChange={(value) => onScopeChange(value as ScopeSelectorValue)}
