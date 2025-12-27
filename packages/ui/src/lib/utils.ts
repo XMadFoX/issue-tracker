@@ -26,20 +26,19 @@ export function getRelativeTime(
 	const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
 
 	const units: Array<[number, Intl.RelativeTimeFormatUnit]> = [
-		[60, "minute"],
-		[3600, "hour"],
-		[86400, "day"],
-		[2592000, "month"],
 		[31536000, "year"],
+		[2592000, "month"],
+		[86400, "day"],
+		[3600, "hour"],
+		[60, "minute"],
 	];
 
 	for (const [threshold, unit] of units) {
-		if (absDiff < threshold) {
-			const value = Math.round(diffInSeconds / (threshold / 60));
+		if (absDiff >= threshold) {
+			const value = Math.round(diffInSeconds / threshold);
 			return rtf.format(value, unit);
 		}
 	}
 
-	const years = Math.round(diffInSeconds / 31536000);
-	return rtf.format(years, "year");
+	return rtf.format(Math.round(diffInSeconds), "second");
 }
