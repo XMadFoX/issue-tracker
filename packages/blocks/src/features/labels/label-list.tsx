@@ -16,6 +16,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@prism/ui/components/table";
+import { getRelativeTime } from "@prism/ui/lib/utils";
 import {
 	type ColumnDef,
 	flexRender,
@@ -90,7 +91,7 @@ export const createColumns = (
 		header: "Updated At",
 		cell: ({ row }) => {
 			const label = row.original;
-			return rtf1.format(label.updatedAt.getTime() - Date.now(), "day");
+			return getRelativeTime(label.updatedAt);
 		},
 	},
 	{
