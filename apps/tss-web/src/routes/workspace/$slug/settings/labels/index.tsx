@@ -88,6 +88,52 @@ function RouteComponent() {
 		}),
 	);
 
+	const createLabel = useMutation(orpc.label.create.mutationOptions({}));
+
+	const handleCreateLabel = useCallback(
+		async (
+			input: Inputs["label"]["create"],
+		): Promise<{ success: true } | { error: unknown }> => {
+			const previousLabels = queryClient.getQueryData<Outputs["label"]["list"]>(
+				orpc.label.list.queryKey({ input: labelListInput }),
+			);
+
+			queryClient.setQueryData<Outputs["label"]["list"]>(
+				orpc.label.list.queryKey({ input: labelListInput }),
+				(old) =>
+					old
+						? [
+								...old,
+								{
+									...input,
+									teamId: input.teamId ?? null,
+									color: input.color ?? null,
+									description: input.description ?? null,
+									id: `temp-${Date.now()}`,
+									createdAt: new Date(),
+									updatedAt: new Date(),
+								},
+							]
+						: [],
+			);
+
+			try {
+				await createLabel.mutateAsync(input);
+				await queryClient.invalidateQueries({
+					queryKey: orpc.label.list.queryKey({ input: labelListInput }),
+				});
+				return { success: true };
+			} catch (error) {
+				queryClient.setQueryData(
+					orpc.label.list.queryKey({ input: labelListInput }),
+					previousLabels,
+				);
+				return { error };
+			}
+		},
+		[createLabel, labelListInput, queryClient],
+	);
+
 	const handleScopeChange = (value: ScopeSelectorValue) => {
 		if (value === "workspace") {
 			setLabelListInput({ workspaceId: workspace.data.id, scope: "workspace" });
@@ -117,6 +163,8 @@ function RouteComponent() {
 				onScopeChange={handleScopeChange}
 				currentScopeValue={currentScopeValue}
 				updateLabel={handleUpdateLabel}
+				createLabel={handleCreateLabel}
+				workspaceId={workspace.data.id}
 			/>
 		</div>
 	);
