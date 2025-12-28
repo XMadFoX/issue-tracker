@@ -1,4 +1,5 @@
 import type { Inputs, Outputs } from "@prism/api/src/router";
+import { Button } from "@prism/ui/components/button";
 import ColorPicker from "@prism/ui/components/color-picker";
 import { InlineEdit } from "@prism/ui/components/inline-edit";
 import {
@@ -23,12 +24,16 @@ import {
 	getCoreRowModel,
 	useReactTable,
 } from "@tanstack/react-table";
-import { useMemo } from "react";
+import { PlusIcon } from "lucide-react";
+import { useCallback, useMemo } from "react";
+import { LabelCreateModal } from "./modal/create-modal";
 
 type Label = Outputs["label"]["list"][0];
 type LabelListInput = Inputs["label"]["list"];
 type TeamId = Extract<LabelListInput, { scope: "team" }>["teamId"];
 type UpdateLabel = Inputs["label"]["update"];
+type CreateLabel = Inputs["label"]["create"];
+type SubmitResult = { success: true } | { error: unknown };
 export type ScopeSelectorValue = "workspace" | "all" | TeamId;
 
 interface LabelListProps {
@@ -37,6 +42,8 @@ interface LabelListProps {
 	onScopeChange: (value: ScopeSelectorValue) => void;
 	currentScopeValue: ScopeSelectorValue;
 	updateLabel?: (input: UpdateLabel) => Promise<void>;
+	createLabel?: (input: CreateLabel) => Promise<SubmitResult>;
+	workspaceId: string;
 }
 
 export const createColumns = (
@@ -108,6 +115,8 @@ export function LabelList({
 	onScopeChange,
 	currentScopeValue,
 	updateLabel,
+	createLabel,
+	workspaceId,
 }: LabelListProps) {
 	const columns = useMemo(() => createColumns(updateLabel), [updateLabel]);
 
@@ -117,25 +126,64 @@ export function LabelList({
 		getCoreRowModel: getCoreRowModel(),
 	});
 
+	const handleCreateLabel = useCallback(
+		async (
+			input: CreateLabel,
+		): Promise<{ success: true } | { error: unknown }> => {
+			if (!createLabel) {
+				return { error: new Error("createLabel not provided") };
+			}
+			try {
+				await createLabel(input);
+				return { success: true };
+			} catch (error) {
+				return { error };
+			}
+		},
+		[createLabel],
+	);
+
+	const initialTeamId =
+		currentScopeValue !== "workspace" && currentScopeValue !== "all"
+			? currentScopeValue
+			: undefined;
+
 	return (
 		<div className="space-y-4 w-full">
-			<Select
-				value={currentScopeValue}
-				onValueChange={(value) => onScopeChange(value as ScopeSelectorValue)}
-			>
-				<SelectTrigger className="w-[200px]">
-					<SelectValue placeholder="Scope" />
-				</SelectTrigger>
-				<SelectContent>
-					<SelectItem value="workspace">Workspace</SelectItem>
-					<SelectItem value="all">Workspace & all teams</SelectItem>
-					{teams.map((team) => (
-						<SelectItem key={team.id} value={team.id}>
-							{team.name}
-						</SelectItem>
-					))}
-				</SelectContent>
-			</Select>
+			<div className="flex items-center justify-between gap-4">
+				<Select
+					value={currentScopeValue}
+					onValueChange={(value) => onScopeChange(value as ScopeSelectorValue)}
+				>
+					<SelectTrigger className="w-[200px]">
+						<SelectValue placeholder="Scope" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="workspace">Workspace</SelectItem>
+						<SelectItem value="all">Workspace & all teams</SelectItem>
+						{teams.map((team) => (
+							<SelectItem key={team.id} value={team.id}>
+								{team.name}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+
+				{createLabel && (
+					<LabelCreateModal
+						workspaceId={workspaceId}
+						teams={teams}
+						initialTeamId={initialTeamId}
+						onSubmit={handleCreateLabel}
+						trigger={
+							<Button size="sm">
+								<PlusIcon className="size-4" />
+								Create label
+							</Button>
+						}
+					/>
+				)}
+			</div>
 
 			<div className="rounded-md border">
 				<Table>
