@@ -1,5 +1,5 @@
 import type { labelCreateSchema } from "@prism/api/src/features/labels/schema";
-import type { Outputs } from "@prism/api/src/router";
+import type { Inputs, Outputs } from "@prism/api/src/router";
 import {
 	Dialog,
 	DialogContent,
@@ -15,9 +15,9 @@ import { LabelCreateForm } from "../form/create";
 type SubmitResult = { success: true } | { error: unknown };
 
 type LabelCreateModalProps = {
-	workspaceId: string;
+	workspaceId: Inputs["label"]["create"]["workspaceId"];
 	teams: Outputs["team"]["listByWorkspace"];
-	initialTeamId?: string;
+	initialTeamId?: Inputs["label"]["create"]["teamId"];
 	onSubmit: (label: z.input<typeof labelCreateSchema>) => Promise<SubmitResult>;
 	trigger: React.ReactNode;
 	title?: string;
