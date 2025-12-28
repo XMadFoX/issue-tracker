@@ -39,8 +39,6 @@ interface LabelListProps {
 	updateLabel?: (input: UpdateLabel) => Promise<void>;
 }
 
-const rtf1 = new Intl.RelativeTimeFormat("en", { style: "short" });
-
 export const createColumns = (
 	updateLabel?: LabelListProps["updateLabel"],
 ): ColumnDef<Label>[] => [

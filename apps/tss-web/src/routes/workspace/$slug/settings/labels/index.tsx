@@ -29,7 +29,7 @@ function RouteComponent() {
 	);
 	const [labelListInput, setLabelListInput] = useState<LabelListInput>({
 		workspaceId: workspace.data.id,
-		scope: "workspace",
+		scope: "all",
 	});
 
 	const labels = useQuery(
@@ -59,13 +59,18 @@ function RouteComponent() {
 				(old) =>
 					old?.map((label) =>
 						label.id === input.id
-							? { ...label, color: input.color ?? null }
+							? {
+									...label,
+									color: input.color ?? label.color,
+									name: input.name ?? label.name,
+									description: input.description ?? label.description,
+								}
 							: label,
 					),
 			);
 
 			try {
-				await debouncedUpdateLabel(input);
+				debouncedUpdateLabel(input);
 			} catch (error) {
 				queryClient.setQueryData(
 					orpc.label.list.queryKey({ input: labelListInput }),
@@ -105,7 +110,7 @@ function RouteComponent() {
 	}, [labelListInput]);
 
 	return (
-		<div className="p-6">
+		<div className="p-6 w-full">
 			<LabelList
 				labels={labels.data ?? []}
 				teams={teams.data ?? []}
