@@ -6,9 +6,16 @@ export const env = createEnv({
 		DATABASE_URL: z.string().url(),
 		PORT: z.coerce.number().optional().default(4000),
 		CORS_ORIGINS: z
-			.array(z.string())
+			.string()
 			.optional()
-			.default(["http://localhost:3000"]),
+			.default("http://localhost:3000")
+			.transform(
+				(val) =>
+					val
+						.split(",")
+						.map((s) => s.trim())
+						.filter(Boolean), // remove empty strings
+			),
 	},
 	runtimeEnv: process.env,
 });
