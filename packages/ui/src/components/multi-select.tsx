@@ -1,22 +1,14 @@
-import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import {
 	CheckIcon,
-	XCircle,
 	ChevronDown,
-	XIcon,
 	WandSparkles,
+	XCircle,
+	XIcon,
 } from "lucide-react";
-
-import { cn } from "@/lib/utils";
-import { Separator } from "@/components/separator";
-import { Button } from "@/components/button";
+import * as React from "react";
 import { Badge } from "@/components/badge";
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "@/components/popover";
+import { Button } from "@/components/button";
 import {
 	Command,
 	CommandEmpty,
@@ -26,6 +18,9 @@ import {
 	CommandList,
 	CommandSeparator,
 } from "@/components/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/popover";
+import { Separator } from "@/components/separator";
+import { cn } from "@/lib/utils";
 
 /**
  * Animation types and configurations
@@ -88,6 +83,8 @@ interface MultiSelectOption {
 	style?: {
 		/** Custom badge color */
 		badgeColor?: string;
+		/** Custom badge text color */
+		badgeTextColor?: string;
 		/** Custom icon color */
 		iconColor?: string;
 		/** Gradient background for badge */
@@ -847,6 +844,9 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 													animationDuration: `${animation}s`,
 													...(customStyle?.badgeColor && {
 														backgroundColor: customStyle.badgeColor,
+													}),
+													...(customStyle?.badgeTextColor && {
+														color: customStyle.badgeTextColor,
 													}),
 													...(customStyle?.gradient && {
 														background: customStyle.gradient,
