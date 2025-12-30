@@ -249,6 +249,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.7)
+      color:
+        specifier: ^5.0.3
+        version: 5.0.3
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.3)

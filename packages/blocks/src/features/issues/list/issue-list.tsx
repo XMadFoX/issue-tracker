@@ -10,6 +10,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@prism/ui/components/table";
+import color from "color";
 import { Plus } from "lucide-react";
 import { type ComponentProps, useMemo } from "react";
 import { IssueCreateModal } from "../modal/issue-create-modal";
@@ -27,6 +28,17 @@ type Props = {
 		input: Inputs["issue"]["labels"]["bulkDelete"],
 	) => Promise<void>;
 };
+
+function getAccessibleTextColor(
+	bgColor: string | undefined,
+): string | undefined {
+	if (!bgColor) return undefined;
+	const bg = color(bgColor);
+	const whiteContrast = bg.contrast(color("#ffffff"));
+	const blackContrast = bg.contrast(color("#000000"));
+
+	return whiteContrast > blackContrast ? "#ffffff" : "#000000";
+}
 
 function CreateIssueButton() {
 	return (
@@ -157,6 +169,9 @@ function IssuesTable({
 										value: l.id,
 										style: {
 											badgeColor: l.color ?? undefined,
+											badgeTextColor: getAccessibleTextColor(
+												l.color ?? undefined,
+											),
 										},
 									}))}
 									defaultValue={issue.labelLinks.map((link) => link.labelId)}
