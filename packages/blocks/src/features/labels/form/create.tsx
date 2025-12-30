@@ -155,6 +155,7 @@ export function LabelCreateForm({
 							items={teams}
 							getItemValue={(team) => team.id}
 							getItemLabel={(team) => team.name}
+							clearable
 						/>
 					)}
 				</form.AppField>
