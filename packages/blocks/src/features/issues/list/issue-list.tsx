@@ -164,6 +164,7 @@ function IssuesTable({
 							</TableCell>
 							<TableCell>
 								<MultiSelect
+									badgeAnimation="none"
 									options={labels.map((l) => ({
 										label: l.name,
 										value: l.id,
