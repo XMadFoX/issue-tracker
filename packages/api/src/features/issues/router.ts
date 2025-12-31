@@ -10,6 +10,7 @@ import {
 	issueDeleteSchema,
 	issueLabelsSchema,
 	issueListSchema,
+	issuePriorityUpdateSchema,
 	issueUpdateSchema,
 } from "./schema";
 
@@ -191,11 +192,34 @@ const bulkDeleteLabels = authedRouter
 			);
 	});
 
+const updatePriority = authedRouter
+	.input(issuePriorityUpdateSchema)
+	.errors(updateDeleteErrors)
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue:update",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		const [updated] = await db
+			.update(issue)
+			.set({ priorityId: input.priorityId })
+			.where(
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			)
+			.returning();
+		if (!updated) throw errors.NOT_FOUND;
+		return updated;
+	});
+
 export const issueRouter = {
 	list: listIssues,
 	create: createIssue,
 	update: updateIssue,
 	delete: deleteIssue,
+	updatePriority,
 	labels: {
 		bulkAdd: bulkAddLabels,
 		bulkDelete: bulkDeleteLabels,
