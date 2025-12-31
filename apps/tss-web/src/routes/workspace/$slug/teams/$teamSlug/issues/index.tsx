@@ -76,6 +76,15 @@ function RouteComponent() {
 		}),
 	);
 
+	const updateIssuePriority = useMutation(
+		orpc.issue.updatePriority.mutationOptions({
+			onSuccess: () => {
+				// TODO: optimistic mutation, no full refetch
+				qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
+			},
+		}),
+	);
+
 	const statuses = useQuery(
 		orpc.issue.status.list.queryOptions({
 			input: workspace.data?.id ? { id: workspace.data.id } : skipToken,
@@ -124,6 +133,7 @@ function RouteComponent() {
 				onIssueSubmit={onIssueSubmit}
 				addLabels={addLabels.mutateAsync}
 				deleteLabels={deleteLabels.mutateAsync}
+				updateIssuePriority={updateIssuePriority.mutateAsync}
 			/>
 		</div>
 	);

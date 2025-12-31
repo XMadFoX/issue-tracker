@@ -27,6 +27,9 @@ type Props = {
 	deleteLabels: (
 		input: Inputs["issue"]["labels"]["bulkDelete"],
 	) => Promise<void>;
+	updateIssuePriority: (
+		input: Inputs["issue"]["updatePriority"],
+	) => Promise<Outputs["issue"]["updatePriority"]>;
 };
 
 function getAccessibleTextColor(
@@ -58,6 +61,7 @@ export function IssueList({
 	onIssueSubmit,
 	addLabels,
 	deleteLabels,
+	updateIssuePriority,
 }: Props) {
 	const groupedIssues = useMemo(() => {
 		const groups: Record<string, typeof issues> = {};
@@ -99,9 +103,11 @@ export function IssueList({
 							<IssuesTable
 								statusIssues={statusIssues}
 								labels={labels}
+								priorities={priorities}
 								workspaceId={workspaceId}
 								addLabels={addLabels}
 								deleteLabels={deleteLabels}
+								updateIssuePriority={updateIssuePriority}
 							/>
 						)}
 					</div>
@@ -116,15 +122,19 @@ type StatusIssues = Props["issues"];
 function IssuesTable({
 	statusIssues,
 	labels,
+	priorities,
 	workspaceId,
 	addLabels,
 	deleteLabels,
+	updateIssuePriority,
 }: {
 	statusIssues: StatusIssues;
 	labels: Props["labels"];
+	priorities: Props["priorities"];
 	workspaceId: string;
 	addLabels: Props["addLabels"];
 	deleteLabels: Props["deleteLabels"];
+	updateIssuePriority: Props["updateIssuePriority"];
 }) {
 	return (
 		<div className="rounded-md border">
