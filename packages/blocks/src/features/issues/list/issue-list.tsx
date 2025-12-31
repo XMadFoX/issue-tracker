@@ -3,6 +3,13 @@ import { Badge } from "@prism/ui/components/badge";
 import { Button } from "@prism/ui/components/button";
 import { MultiSelect } from "@prism/ui/components/multi-select";
 import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@prism/ui/components/select";
+import {
 	Table,
 	TableBody,
 	TableCell,
@@ -157,30 +164,42 @@ function IssuesTable({
 							</TableCell>
 							<TableCell className="font-medium">{issue.title}</TableCell>
 							<TableCell>
-								<select
+								<Select
 									value={issue.priorityId ?? ""}
-									onChange={async (e) => {
-										const newPriorityId = e.target.value || null;
+									onValueChange={async (newPriorityId) => {
 										await updateIssuePriority({
 											id: issue.id,
 											workspaceId,
-											priorityId: newPriorityId,
+											priorityId: newPriorityId || null,
 										});
 									}}
-									className="bg-transparent border rounded px-2 py-1 text-sm cursor-pointer"
-									style={{
-										borderColor:
-											priorities.find((p) => p.id === issue.priorityId)
-												?.color ?? undefined,
-									}}
 								>
-									<option value="">-</option>
-									{priorities.map((priority) => (
-										<option key={priority.id} value={priority.id}>
-											{priority.name}
-										</option>
-									))}
-								</select>
+									<SelectTrigger
+										className="bg-transparent border rounded px-2 py-1 text-sm cursor-pointer h-fit w-full shadow-none"
+										style={{
+											borderColor:
+												priorities.find((p) => p.id === issue.priorityId)
+													?.color ?? undefined,
+										}}
+										clearable={!!issue.priorityId}
+										onClear={async () => {
+											await updateIssuePriority({
+												id: issue.id,
+												workspaceId,
+												priorityId: null,
+											});
+										}}
+									>
+										<SelectValue placeholder="-" />
+									</SelectTrigger>
+									<SelectContent>
+										{priorities.map((priority) => (
+											<SelectItem key={priority.id} value={priority.id}>
+												{priority.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</TableCell>
 							<TableCell>
 								<MultiSelect
