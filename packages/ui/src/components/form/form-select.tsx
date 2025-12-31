@@ -1,4 +1,3 @@
-import { ChevronDownIcon, XIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
@@ -32,7 +31,7 @@ type FormSelectProps<TItem> = FormControlProps & {
 	children?: ReactNode;
 	triggerProps?: Omit<
 		ComponentProps<typeof SelectTrigger>,
-		"id" | "aria-invalid" | "onBlur" | "size"
+		"id" | "aria-invalid" | "onBlur" | "size" | "clearable" | "onClear"
 	>;
 	contentProps?: ComponentProps<typeof SelectContent>;
 };
@@ -57,9 +56,7 @@ export function FormSelect<TItem = never>({
 		typeof field.state.value === "string" ? field.state.value : undefined;
 	const hasValue = value !== undefined && value !== "";
 
-	const handleClear = (e: React.MouseEvent | React.KeyboardEvent) => {
-		e.preventDefault();
-		e.stopPropagation();
+	const handleClear = () => {
 		field.handleChange("");
 	};
 
@@ -94,33 +91,14 @@ export function FormSelect<TItem = never>({
 				<SelectTrigger
 					{...triggerProps}
 					size={size}
+					clearable={clearable && hasValue}
+					onClear={handleClear}
 					aria-invalid={isInvalid}
 					id={field.name}
 					onBlur={field.handleBlur}
-					className={cn(
-						triggerProps?.className,
-						"cursor-pointer",
-						clearable && "[&>svg]:hidden",
-					)}
+					className={cn(triggerProps?.className, "cursor-pointer")}
 				>
 					<SelectValue placeholder={placeholder} />
-					<div className="flex items-center gap-1">
-						{clearable && hasValue && (
-							<button
-								type="button"
-								onPointerDown={(e) => {
-									e.stopPropagation();
-									e.preventDefault();
-								}}
-								onClick={handleClear}
-								aria-label="Clear selection"
-								className="flex size-4 items-center justify-center opacity-50 hover:opacity-100 cursor-pointer"
-							>
-								<XIcon className="size-4" />
-							</button>
-						)}
-						<ChevronDownIcon className="size-4 opacity-50 hover:opacity-100 pointer-events-auto" />
-					</div>
 				</SelectTrigger>
 				<SelectContent {...contentProps}>{resolvedChildren}</SelectContent>
 			</Select>
