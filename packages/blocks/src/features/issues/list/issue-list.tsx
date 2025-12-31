@@ -157,20 +157,30 @@ function IssuesTable({
 							</TableCell>
 							<TableCell className="font-medium">{issue.title}</TableCell>
 							<TableCell>
-								{issue.priority ? (
-									<Badge
-										variant="outline"
-										className="font-normal"
-										style={{
-											borderColor: issue.priority.color ?? undefined,
-											color: issue.priority.color ?? undefined,
-										}}
-									>
-										{issue.priority.name}
-									</Badge>
-								) : (
-									<span className="text-muted-foreground">-</span>
-								)}
+								<select
+									value={issue.priorityId ?? ""}
+									onChange={async (e) => {
+										const newPriorityId = e.target.value || null;
+										await updateIssuePriority({
+											id: issue.id,
+											workspaceId,
+											priorityId: newPriorityId,
+										});
+									}}
+									className="bg-transparent border rounded px-2 py-1 text-sm cursor-pointer"
+									style={{
+										borderColor:
+											priorities.find((p) => p.id === issue.priorityId)
+												?.color ?? undefined,
+									}}
+								>
+									<option value="">-</option>
+									{priorities.map((priority) => (
+										<option key={priority.id} value={priority.id}>
+											{priority.name}
+										</option>
+									))}
+								</select>
 							</TableCell>
 							<TableCell>
 								<MultiSelect
