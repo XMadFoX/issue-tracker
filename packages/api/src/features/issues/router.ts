@@ -34,8 +34,12 @@ const listIssues = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED;
 
+		const workspaceCond = eq(issue.workspaceId, input.workspaceId);
 		const rows = await db.query.issue.findMany({
-			where: (issue, { eq }) => eq(issue.workspaceId, input.workspaceId),
+			where: (issue, { eq, and }) =>
+				input.teamId
+					? and(workspaceCond, eq(issue.teamId, input.teamId))
+					: workspaceCond,
 			with: {
 				status: {
 					with: {

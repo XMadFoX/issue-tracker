@@ -24,6 +24,7 @@ export const issueCreateSchema = issueInsertSchema
 
 export const issueListSchema = z.object({
 	workspaceId: workspaceInsertSchema.shape.id,
+	teamId: teamInsertSchema.shape.id.optional(),
 	limit: z.number().min(1).max(200).default(100),
 	offset: z.number().min(0).default(0),
 });
