@@ -12,6 +12,7 @@ export type FormControlProps = {
   label: string
   description?: string
   type?: HTMLInputTypeAttribute
+  placeholder?: string
 }
 
 type FormBaseProps = FormControlProps & {
@@ -26,6 +27,7 @@ export function FormBase({
   description,
   controlFirst,
   horizontal,
+  ...rest
 }: FormBaseProps) {
   const field = useFieldContext()
   const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
@@ -41,6 +43,7 @@ export function FormBase({
     <Field
       data-invalid={isInvalid}
       orientation={horizontal ? "horizontal" : undefined}
+      {...rest}
     >
       {controlFirst ? (
         <>
