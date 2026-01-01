@@ -7,7 +7,10 @@ export const teamInsertSchema = createInsertSchema(team).extend({
 	id: z.cuid2(),
 });
 
-export const teamCreateSchema = teamInsertSchema.omit({ id: true });
+export const teamCreateSchema = teamInsertSchema.omit({ id: true }).extend({
+	name: teamInsertSchema.shape.name.min(1).max(32),
+	key: teamInsertSchema.shape.key.min(1).max(12),
+});
 
 export const teamListSchema = workspaceInsertSchema.pick({ id: true });
 
