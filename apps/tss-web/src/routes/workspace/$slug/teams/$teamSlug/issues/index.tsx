@@ -40,9 +40,10 @@ function RouteComponent() {
 
 	const issues = useQuery(
 		orpc.issue.list.queryOptions({
-			input: workspace.data?.id
-				? { workspaceId: workspace.data.id }
-				: skipToken,
+			input:
+				workspace.data?.id && team.data?.id
+					? { workspaceId: workspace.data.id, teamId: team.data.id }
+					: skipToken,
 		}),
 	);
 
