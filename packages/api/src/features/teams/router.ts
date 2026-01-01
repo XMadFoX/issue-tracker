@@ -6,7 +6,7 @@ import {
 	teamMembership,
 	workspace,
 } from "db/features/tracker/tracker.schema";
-import { and, eq } from "drizzle-orm";
+import { and, DrizzleQueryError, eq } from "drizzle-orm";
 import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
@@ -103,7 +103,8 @@ export const getBySlug = authedRouter
 
 export const create = authedRouter
 	.input(teamCreateSchema)
-	.handler(async ({ context, input }) => {
+	.errors({ CONFLICT: {} })
+	.handler(async ({ context, errors, input }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
@@ -113,19 +114,32 @@ export const create = authedRouter
 			throw new ORPCError("Unauthorized to create team in this workspace");
 		}
 
-		const [createdTeam] = await db
-			.insert(team)
-			.values({
-				id: createId(),
-				...input,
-			})
-			.returning({ id: team.id });
+		try {
+			const [createdTeam] = await db
+				.insert(team)
+				.values({
+					id: createId(),
+					...input,
+				})
+				.returning({ id: team.id });
 
-		if (!createdTeam) {
-			throw new ORPCError("Failed to create team");
+			if (!createdTeam) {
+				throw new ORPCError("Failed to create team");
+			}
+			return createdTeam;
+		} catch (error) {
+			if (
+				error instanceof DrizzleQueryError &&
+				error.cause &&
+				"code" in error.cause
+			) {
+				throw errors.CONFLICT({
+					message: "Team with the same key already exists in this workspace",
+				});
+			}
+			console.error("Error creating team:", error);
+			throw new ORPCError("Failed to create team due to an internal error");
 		}
-
-		return createdTeam;
 	});
 
 const unauthorizedMessage = (action: "update" | "delete") =>
