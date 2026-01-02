@@ -25,7 +25,7 @@ import {
 	Outlet,
 	useNavigate,
 } from "@tanstack/react-router";
-import { Cog, Contact, Settings } from "lucide-react";
+import { Contact, Settings } from "lucide-react";
 import { orpc } from "src/orpc/client";
 
 export const Route = createFileRoute("/workspace/$slug")({
@@ -123,6 +123,23 @@ export function WorkspaceSidebar({
 									</SidebarMenuButton>
 								</SidebarMenuItem>
 							))}
+						</SidebarMenu>
+					</SidebarGroupContent>
+				</SidebarGroup>
+				<SidebarGroup>
+					<SidebarGroupLabel>Settings</SidebarGroupLabel>
+					<SidebarGroupContent>
+						<SidebarMenu>
+							<SidebarMenuItem>
+								<SidebarMenuButton asChild>
+									<Link
+										to="/workspace/$slug/settings/labels"
+										params={{ slug: workspace?.slug ?? "" }}
+									>
+										<span>Labels</span>
+									</Link>
+								</SidebarMenuButton>
+							</SidebarMenuItem>
 						</SidebarMenu>
 					</SidebarGroupContent>
 				</SidebarGroup>
