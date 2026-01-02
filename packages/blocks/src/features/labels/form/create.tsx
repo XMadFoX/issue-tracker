@@ -5,32 +5,10 @@ import ColorPicker from "@prism/ui/components/color-picker";
 import { FieldError } from "@prism/ui/components/field";
 import { useAppForm } from "@prism/ui/components/form/form-hooks";
 import { Label } from "@prism/ui/components/label";
+import { generateRandomColor } from "@prism/ui/lib/colors";
 import { cn } from "@prism/ui/lib/utils";
-import Color from "color";
 import { Pipette, RefreshCcw } from "lucide-react";
 import type z from "zod";
-
-const PRESET_COLORS = [
-	"#EF4444",
-	"#F97316",
-	"#EAB308",
-	"#22C55E",
-	"#06B6D4",
-	"#0EA5E9",
-	"#6366F1",
-	"#8B5CF6",
-	"#D946EF",
-	"#EC4899",
-	"#64748B",
-];
-
-function generateRandomColor(): string {
-	return Color({
-		r: Math.floor(Math.random() * 255),
-		g: Math.floor(Math.random() * 255),
-		b: Math.floor(Math.random() * 255),
-	}).hex();
-}
 
 type Props = {
 	workspaceId: Inputs["label"]["create"]["workspaceId"];
