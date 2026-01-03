@@ -27,6 +27,7 @@ type Props = {
 	statuses: Outputs["issue"]["status"]["list"];
 	priorities: Outputs["priority"]["list"];
 	labels: Outputs["label"]["list"];
+	teamMembers: Outputs["teamMembership"]["list"];
 	teamId: string;
 	workspaceId: string;
 	onIssueSubmit: ComponentProps<typeof IssueCreateModal>["onSubmit"];
@@ -37,6 +38,9 @@ type Props = {
 	updateIssuePriority: (
 		input: Inputs["issue"]["updatePriority"],
 	) => Promise<Outputs["issue"]["updatePriority"]>;
+	updateIssueAssignee: (
+		input: Inputs["issue"]["updateAssignee"],
+	) => Promise<Outputs["issue"]["updateAssignee"]>;
 };
 
 function getAccessibleTextColor(
@@ -65,10 +69,12 @@ export function IssueList({
 	teamId,
 	priorities,
 	labels,
+	teamMembers,
 	onIssueSubmit,
 	addLabels,
 	deleteLabels,
 	updateIssuePriority,
+	updateIssueAssignee,
 }: Props) {
 	const groupedIssues = useMemo(() => {
 		const groups: Record<string, typeof issues> = {};
@@ -100,6 +106,7 @@ export function IssueList({
 								teamId={teamId}
 								priorities={priorities}
 								statuses={statuses}
+								assignees={teamMembers}
 								trigger={CreateIssueButton()}
 								onSubmit={onIssueSubmit}
 								initialStatusId={status.id}
@@ -111,10 +118,12 @@ export function IssueList({
 								statusIssues={statusIssues}
 								labels={labels}
 								priorities={priorities}
+								teamMembers={teamMembers}
 								workspaceId={workspaceId}
 								addLabels={addLabels}
 								deleteLabels={deleteLabels}
 								updateIssuePriority={updateIssuePriority}
+								updateIssueAssignee={updateIssueAssignee}
 							/>
 						)}
 					</div>
@@ -130,18 +139,22 @@ function IssuesTable({
 	statusIssues,
 	labels,
 	priorities,
+	teamMembers,
 	workspaceId,
 	addLabels,
 	deleteLabels,
 	updateIssuePriority,
+	updateIssueAssignee,
 }: {
 	statusIssues: StatusIssues;
 	labels: Props["labels"];
 	priorities: Props["priorities"];
+	teamMembers: Props["teamMembers"];
 	workspaceId: string;
 	addLabels: Props["addLabels"];
 	deleteLabels: Props["deleteLabels"];
 	updateIssuePriority: Props["updateIssuePriority"];
+	updateIssueAssignee: Props["updateIssueAssignee"];
 }) {
 	return (
 		<div className="rounded-md border">
@@ -245,16 +258,37 @@ function IssuesTable({
 								/>
 							</TableCell>
 							<TableCell>
-								{issue.assignee ? (
-									<div className="flex items-center gap-2">
-										<div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[10px]">
-											{issue.assignee.name?.[0]}
-										</div>
-										<span>{issue.assignee.name}</span>
-									</div>
-								) : (
-									<span className="text-muted-foreground">Unassigned</span>
-								)}
+								<Select
+									value={issue.assignee?.id ?? ""}
+									onValueChange={async (newAssigneeId) => {
+										await updateIssueAssignee({
+											id: issue.id,
+											workspaceId,
+											assigneeId: newAssigneeId || null,
+										});
+									}}
+								>
+									<SelectTrigger
+										className="bg-transparent border rounded px-2 py-1 text-sm cursor-pointer h-fit w-full shadow-none"
+										clearable={!!issue.assignee}
+										onClear={async () => {
+											await updateIssueAssignee({
+												id: issue.id,
+												workspaceId,
+												assigneeId: null,
+											});
+										}}
+									>
+										<SelectValue placeholder="Unassigned" />
+									</SelectTrigger>
+									<SelectContent>
+										{teamMembers?.map((member) => (
+											<SelectItem key={member.user.id} value={member.user.id}>
+												{member.user.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</TableCell>
 							<TableCell className="text-right text-muted-foreground">
 								{new Date(issue.createdAt).toLocaleDateString()}
