@@ -1,3 +1,4 @@
+import { user } from "db/features/auth/auth.schema";
 import { issue } from "db/features/tracker/issues.schema";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -7,6 +8,9 @@ import { teamInsertSchema } from "../teams/schema";
 import { workspaceInsertSchema } from "../workspaces/schema";
 
 export const issueInsertSchema = createInsertSchema(issue);
+export const userInsertSchema = createInsertSchema(user);
+
+const assigneeIdSchema = userInsertSchema.shape.id.nullable();
 
 export const issueCreateSchema = issueInsertSchema
 	.omit({
@@ -20,7 +24,14 @@ export const issueCreateSchema = issueInsertSchema
 		workspaceId: workspaceInsertSchema.shape.id,
 		title: z.string().min(1).max(100),
 		teamId: teamInsertSchema.shape.id,
+		assigneeId: assigneeIdSchema.optional(),
 	});
+
+export const issueUpdateAssigneeSchema = z.object({
+	id: issueInsertSchema.shape.id,
+	workspaceId: workspaceInsertSchema.shape.id,
+	assigneeId: assigneeIdSchema,
+});
 
 export const issueListSchema = z.object({
 	workspaceId: workspaceInsertSchema.shape.id,
