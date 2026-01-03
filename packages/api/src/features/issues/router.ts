@@ -11,6 +11,7 @@ import {
 	issueLabelsSchema,
 	issueListSchema,
 	issuePriorityUpdateSchema,
+	issueUpdateAssigneeSchema,
 	issueUpdateSchema,
 } from "./schema";
 
@@ -218,12 +219,35 @@ const updatePriority = authedRouter
 		return updated;
 	});
 
+const updateAssignee = authedRouter
+	.input(issueUpdateAssigneeSchema)
+	.errors(updateDeleteErrors)
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue:update",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		const [updated] = await db
+			.update(issue)
+			.set({ assigneeId: input.assigneeId })
+			.where(
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			)
+			.returning();
+		if (!updated) throw errors.NOT_FOUND;
+		return updated;
+	});
+
 export const issueRouter = {
 	list: listIssues,
 	create: createIssue,
 	update: updateIssue,
 	delete: deleteIssue,
 	updatePriority,
+	updateAssignee,
 	labels: {
 		bulkAdd: bulkAddLabels,
 		bulkDelete: bulkDeleteLabels,

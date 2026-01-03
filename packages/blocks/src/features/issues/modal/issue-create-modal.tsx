@@ -19,6 +19,7 @@ type IssueCreateModalProps = {
 	teamId: string;
 	priorities: Outputs["priority"]["list"];
 	statuses: Outputs["issue"]["status"]["list"];
+	assignees?: Outputs["teamMembership"]["list"];
 	onSubmit: (issue: z.input<typeof issueCreateSchema>) => Promise<SubmitResult>;
 	trigger: React.ReactNode;
 	title?: string;
@@ -32,6 +33,7 @@ export function IssueCreateModal({
 	teamId,
 	priorities,
 	statuses,
+	assignees,
 	onSubmit,
 	trigger,
 	title = "Create issue",
@@ -57,6 +59,7 @@ export function IssueCreateModal({
 					teamId={teamId}
 					priorities={priorities}
 					statuses={statuses}
+					assignees={assignees}
 					onSubmit={async (issue) => {
 						const res = await onSubmit(issue);
 						if ("success" in res) {

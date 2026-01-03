@@ -60,6 +60,15 @@ function RouteComponent() {
 		}),
 	);
 
+	const teamMembers = useQuery(
+		orpc.teamMembership.list.queryOptions({
+			input:
+				workspace.data?.id && team.data?.id
+					? { workspaceId: workspace.data.id, teamId: team.data.id }
+					: skipToken,
+		}),
+	);
+
 	const addLabels = useMutation(
 		orpc.issue.labels.bulkAdd.mutationOptions({
 			onSuccess: () => {
@@ -79,6 +88,15 @@ function RouteComponent() {
 
 	const updateIssuePriority = useMutation(
 		orpc.issue.updatePriority.mutationOptions({
+			onSuccess: () => {
+				// TODO: optimistic mutation, no full refetch
+				qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
+			},
+		}),
+	);
+
+	const updateIssueAssignee = useMutation(
+		orpc.issue.updateAssignee.mutationOptions({
 			onSuccess: () => {
 				// TODO: optimistic mutation, no full refetch
 				qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
@@ -130,11 +148,13 @@ function RouteComponent() {
 				teamId={team?.data?.id ?? ""}
 				priorities={priorities.data ?? []}
 				labels={labels.data ?? []}
+				teamMembers={teamMembers.data ?? []}
 				workspaceId={workspaceId ?? ""}
 				onIssueSubmit={onIssueSubmit}
 				addLabels={addLabels.mutateAsync}
 				deleteLabels={deleteLabels.mutateAsync}
 				updateIssuePriority={updateIssuePriority.mutateAsync}
+				updateIssueAssignee={updateIssueAssignee.mutateAsync}
 			/>
 		</div>
 	);

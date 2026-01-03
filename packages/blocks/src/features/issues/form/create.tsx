@@ -11,6 +11,7 @@ type Props = {
 	teamId: string;
 	priorities: Outputs["priority"]["list"];
 	statuses: Outputs["issue"]["status"]["list"];
+	assignees?: Outputs["teamMembership"]["list"];
 	onSubmit: (
 		issue: z.input<typeof issueCreateSchema>,
 	) => Promise<{ success: true } | { error: unknown }>;
@@ -23,6 +24,7 @@ export function IssueCreateForm({
 	teamId,
 	statuses,
 	priorities,
+	assignees,
 	onSubmit,
 	className,
 	initialStatusId,
@@ -36,6 +38,7 @@ export function IssueCreateForm({
 			teamId: teamId,
 			statusId: initialStatusId ?? statuses[0]?.id,
 			priorityId: undefined,
+			assigneeId: undefined,
 		} as z.input<typeof issueCreateSchema>,
 		validators: {
 			onSubmit: issueCreateSchema,
@@ -86,6 +89,17 @@ export function IssueCreateForm({
 						items={priorities ?? []}
 						getItemValue={(priority) => priority.id}
 						getItemLabel={(priority) => priority.name}
+					/>
+				)}
+			</form.AppField>
+			<form.AppField name="assigneeId">
+				{(field) => (
+					<field.Select
+						label="Assignee"
+						placeholder="Select an assignee"
+						items={assignees ?? []}
+						getItemValue={(member) => member.user.id}
+						getItemLabel={(member) => member.user.name}
 					/>
 				)}
 			</form.AppField>
