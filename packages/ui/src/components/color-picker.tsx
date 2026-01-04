@@ -14,7 +14,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "./select";
+} from "./radix-select";
 import { Input } from "./input";
 import { Label } from "./label";
 import { Loader2, PipetteIcon } from "lucide-react";

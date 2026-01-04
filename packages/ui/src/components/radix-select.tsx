@@ -4,6 +4,9 @@ import type * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * @deprecated Use Select from "./select" instead.
+ */
 function Select({
 	...props
 }: React.ComponentProps<typeof SelectPrimitive.Root>) {
