@@ -262,7 +262,10 @@ function IssuesTable({
 											});
 										}}
 									>
-										<SelectValue placeholder="Select labels...">
+										<SelectValue
+											placeholder="Select labels..."
+											className="flex items-center gap-1"
+										>
 											{(value: string[]) => {
 												if (value.length === 0) return "Select labels...";
 												const allLabels = value;
@@ -271,6 +274,8 @@ function IssuesTable({
 													if (!label) return null;
 													return (
 														<button
+															aria-label={`Remove label ${label.name}`}
+															title="Click to remove the label"
 															type="button"
 															onPointerDown={(e) => {
 																e.stopPropagation();
@@ -286,15 +291,18 @@ function IssuesTable({
 																});
 															}}
 															key={label.id}
-															className="inline-block px-2 py-1 rounded text-xs font-medium mr-2"
-															style={{
-																backgroundColor: label.color ?? undefined,
-																color: getAccessibleTextColor(
-																	label.color ?? undefined,
-																),
-															}}
 														>
-															{label.name}
+															<Badge
+																className="px-2 text-xs font-medium"
+																style={{
+																	backgroundColor: label.color ?? undefined,
+																	color: getAccessibleTextColor(
+																		label.color ?? undefined,
+																	),
+																}}
+															>
+																{label.name}
+															</Badge>
 														</button>
 													);
 												});
