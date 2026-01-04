@@ -368,7 +368,7 @@ export default function InputColor({
               </div>
               {showControls && (
                 <div className="flex gap-2">
-                  <Select value={colorFormat} onValueChange={setColorFormat}>
+                  <Select value={colorFormat} onValueChange={v => v !== null && setColorFormat(v)}>
                     <SelectTrigger className="!h-7 !w-[4.8rem] rounded-sm px-2 py-1 !text-sm">
                       <SelectValue placeholder="Color" />
                     </SelectTrigger>

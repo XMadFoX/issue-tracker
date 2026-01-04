@@ -71,8 +71,10 @@ export function WorkspaceSidebar({
 		<Sidebar>
 			<SidebarHeader>
 				<Select
-					value={workspace?.slug}
+					value={workspace?.slug ?? null}
+					items={workspaces?.map((ws) => ({ value: ws.slug, label: ws.name }))}
 					onValueChange={(slug) => {
+						if (!slug) return;
 						navigate({
 							to: "/workspace/$slug",
 							params: { slug },
@@ -80,7 +82,12 @@ export function WorkspaceSidebar({
 					}}
 				>
 					<SelectTrigger className="w-full">
-						<SelectValue placeholder="Select workspace" />
+						<SelectValue placeholder="Select workspace">
+							{(value) => {
+								const ws = workspaces?.find((w) => w.slug === value);
+								return ws?.name ?? value;
+							}}
+						</SelectValue>
 					</SelectTrigger>
 					<SelectContent>
 						{workspaces

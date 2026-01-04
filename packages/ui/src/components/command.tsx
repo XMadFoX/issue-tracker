@@ -7,7 +7,7 @@ import {
 	DialogDescription,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/dialog";
+} from "@/components/radix-dialog";
 import { cn } from "@/lib/utils";
 
 function Command({

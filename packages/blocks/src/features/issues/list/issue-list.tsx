@@ -1,7 +1,6 @@
 import type { Inputs, Outputs } from "@prism/api/src/router";
 import { Badge } from "@prism/ui/components/badge";
 import { Button } from "@prism/ui/components/button";
-import { MultiSelect } from "@prism/ui/components/multi-select";
 import {
 	Select,
 	SelectContent,
@@ -188,7 +187,7 @@ function IssuesTable({
 									}}
 								>
 									<SelectTrigger
-										className="bg-transparent border rounded px-2 py-1 text-sm cursor-pointer h-fit w-full shadow-none"
+										className="bg-transparent border px-2 py-1 text-sm cursor-pointer h-fit w-full shadow-none"
 										style={{
 											borderColor:
 												priorities.find((p) => p.id === issue.priorityId)
@@ -203,7 +202,13 @@ function IssuesTable({
 											});
 										}}
 									>
-										<SelectValue placeholder="-" />
+										<SelectValue placeholder="-">
+											{(value) => {
+												return (
+													priorities.find((p) => p.id === value)?.name ?? value
+												);
+											}}
+										</SelectValue>
 									</SelectTrigger>
 									<SelectContent>
 										{priorities.map((priority) => (
@@ -215,19 +220,9 @@ function IssuesTable({
 								</Select>
 							</TableCell>
 							<TableCell>
-								<MultiSelect
-									badgeAnimation="none"
-									options={labels.map((l) => ({
-										label: l.name,
-										value: l.id,
-										style: {
-											badgeColor: l.color ?? undefined,
-											badgeTextColor: getAccessibleTextColor(
-												l.color ?? undefined,
-											),
-										},
-									}))}
-									defaultValue={issue.labelLinks.map((link) => link.labelId)}
+								<Select
+									multiple
+									value={issue.labelLinks.map((link) => link.labelId)}
 									onValueChange={async (newLabelIds) => {
 										const currentLabelIds = issue.labelLinks.map(
 											(link) => link.labelId,
@@ -255,7 +250,73 @@ function IssuesTable({
 											});
 										}
 									}}
-								/>
+								>
+									<SelectTrigger
+										className="bg-transparent border px-2 py-1 text-sm cursor-pointer h-fit w-full shadow-none"
+										clearable={issue.labelLinks.length > 0}
+										onClear={async () => {
+											deleteLabels({
+												issueId: issue.id,
+												workspaceId: workspaceId,
+												labelIds: issue.labelLinks.map((link) => link.labelId),
+											});
+										}}
+									>
+										<SelectValue
+											placeholder="Select labels..."
+											className="flex items-center gap-1"
+										>
+											{(value: string[]) => {
+												if (value.length === 0) return "Select labels...";
+												const allLabels = value;
+												return allLabels.map((labelId) => {
+													const label = labels.find((l) => l.id === labelId);
+													if (!label) return null;
+													return (
+														<button
+															aria-label={`Remove label ${label.name}`}
+															title="Click to remove the label"
+															type="button"
+															onPointerDown={(e) => {
+																e.stopPropagation();
+																e.preventDefault();
+															}}
+															onClick={(e) => {
+																e.stopPropagation();
+																e.preventDefault();
+																deleteLabels({
+																	issueId: issue.id,
+																	workspaceId: workspaceId,
+																	labelIds: [label.id],
+																});
+															}}
+															key={label.id}
+														>
+															<Badge
+																className="px-2 text-xs font-medium"
+																style={{
+																	backgroundColor: label.color ?? undefined,
+																	color: getAccessibleTextColor(
+																		label.color ?? undefined,
+																	),
+																}}
+															>
+																{label.name}
+															</Badge>
+														</button>
+													);
+												});
+											}}
+										</SelectValue>
+									</SelectTrigger>
+									<SelectContent>
+										{labels.map((label) => (
+											<SelectItem key={label.id} value={label.id}>
+												{label.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</TableCell>
 							<TableCell>
 								<Select
@@ -269,7 +330,7 @@ function IssuesTable({
 									}}
 								>
 									<SelectTrigger
-										className="bg-transparent border rounded px-2 py-1 text-sm cursor-pointer h-fit w-full shadow-none"
+										className="border px-2 py-1 text-sm cursor-pointer h-fit w-full shadow-none"
 										clearable={!!issue.assignee}
 										onClear={async () => {
 											await updateIssueAssignee({
@@ -279,7 +340,14 @@ function IssuesTable({
 											});
 										}}
 									>
-										<SelectValue placeholder="Unassigned" />
+										<SelectValue placeholder="Unassigned">
+											{(value) => {
+												return (
+													teamMembers?.find((m) => m.user.id === value)?.user
+														.name ?? value
+												);
+											}}
+										</SelectValue>
 									</SelectTrigger>
 									<SelectContent>
 										{teamMembers?.map((member) => (

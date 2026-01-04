@@ -98,7 +98,20 @@ export function FormSelect<TItem = never>({
 					onBlur={field.handleBlur}
 					className={cn(triggerProps?.className, "cursor-pointer")}
 				>
-					<SelectValue placeholder={placeholder} />
+					<SelectValue placeholder={placeholder}>
+						{(v) => {
+							if (options) {
+								return (
+									options.find((option) => option.value === v)?.label ?? v
+								);
+							}
+							if (items && getItemValue && getItemLabel) {
+								const item = items.find((i) => getItemValue(i) === v);
+								return item ? getItemLabel(item) : v;
+							}
+							return v;
+						}}
+					</SelectValue>
 				</SelectTrigger>
 				<SelectContent {...contentProps}>{resolvedChildren}</SelectContent>
 			</Select>

@@ -17,7 +17,7 @@ type SubmitResult = { success: true } | { error: unknown };
 type TeamCreateModalProps = {
 	workspaceId: Inputs["team"]["create"]["workspaceId"];
 	onSubmit: (team: z.input<typeof teamCreateSchema>) => Promise<SubmitResult>;
-	trigger: React.ReactNode;
+	trigger: React.ReactElement;
 	title?: string;
 	description?: string;
 	className?: string;
@@ -35,7 +35,7 @@ export function TeamCreateModal({
 
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
-			<DialogTrigger asChild>{trigger}</DialogTrigger>
+			<DialogTrigger render={trigger} />
 			<DialogContent className="max-w-xl">
 				<DialogHeader>
 					<DialogTitle>{title}</DialogTitle>

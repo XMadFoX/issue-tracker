@@ -19,7 +19,7 @@ type LabelCreateModalProps = {
 	teams: Outputs["team"]["listByWorkspace"];
 	initialTeamId?: Inputs["label"]["create"]["teamId"];
 	onSubmit: (label: z.input<typeof labelCreateSchema>) => Promise<SubmitResult>;
-	trigger: React.ReactNode;
+	trigger: React.ReactElement;
 	title?: string;
 	description?: string;
 	className?: string;
@@ -39,7 +39,7 @@ export function LabelCreateModal({
 
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
-			<DialogTrigger asChild>{trigger}</DialogTrigger>
+			<DialogTrigger render={trigger} />
 			<DialogContent className="max-w-xl">
 				<DialogHeader>
 					<DialogTitle>{title}</DialogTitle>
