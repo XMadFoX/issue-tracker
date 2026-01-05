@@ -25,6 +25,7 @@ export const issueCreateSchema = issueInsertSchema
 		title: z.string().min(1).max(100),
 		teamId: teamInsertSchema.shape.id,
 		assigneeId: assigneeIdSchema.optional(),
+		labelIds: z.array(labelInsertSchema.shape.id).default([]),
 	});
 
 export const issueUpdateAssigneeSchema = z.object({

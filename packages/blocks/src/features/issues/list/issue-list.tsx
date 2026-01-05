@@ -16,9 +16,9 @@ import {
 	TableHeader,
 	TableRow,
 } from "@prism/ui/components/table";
-import color from "color";
 import { Plus } from "lucide-react";
 import { type ComponentProps, useMemo } from "react";
+import { IssueLabelSelect } from "../components/issue-label-select";
 import { IssueCreateModal } from "../modal/issue-create-modal";
 
 type Props = {
@@ -41,17 +41,6 @@ type Props = {
 		input: Inputs["issue"]["updateAssignee"],
 	) => Promise<Outputs["issue"]["updateAssignee"]>;
 };
-
-function getAccessibleTextColor(
-	bgColor: string | undefined,
-): string | undefined {
-	if (!bgColor) return undefined;
-	const bg = color(bgColor);
-	const whiteContrast = bg.contrast(color("#ffffff"));
-	const blackContrast = bg.contrast(color("#000000"));
-
-	return whiteContrast > blackContrast ? "#ffffff" : "#000000";
-}
 
 function CreateIssueButton() {
 	return (
@@ -106,6 +95,7 @@ export function IssueList({
 								priorities={priorities}
 								statuses={statuses}
 								assignees={teamMembers}
+								labels={labels}
 								trigger={CreateIssueButton()}
 								onSubmit={onIssueSubmit}
 								initialStatusId={status.id}
@@ -220,103 +210,14 @@ function IssuesTable({
 								</Select>
 							</TableCell>
 							<TableCell>
-								<Select
-									multiple
+								<IssueLabelSelect
+									labels={labels}
 									value={issue.labelLinks.map((link) => link.labelId)}
-									onValueChange={async (newLabelIds) => {
-										const currentLabelIds = issue.labelLinks.map(
-											(link) => link.labelId,
-										);
-										const added = newLabelIds.filter(
-											(id) => !currentLabelIds.includes(id),
-										);
-										const removed = currentLabelIds.filter(
-											(id) => !newLabelIds.includes(id),
-										);
-
-										if (added.length > 0) {
-											await addLabels({
-												issueId: issue.id,
-												workspaceId,
-												labelIds: added,
-											});
-										}
-
-										if (removed.length > 0) {
-											await deleteLabels({
-												issueId: issue.id,
-												workspaceId,
-												labelIds: removed,
-											});
-										}
-									}}
-								>
-									<SelectTrigger
-										className="bg-transparent border px-2 py-1 text-sm cursor-pointer h-fit w-full shadow-none"
-										clearable={issue.labelLinks.length > 0}
-										onClear={async () => {
-											deleteLabels({
-												issueId: issue.id,
-												workspaceId: workspaceId,
-												labelIds: issue.labelLinks.map((link) => link.labelId),
-											});
-										}}
-									>
-										<SelectValue
-											placeholder="Select labels..."
-											className="flex items-center gap-1"
-										>
-											{(value: string[]) => {
-												if (value.length === 0) return "Select labels...";
-												const allLabels = value;
-												return allLabels.map((labelId) => {
-													const label = labels.find((l) => l.id === labelId);
-													if (!label) return null;
-													return (
-														<button
-															aria-label={`Remove label ${label.name}`}
-															title="Click to remove the label"
-															type="button"
-															onPointerDown={(e) => {
-																e.stopPropagation();
-																e.preventDefault();
-															}}
-															onClick={(e) => {
-																e.stopPropagation();
-																e.preventDefault();
-																deleteLabels({
-																	issueId: issue.id,
-																	workspaceId: workspaceId,
-																	labelIds: [label.id],
-																});
-															}}
-															key={label.id}
-														>
-															<Badge
-																className="px-2 text-xs font-medium"
-																style={{
-																	backgroundColor: label.color ?? undefined,
-																	color: getAccessibleTextColor(
-																		label.color ?? undefined,
-																	),
-																}}
-															>
-																{label.name}
-															</Badge>
-														</button>
-													);
-												});
-											}}
-										</SelectValue>
-									</SelectTrigger>
-									<SelectContent>
-										{labels.map((label) => (
-											<SelectItem key={label.id} value={label.id}>
-												{label.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+									workspaceId={workspaceId}
+									issueId={issue.id}
+									addLabels={addLabels}
+									deleteLabels={deleteLabels}
+								/>
 							</TableCell>
 							<TableCell>
 								<Select

@@ -5,6 +5,7 @@ import { FieldError } from "@prism/ui/components/field";
 import { useAppForm } from "@prism/ui/components/form/form-hooks";
 import { cn } from "@prism/ui/lib/utils";
 import type z from "zod";
+import { LabelMultiSelect } from "@/features/labels/components/label-multi-select";
 
 type Props = {
 	workspaceId: string;
@@ -12,6 +13,7 @@ type Props = {
 	priorities: Outputs["priority"]["list"];
 	statuses: Outputs["issue"]["status"]["list"];
 	assignees?: Outputs["teamMembership"]["list"];
+	labels: Outputs["label"]["list"];
 	onSubmit: (
 		issue: z.input<typeof issueCreateSchema>,
 	) => Promise<{ success: true } | { error: unknown }>;
@@ -25,11 +27,11 @@ export function IssueCreateForm({
 	statuses,
 	priorities,
 	assignees,
+	labels,
 	onSubmit,
 	className,
 	initialStatusId,
 }: Props) {
-	console.log(initialStatusId);
 	const form = useAppForm({
 		defaultValues: {
 			title: "",
@@ -39,6 +41,7 @@ export function IssueCreateForm({
 			statusId: initialStatusId ?? statuses[0]?.id,
 			priorityId: undefined,
 			assigneeId: undefined,
+			labelIds: [],
 		} as z.input<typeof issueCreateSchema>,
 		validators: {
 			onSubmit: issueCreateSchema,
@@ -100,6 +103,17 @@ export function IssueCreateForm({
 						items={assignees ?? []}
 						getItemValue={(member) => member.user.id}
 						getItemLabel={(member) => member.user.name}
+					/>
+				)}
+			</form.AppField>
+			<form.AppField name="labelIds">
+				{(field) => (
+					<LabelMultiSelect
+						label="Labels"
+						labels={labels}
+						value={(field.state.value ?? []) as unknown as string[]}
+						onChange={field.handleChange}
+						className="w-full"
 					/>
 				)}
 			</form.AppField>

@@ -77,7 +77,7 @@ const createIssue = authedRouter
 	.input(issueCreateSchema)
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
-		const { workspaceId, teamId } = input;
+		const { workspaceId, teamId, labelIds } = input;
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId,
@@ -93,15 +93,32 @@ const createIssue = authedRouter
 
 		const nextNumber = (maxRow?.maxNumber ?? 0) + 1;
 
-		const [created] = await db
-			.insert(issue)
-			.values({
-				id: createId(),
-				number: nextNumber,
-				creatorId: context.auth.session.userId,
-				...input,
-			})
-			.returning();
+		const created = await db.transaction(async (tx) => {
+			const [newIssue] = await tx
+				.insert(issue)
+				.values({
+					id: createId(),
+					number: nextNumber,
+					creatorId: context.auth.session.userId,
+					...omit(input, ["labelIds"]),
+				})
+				.returning();
+
+			if (!newIssue) {
+				throw new Error("Failed to create issue");
+			}
+
+			if (labelIds.length > 0) {
+				await tx.insert(issueLabel).values(
+					labelIds.map((labelId) => ({
+						issueId: newIssue.id,
+						labelId,
+					})),
+				);
+			}
+
+			return newIssue;
+		});
 
 		return created;
 	});
