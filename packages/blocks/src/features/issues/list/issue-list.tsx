@@ -95,6 +95,7 @@ export function IssueList({
 								priorities={priorities}
 								statuses={statuses}
 								assignees={teamMembers}
+								labels={labels}
 								trigger={CreateIssueButton()}
 								onSubmit={onIssueSubmit}
 								initialStatusId={status.id}
