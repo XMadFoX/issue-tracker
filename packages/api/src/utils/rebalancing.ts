@@ -1,10 +1,7 @@
-import {
-	generateEvenlySpacedRanks,
-	needsRebalancing,
-} from "@prism/api/src/utils/lexorank";
 import { db } from "db";
 import { issue } from "db/features/tracker/issues.schema";
 import { eq } from "drizzle-orm";
+import { generateEvenlySpacedRanks, needsRebalancing } from "./lexorank";
 
 /**
  * Rebalances issues in a single status column.

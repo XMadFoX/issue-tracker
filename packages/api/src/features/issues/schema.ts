@@ -61,6 +61,13 @@ export const issueLabelsSchema = z.object({
 
 export const issuePriorityUpdateSchema = z.object({
 	id: issueInsertSchema.shape.id,
-	workspaceId: workspaceInsertSchema.shape.id,
+	workspaceId: issueInsertSchema.shape.id.workspaceId,
 	priorityId: issuePriorityInsertSchema.shape.id.or(z.null()),
+});
+
+export const issueMoveSchema = z.object({
+	id: issueInsertSchema.shape.id,
+	workspaceId: workspaceInsertSchema.shape.id,
+	targetId: issueInsertSchema.shape.id.optional(),
+	after: z.boolean().default(true),
 });
