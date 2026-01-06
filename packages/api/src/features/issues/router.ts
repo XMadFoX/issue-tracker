@@ -93,34 +93,55 @@ const createIssue = authedRouter
 
 		const nextNumber = (maxRow?.maxNumber ?? 0) + 1;
 
-		const created = await db.transaction(async (tx) => {
-			const [newIssue] = await tx
-				.insert(issue)
-				.values({
-					id: createId(),
-					number: nextNumber,
-					creatorId: context.auth.session.userId,
-					...omit(input, ["labelIds"]),
-				})
-				.returning();
+		for (let attempt = 0; attempt <= 1; attempt++) {
+			try {
+				const [maxSortRow] = await db
+					.select({ maxSort: sql<string>`max(${issue.sortOrder})` })
+					.from(issue)
+					.where(eq(issue.statusId, input.statusId))
+					.limit(1);
 
-			if (!newIssue) {
-				throw new Error("Failed to create issue");
+				const sortOrder = calculateAfterRank(maxSortRow?.maxSort || "a00");
+
+				const created = await db.transaction(async (tx) => {
+					const [newIssue] = await tx
+						.insert(issue)
+						.values({
+							id: createId(),
+							number: nextNumber,
+							creatorId: context.auth.session.userId,
+							sortOrder,
+							...omit(input, ["labelIds"]),
+						})
+						.returning();
+
+					if (!newIssue) {
+						throw new Error("Failed to create issue");
+					}
+
+					if (labelIds.length > 0) {
+						await tx.insert(issueLabel).values(
+							labelIds.map((labelId) => ({
+								issueId: newIssue.id,
+								labelId,
+							})),
+						);
+					}
+
+					return newIssue;
+				});
+
+				return created;
+			} catch (error) {
+				if (attempt === 0) {
+					await rebalanceStatusIssues(input.statusId);
+				} else {
+					throw error;
+				}
 			}
+		}
 
-			if (labelIds.length > 0) {
-				await tx.insert(issueLabel).values(
-					labelIds.map((labelId) => ({
-						issueId: newIssue.id,
-						labelId,
-					})),
-				);
-			}
-
-			return newIssue;
-		});
-
-		return created;
+		throw new Error("Failed to create issue after rebalancing");
 	});
 
 const updateIssue = authedRouter
