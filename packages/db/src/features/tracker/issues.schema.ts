@@ -1,7 +1,6 @@
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import {
 	type AnyPgColumn,
-	doublePrecision,
 	index,
 	integer,
 	jsonb,
@@ -39,8 +38,8 @@ export const issue = pgTable(
 		// TODO: cycleId: text("cycle_id").references(() => cycle.id, { onDelete: "set null" }),
 		// TODO: estimate: integer("estimate"),
 		dueDate: timestamp("due_date", { withTimezone: true }),
-		// Sort Order (Lexorank style)
-		sortOrder: doublePrecision("sort_order").notNull().default(0),
+		// Sort Order (LexoRank style - custom [letter][digit][digit] format)
+		sortOrder: text("sort_order").notNull().default("a00"),
 		assigneeId: text("assignee_id").references(() => user.id, {
 			onDelete: "set null",
 		}),

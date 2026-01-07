@@ -104,6 +104,17 @@ function RouteComponent() {
 		}),
 	);
 
+	const moveIssue = useMutation(
+		orpc.issue.move.mutationOptions({
+			onSuccess: () => {
+				qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
+			},
+			onError: () => {
+				toast.error("Failed to move issue");
+			},
+		}),
+	);
+
 	const statuses = useQuery(
 		orpc.issue.status.list.queryOptions({
 			input: workspace.data?.id ? { id: workspace.data.id } : skipToken,
@@ -155,6 +166,7 @@ function RouteComponent() {
 				deleteLabels={deleteLabels.mutateAsync}
 				updateIssuePriority={updateIssuePriority.mutateAsync}
 				updateIssueAssignee={updateIssueAssignee.mutateAsync}
+				moveIssue={moveIssue.mutateAsync}
 			/>
 		</div>
 	);
