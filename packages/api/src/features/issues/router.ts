@@ -165,6 +165,27 @@ const updateIssue = authedRouter
 		if (!allowed) throw errors.UNAUTHORIZED;
 
 		const values = omit(input, ["id", "workspaceId"]);
+
+		// move to another status col with changing sortOrder to top
+		if (input.statusId) {
+			const [currentIssue] = await db
+				.select()
+				.from(issue)
+				.where(eq(issue.id, input.id))
+				.limit(1);
+
+			if (currentIssue && currentIssue.statusId !== input.statusId) {
+				const firstRank = await db
+					.select({ minSort: sql<string>`min(${issue.sortOrder})` })
+					.from(issue)
+					.where(eq(issue.statusId, input.statusId))
+					.limit(1)
+					.then((rows) => rows[0]?.minSort);
+
+				values.sortOrder = calculateBeforeRank(firstRank || "a00");
+			}
+		}
+
 		const [updated] = await db
 			.update(issue)
 			.set(values)
