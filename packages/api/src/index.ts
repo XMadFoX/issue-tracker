@@ -11,6 +11,9 @@ import { auth } from "./lib/auth";
 import { router } from "./router";
 export { router };
 
+import { logger } from "./logger";
+import { instrumentation } from "./otel-instrumentation";
+
 const handler = new OpenAPIHandler(router, {
 	plugins: [
 		new ResponseHeadersPlugin(),
@@ -43,6 +46,7 @@ const betterAuthView = (context: Context) => {
 
 const port = env.PORT;
 new Elysia()
+	.use(instrumentation)
 	.use(cors({ origin: env.CORS_ORIGINS }))
 	.all(
 		"/rpc*",
@@ -83,4 +87,4 @@ new Elysia()
 	.all("/api/auth/*", betterAuthView)
 	.listen(port);
 
-console.log(`🦊 Elysia is running at http://localhost:${port}`);
+logger.debug(`🦊 Elysia is running at http://localhost:${port}`);
