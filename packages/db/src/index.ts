@@ -12,6 +12,9 @@ function customColMapper(value: unknown) {
 	return value;
 }
 
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
 const pino = require("pino");
 
 const logger = pino({ level: "debug" });

@@ -2,7 +2,9 @@ import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
 export const env = createEnv({
-	server: {},
+	server: {
+		HOST_API: z.stringbool().optional(),
+	},
 
 	/**
 	 * The prefix that client-side variables must have. This is enforced both at
@@ -19,7 +21,7 @@ export const env = createEnv({
 	 * What object holds the environment variables at runtime. This is usually
 	 * `process.env` or `import.meta.env`.
 	 */
-	runtimeEnv: import.meta.env,
+	runtimeEnv: typeof window !== "undefined" ? import.meta.env : process.env,
 
 	/**
 	 * By default, this library will feed the environment variables directly to

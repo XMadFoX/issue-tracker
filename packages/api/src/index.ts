@@ -1,90 +1,16 @@
-import { cors } from "@elysiajs/cors";
-import { OpenAPIHandler } from "@orpc/openapi/fetch";
-import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
-import type { Context } from "@orpc/server";
-import { RPCHandler } from "@orpc/server/fetch";
-import { ResponseHeadersPlugin } from "@orpc/server/plugins";
-import { ZodToJsonSchemaConverter } from "@orpc/zod";
 import { Elysia } from "elysia";
+import { prism } from "./app";
 import { env } from "./env";
-import { auth } from "./lib/auth";
-import { router } from "./router";
-export { router };
-
 import { logger } from "./logger";
-import { instrumentation } from "./otel-instrumentation";
+import { router } from "./router";
 
-const handler = new OpenAPIHandler(router, {
-	plugins: [
-		new ResponseHeadersPlugin(),
-		new OpenAPIReferencePlugin({
-			docsProvider: "scalar",
-			schemaConverters: [new ZodToJsonSchemaConverter()],
-			specGenerateOptions: {
-				info: {
-					title: "ORPC Playground",
-					version: "0.0.0",
-				},
-			},
-		}),
-	],
-});
-
-const handlerRPC = new RPCHandler(router, {
-	plugins: [new ResponseHeadersPlugin()],
-});
-
-const betterAuthView = (context: Context) => {
-	const BETTER_AUTH_ACCEPT_METHODS = ["POST", "GET"];
-	// validate request method
-	if (BETTER_AUTH_ACCEPT_METHODS.includes(context.request.method)) {
-		return auth.handler(context.request);
-	} else {
-		context.error(405);
-	}
-};
+export { router, prism, Elysia };
 
 const port = env.PORT;
-new Elysia()
-	.use(instrumentation)
-	.use(cors({ origin: env.CORS_ORIGINS }))
-	.all(
-		"/rpc*",
-		async ({ request }: { request: Request }) => {
-			const session = await auth.api.getSession({ headers: request.headers });
-			const { response } = await handlerRPC.handle(request, {
-				prefix: "/rpc",
-				context: {
-					headers: request.headers,
-					auth: session,
-				},
-			});
+export const ElysiaApp = new Elysia().use(prism);
 
-			return response ?? new Response("Not Found", { status: 404 });
-		},
-		{
-			parse: "none", // Disable Elysia body parser to prevent "body already used" error
-		},
-	)
-	.all(
-		"/api*",
-		async ({ request }: { request: Request }) => {
-			const session = await auth.api.getSession({ headers: request.headers });
-			const { response } = await handler.handle(request, {
-				prefix: "/api",
-				context: {
-					headers: request.headers,
-					auth: session,
-				},
-			});
-
-			return response ?? new Response("Not Found", { status: 404 });
-		},
-		{
-			parse: "none", // Disable Elysia body parser to prevent "body already used" error
-		},
-	)
-	.all("/api/auth/*", betterAuthView)
-	.listen(port);
-
-logger.debug(`🦊 Elysia is running at http://localhost:${port}`);
+// Only listen if this is the main module (standalone mode)
+if (import.meta.main) {
+	ElysiaApp.listen(port);
+	logger.info(`🦊 Elysia is running at http://localhost:${port}`);
+}
