@@ -15,6 +15,7 @@ const config = defineConfig({
 			projects: [
 				"./tsconfig.json",
 				"../../packages/ui/tsconfig.json",
+				"../../packages/blocks/tsconfig.json",
 				"../../packages/api/tsconfig.json",
 			],
 		}),
