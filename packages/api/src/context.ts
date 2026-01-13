@@ -4,11 +4,11 @@ import type { auth } from "./lib/auth";
 
 type AuthBase = Awaited<ReturnType<typeof auth.api.getSession>>;
 
-interface ORPCContext extends ResponseHeadersPluginContext {
+export interface ORPCContext extends ResponseHeadersPluginContext {
 	headers: Headers;
 }
 
-interface AuthedORPCContext extends ORPCContext {
+export interface AuthedORPCContext extends ORPCContext {
 	auth: AuthBase;
 }
 
