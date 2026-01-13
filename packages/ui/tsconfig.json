@@ -2,6 +2,7 @@
 	"compilerOptions": {
 		"strict": true,
 		"esModuleInterop": true,
+		"composite": true,
 		"jsx": "react-jsx",
 		"outDir": "dist",
 		"moduleResolution": "Bundler",
