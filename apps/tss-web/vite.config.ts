@@ -9,7 +9,30 @@ import viteTsConfigPaths from "vite-tsconfig-paths";
 const config = defineConfig({
 	plugins: [
 		devtools(),
-		nitro(),
+		nitro({
+			externals: {
+				external: [
+					"@opentelemetry/api",
+					"@opentelemetry/sdk-node",
+					"@opentelemetry/resources",
+					"@opentelemetry/instrumentation",
+					"@opentelemetry/sdk-trace-node",
+					"@opentelemetry/sdk-logs",
+					"@opentelemetry/semantic-conventions",
+					"@opentelemetry/exporter-trace-otlp-proto",
+					"@opentelemetry/exporter-logs-otlp-http",
+					"@opentelemetry/exporter-trace-otlp-grpc",
+					"@opentelemetry/exporter-logs-otlp-grpc",
+					"@opentelemetry/instrumentation-http",
+					"@opentelemetry/instrumentation-pg",
+					"@opentelemetry/instrumentation-pino",
+					"@prisma/client",
+					"pino",
+					"pino-pretty",
+					"pg",
+				],
+			},
+		}),
 		// this is the plugin that enables path aliases
 		viteTsConfigPaths({
 			projects: [
@@ -21,12 +44,30 @@ const config = defineConfig({
 		}),
 		tailwindcss(),
 		tanstackStart(),
-		viteReact({
-			babel: {
-				plugins: ["babel-plugin-react-compiler"],
-			},
-		}),
+		viteReact(),
 	],
+	ssr: {
+		external: [
+			"@opentelemetry/api",
+			"@opentelemetry/sdk-node",
+			"@opentelemetry/resources",
+			"@opentelemetry/instrumentation",
+			"@opentelemetry/sdk-trace-node",
+			"@opentelemetry/sdk-logs",
+			"@opentelemetry/semantic-conventions",
+			"@opentelemetry/exporter-trace-otlp-proto",
+			"@opentelemetry/exporter-logs-otlp-http",
+			"@opentelemetry/exporter-trace-otlp-grpc",
+			"@opentelemetry/exporter-logs-otlp-grpc",
+			"@opentelemetry/instrumentation-http",
+			"@opentelemetry/instrumentation-pg",
+			"@opentelemetry/instrumentation-pino",
+			"@prisma/client",
+			"pino",
+			"pino-pretty",
+			"pg",
+		],
+	},
 });
 
 export default config;
