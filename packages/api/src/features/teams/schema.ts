@@ -5,6 +5,7 @@ import { workspaceInsertSchema } from "../workspaces/schema";
 
 export const teamInsertSchema = createInsertSchema(team).extend({
 	id: z.cuid2(),
+	key: z.string().regex(/^[A-z0-9-]+$/),
 });
 
 export const teamCreateSchema = teamInsertSchema.omit({ id: true }).extend({
@@ -14,9 +15,9 @@ export const teamCreateSchema = teamInsertSchema.omit({ id: true }).extend({
 
 export const teamListSchema = workspaceInsertSchema.pick({ id: true });
 
-export const teamGetBySlugSchema = workspaceInsertSchema
+export const teamGetBySlugSchema = teamInsertSchema
 	.pick({
-		slug: true,
+		key: true,
 	})
 	.extend({ workspaceId: workspaceInsertSchema.shape.id });
 

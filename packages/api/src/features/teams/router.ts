@@ -81,7 +81,7 @@ export const getBySlug = authedRouter
 			.from(team)
 			.leftJoin(teamMembership, eq(team.id, teamMembership.teamId))
 			.where(
-				and(eq(team.key, input.slug), eq(team.workspaceId, input.workspaceId)),
+				and(eq(team.key, input.key), eq(team.workspaceId, input.workspaceId)),
 			);
 		if (!res) {
 			throw errors.NOT_FOUND;

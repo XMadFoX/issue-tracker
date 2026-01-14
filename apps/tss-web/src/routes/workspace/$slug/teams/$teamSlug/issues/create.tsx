@@ -30,7 +30,7 @@ function RouteComponent() {
 	const team = useQuery(
 		orpc.team.getBySlug.queryOptions({
 			input: workspaceId
-				? { slug: teamSlug, workspaceId: workspace?.data?.id }
+				? { key: teamSlug, workspaceId: workspace?.data?.id }
 				: skipToken,
 			enabled: !!workspace?.data?.id,
 		}),
