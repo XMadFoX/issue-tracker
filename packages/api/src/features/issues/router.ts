@@ -14,6 +14,7 @@ import { rebalanceStatusIssues } from "../../utils/rebalancing";
 import {
 	issueCreateSchema,
 	issueDeleteSchema,
+	issueGetSchema,
 	issueLabelsSchema,
 	issueListSchema,
 	issueMoveSchema,
@@ -80,6 +81,41 @@ const listIssues = authedRouter
 		});
 
 		return rows;
+	});
+
+const getIssue = authedRouter
+	.input(issueGetSchema)
+	.errors(updateDeleteErrors)
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue:read",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		const row = await db.query.issue.findFirst({
+			where: (issue, { eq, and }) =>
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			with: {
+				status: {
+					with: {
+						statusGroup: true,
+					},
+				},
+				priority: true,
+				assignee: true,
+				team: true,
+				labelLinks: {
+					with: {
+						label: true,
+					},
+				},
+			},
+		});
+
+		if (!row) throw errors.NOT_FOUND;
+		return row;
 	});
 
 const createIssue = authedRouter
@@ -476,6 +512,7 @@ const moveIssue = authedRouter
 
 export const issueRouter = {
 	list: listIssues,
+	get: getIssue,
 	create: createIssue,
 	update: updateIssue,
 	delete: deleteIssue,

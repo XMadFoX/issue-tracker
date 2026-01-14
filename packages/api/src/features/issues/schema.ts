@@ -65,6 +65,11 @@ export const issuePriorityUpdateSchema = z.object({
 	priorityId: issuePriorityInsertSchema.shape.id.or(z.null()),
 });
 
+export const issueGetSchema = z.object({
+	id: issueInsertSchema.shape.id,
+	workspaceId: workspaceInsertSchema.shape.id,
+});
+
 export const issueMoveSchema = z.object({
 	id: issueInsertSchema.shape.id,
 	workspaceId: workspaceInsertSchema.shape.id,
