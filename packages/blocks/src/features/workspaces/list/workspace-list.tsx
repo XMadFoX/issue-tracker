@@ -49,7 +49,7 @@ export function WorkspaceList({
 				<Button asChild>
 					{renderCreateLink(
 						<>
-							<PlusIcon className="w-4 h-4 mr-2" />
+							<PlusIcon className="size-4 mr-2" />
 							Create Workspace
 						</>,
 					)}
@@ -69,7 +69,32 @@ export function WorkspaceList({
 }
 
 function WorkspaceListSkeleton() {
-	return <div className="p-8 max-w-5xl mx-auto space-y-8">{/* TODO */}</div>;
+	return (
+		<div className="p-8 max-w-5xl mx-auto space-y-8">
+			<div className="flex items-center justify-between">
+				<Skeleton className="h-10 w-48" />
+				<Skeleton className="h-10 w-32" />
+			</div>
+			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+				{[1, 2, 3].map((i) => (
+					<Card key={i} className="h-full">
+						<CardHeader className="flex flex-row items-center gap-4 space-y-0 pb-2">
+							<Skeleton className="size-12 rounded-lg flex-shrink-0" />
+							<div className="flex-1 space-y-2">
+								<Skeleton className="h-5 w-24" />
+								<Skeleton className="h-4 w-16" />
+							</div>
+						</CardHeader>
+						<CardContent>
+							<div className="mt-4">
+								<Skeleton className="h-4 w-40" />
+							</div>
+						</CardContent>
+					</Card>
+				))}
+			</div>
+		</div>
+	);
 }
 
 function WorkspaceListEmpty({
@@ -81,7 +106,7 @@ function WorkspaceListEmpty({
 		<div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
 			<div className="max-w-md space-y-6">
 				<div className="bg-primary/5 p-6 rounded-full inline-flex">
-					<PlusIcon className="w-12 h-12 text-primary" />
+					<PlusIcon className="size-12 text-primary" />
 				</div>
 				<h1 className="text-3xl font-bold tracking-tight">Welcome to Prism</h1>
 				<p className="text-muted-foreground text-lg">
@@ -100,7 +125,7 @@ function WorkspaceCard({ workspace }: { workspace: WorkspaceItem }) {
 	return (
 		<Card className="h-full transition-all duration-200 hover:shadow-md hover:border-primary/50">
 			<CardHeader className="flex flex-row items-center gap-4 space-y-0 pb-2">
-				<Avatar className="h-12 w-12 rounded-lg border">
+				<Avatar className="size-12 rounded-lg border">
 					<AvatarImage
 						src={`https://api.dicebear.com/9.x/initials/svg?seed=${workspace.name}`}
 					/>
@@ -119,7 +144,7 @@ function WorkspaceCard({ workspace }: { workspace: WorkspaceItem }) {
 			</CardHeader>
 			<CardContent>
 				<div className="flex items-center text-sm text-muted-foreground mt-4">
-					<CalendarIcon className="w-4 h-4 mr-2 opacity-70" />
+					<CalendarIcon className="size-4 mr-2 opacity-70" />
 					<span>
 						Joined{" "}
 						{new Date(
