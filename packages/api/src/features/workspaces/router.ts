@@ -30,12 +30,24 @@ import {
 
 export const list = authedRouter.handler(async ({ context }) => {
 	const userWorkspaces = await db
-		.select({ workspace })
+		.select({
+			workspace,
+			roleName: roleDefinitions.name,
+			joinedAt: workspaceMembership.joinedAt,
+		})
 		.from(workspaceMembership)
 		.innerJoin(workspace, eq(workspaceMembership.workspaceId, workspace.id))
+		.innerJoin(
+			roleDefinitions,
+			eq(workspaceMembership.roleId, roleDefinitions.id),
+		)
 		.where(eq(workspaceMembership.userId, context.auth.session.userId));
 
-	return userWorkspaces.map(({ workspace }) => workspace);
+	return userWorkspaces.map(({ workspace, roleName, joinedAt }) => ({
+		...workspace,
+		roleName,
+		joinedAt,
+	}));
 });
 
 export const getBySlug = authedRouter
