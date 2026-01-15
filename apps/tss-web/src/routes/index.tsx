@@ -1,3 +1,4 @@
+import { WorkspaceList } from "@prism/blocks/src/features/workspaces/list/workspace-list";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
@@ -21,26 +22,21 @@ function RouteComponent() {
 	}, [session, navigate]);
 
 	return (
-		<div className="flex flex-col items-center justify-center max-w-md mx-auto">
-			{workspaces.data ? (
-				<div>
-					<h1>Your workspaces</h1>
-					<ul>
-						{workspaces.data.map((workspace) => (
-							<li key={workspace.id}>
-								<Link to={`/workspace/${workspace.slug}`}>
-									{workspace.name}
-								</Link>
-							</li>
-						))}
-					</ul>
-				</div>
-			) : (
-				<>
-					<p>You don't have any workspaces yet</p>
-					<Link to="/workspace/create">Create</Link>
-				</>
+		<WorkspaceList
+			isLoading={session.isPending || workspaces.isLoading}
+			workspaces={workspaces.data}
+			renderWorkspaceLink={(workspace, children) => (
+				<Link
+					key={workspace.id}
+					to={`/workspace/${workspace.slug}`}
+					className="block group"
+				>
+					{children}
+				</Link>
 			)}
-		</div>
+			renderCreateLink={(children) => (
+				<Link to="/workspace/create">{children}</Link>
+			)}
+		/>
 	);
 }
