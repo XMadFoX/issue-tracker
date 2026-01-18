@@ -8,6 +8,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@prism/ui/components/select";
+import { cn } from "@prism/ui/lib/utils";
 import { Check } from "lucide-react";
 import { type ComponentProps, useState } from "react";
 import { IssueLabelSelect } from "../components/issue-label-select";
@@ -32,6 +33,7 @@ type Props = {
 	deleteLabels: (
 		input: Inputs["issue"]["labels"]["bulkDelete"],
 	) => Promise<void>;
+	className?: ComponentProps<"div">["className"];
 };
 
 export function IssueDetail({
@@ -46,6 +48,7 @@ export function IssueDetail({
 	updateIssueAssignee,
 	addLabels,
 	deleteLabels,
+	className,
 }: Props) {
 	const [isEditingTitle, setIsEditingTitle] = useState(false);
 	const [editedTitle, setEditedTitle] = useState(issue.title);
@@ -62,7 +65,7 @@ export function IssueDetail({
 	};
 
 	return (
-		<div className="space-y-6">
+		<div className={cn("space-y-6", className)}>
 			<div className="space-y-2">
 				<div className="flex items-center gap-2 text-muted-foreground text-sm">
 					<span>
@@ -169,7 +172,7 @@ export function IssueDetail({
 						await onUpdate({
 							id: issue.id,
 							workspaceId,
-							statusId: newStatusId,
+							statusId: newStatusId ?? undefined,
 						});
 					}}
 				>
@@ -245,6 +248,7 @@ export function IssueDetail({
 
 			<div className="prose dark:prose-invert max-w-none">
 				{issue.description ? (
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: TEMPORARY until rich text editor implemented
 					<div dangerouslySetInnerHTML={{ __html: issue.description }} />
 				) : (
 					<p className="text-muted-foreground italic">
