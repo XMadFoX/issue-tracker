@@ -41,12 +41,10 @@ export const issueListSchema = z.object({
 	offset: z.number().min(0).default(0),
 });
 
-export const issueUpdateSchema = z
-	.object({
-		id: z.string(),
-		workspaceId: z.string(),
-	})
-	.extend(issueInsertSchema.omit({ id: true, workspaceId: true }).shape);
+export const issueUpdateSchema = issueInsertSchema.partial().required({
+	id: true,
+	workspaceId: true,
+});
 
 export const issueDeleteSchema = z.object({
 	id: z.string(),
@@ -61,7 +59,7 @@ export const issueLabelsSchema = z.object({
 
 export const issuePriorityUpdateSchema = z.object({
 	id: issueInsertSchema.shape.id,
-	workspaceId: issueInsertSchema.shape.id.workspaceId,
+	workspaceId: issueInsertSchema.shape.workspaceId,
 	priorityId: issuePriorityInsertSchema.shape.id.or(z.null()),
 });
 

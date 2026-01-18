@@ -9,15 +9,15 @@
 	},
 	"dependencies": {
 		"dotenv": "^16.6.1",
-		"drizzle-orm": "^0.44.6",
-		"pg": "^8.16.0",
+		"drizzle-orm": "0.45.1",
+		"pg": "8.17.0",
 		"pino": "^10.1.0",
 		"zod": "^4.1.12"
 	},
 	"devDependencies": {
 		"@types/pg": "8.16.0",
 		"@types/bun": "1.3.5",
-		"drizzle-kit": "^0.31.1",
+		"drizzle-kit": "^0.31.8",
 		"tsx": "^4.19.4"
 	},
 	"peerDependencies": {
