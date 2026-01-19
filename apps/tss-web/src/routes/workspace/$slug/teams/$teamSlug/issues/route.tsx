@@ -1,19 +1,25 @@
 import type { issueCreateSchema } from "@prism/api/src/features/issues/schema";
 import { IssueList } from "@prism/blocks/src/features/issues/list/issue-list";
+import { IssueDetailSheet } from "@prism/blocks/src/features/issues/modal/issue-detail-sheet";
 import {
 	skipToken,
 	useMutation,
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { orpc } from "src/orpc/client";
-import type z from "zod";
+import z from "zod";
+
+const searchParamsSchema = z.object({
+	selectedIssue: z.string().optional(),
+});
 
 export const Route = createFileRoute("/workspace/$slug/teams/$teamSlug/issues")(
 	{
 		component: RouteComponent,
+		validateSearch: searchParamsSchema,
 	},
 );
 
@@ -21,6 +27,8 @@ type SubmitResult = { success: true } | { error: unknown };
 
 function RouteComponent() {
 	const { slug, teamSlug } = Route.useParams();
+	const search = Route.useSearch();
+	const navigate = useNavigate();
 	const workspace = useQuery(
 		orpc.workspace.getBySlug.queryOptions({ input: { slug } }),
 	);
@@ -74,6 +82,13 @@ function RouteComponent() {
 			onSuccess: () => {
 				// TODO: optimistic mutation, no full refetch
 				qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
+				if (search.selectedIssue && workspaceId) {
+					qc.invalidateQueries({
+						queryKey: orpc.issue.get.key({
+							input: { id: search.selectedIssue, workspaceId },
+						}),
+					});
+				}
 			},
 		}),
 	);
@@ -82,6 +97,13 @@ function RouteComponent() {
 			onSuccess: () => {
 				// TODO: no full refetch
 				qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
+				if (search.selectedIssue && workspaceId) {
+					qc.invalidateQueries({
+						queryKey: orpc.issue.get.key({
+							input: { id: search.selectedIssue, workspaceId },
+						}),
+					});
+				}
 			},
 		}),
 	);
@@ -91,6 +113,13 @@ function RouteComponent() {
 			onSuccess: () => {
 				// TODO: optimistic mutation, no full refetch
 				qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
+				if (search.selectedIssue && workspaceId) {
+					qc.invalidateQueries({
+						queryKey: orpc.issue.get.key({
+							input: { id: search.selectedIssue, workspaceId },
+						}),
+					});
+				}
 			},
 		}),
 	);
@@ -100,6 +129,13 @@ function RouteComponent() {
 			onSuccess: () => {
 				// TODO: optimistic mutation, no full refetch
 				qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
+				if (search.selectedIssue && workspaceId) {
+					qc.invalidateQueries({
+						queryKey: orpc.issue.get.key({
+							input: { id: search.selectedIssue, workspaceId },
+						}),
+					});
+				}
 			},
 		}),
 	);
@@ -121,8 +157,31 @@ function RouteComponent() {
 		}),
 	);
 
+	const selectedIssue = useQuery(
+		orpc.issue.get.queryOptions({
+			input:
+				search.selectedIssue && workspace.data?.id && team.data?.id
+					? { id: search.selectedIssue, workspaceId: workspace.data.id }
+					: skipToken,
+		}),
+	);
+
 	const qc = useQueryClient();
 	const createIssue = useMutation(orpc.issue.create.mutationOptions());
+	const onUpdate = useMutation(
+		orpc.issue.update.mutationOptions({
+			onSuccess: () => {
+				qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
+				if (search.selectedIssue && workspaceId) {
+					qc.invalidateQueries({
+						queryKey: orpc.issue.get.key({
+							input: { id: search.selectedIssue, workspaceId },
+						}),
+					});
+				}
+			},
+		}),
+	);
 
 	const onIssueSubmit = async (
 		issue: z.input<typeof issueCreateSchema>,
@@ -148,7 +207,7 @@ function RouteComponent() {
 	}
 
 	return (
-		<div className="p-6 space-y-8 w-full">
+		<div className="p-6 space-y-8 w-full relative">
 			<div className="flex items-center justify-between">
 				<h1 className="text-2xl font-bold">Issues</h1>
 			</div>
@@ -167,7 +226,36 @@ function RouteComponent() {
 				updateIssuePriority={updateIssuePriority.mutateAsync}
 				updateIssueAssignee={updateIssueAssignee.mutateAsync}
 				moveIssue={moveIssue.mutateAsync}
+				onIssueClick={(issueId) => {
+					navigate({
+						to: ".",
+						search: { selectedIssue: issueId },
+					});
+				}}
 			/>
+			<Outlet />
+			{selectedIssue.data && (
+				<IssueDetailSheet
+					issue={selectedIssue.data}
+					onClose={() => {
+						navigate({
+							to: ".",
+							search: { selectedIssue: undefined },
+						});
+					}}
+					statuses={statuses.data ?? []}
+					priorities={priorities.data ?? []}
+					labels={labels.data ?? []}
+					teamMembers={teamMembers.data ?? []}
+					workspaceId={workspaceId ?? ""}
+					onUpdate={onUpdate.mutateAsync}
+					updateIssuePriority={updateIssuePriority.mutateAsync}
+					updateIssueAssignee={updateIssueAssignee.mutateAsync}
+					addLabels={addLabels.mutateAsync}
+					deleteLabels={deleteLabels.mutateAsync}
+					fullPageUrl={`/workspace/$slug/teams/$teamSlug/issue/${search.selectedIssue}`}
+				/>
+			)}
 		</div>
 	);
 }
