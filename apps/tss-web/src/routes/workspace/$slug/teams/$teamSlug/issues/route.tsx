@@ -11,11 +11,11 @@ import { toast } from "sonner";
 import { orpc } from "src/orpc/client";
 import type z from "zod";
 
-export const Route = createFileRoute(
-	"/workspace/$slug/teams/$teamSlug/issues/",
-)({
-	component: RouteComponent,
-});
+export const Route = createFileRoute("/workspace/$slug/teams/$teamSlug/issues")(
+	{
+		component: RouteComponent,
+	},
+);
 
 type SubmitResult = { success: true } | { error: unknown };
 
