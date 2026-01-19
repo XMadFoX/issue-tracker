@@ -59,6 +59,7 @@ type Props = {
 		input: Inputs["issue"]["updateAssignee"],
 	) => Promise<Outputs["issue"]["updateAssignee"]>;
 	moveIssue?: (input: Inputs["issue"]["move"]) => Promise<void>;
+	onIssueClick?: (issueId: string) => void;
 };
 
 function CreateIssueButton() {
@@ -83,6 +84,7 @@ export function IssueList({
 	updateIssuePriority,
 	updateIssueAssignee,
 	moveIssue,
+	onIssueClick,
 }: Props) {
 	const groupedIssues = useMemo(() => {
 		const groups: Record<string, typeof issues> = {};
@@ -203,6 +205,7 @@ export function IssueList({
 									deleteLabels={deleteLabels}
 									updateIssuePriority={updateIssuePriority}
 									updateIssueAssignee={updateIssueAssignee}
+									onIssueClick={onIssueClick}
 								/>
 							)}
 						</div>
@@ -238,8 +241,6 @@ export function IssueList({
 	);
 }
 
-type StatusIssues = Props["issues"];
-
 function SortableIssueRow({
 	issue,
 	labels,
@@ -250,6 +251,7 @@ function SortableIssueRow({
 	deleteLabels,
 	updateIssuePriority,
 	updateIssueAssignee,
+	onIssueClick,
 }: {
 	issue: StatusIssues[number];
 	labels: Props["labels"];
@@ -260,6 +262,7 @@ function SortableIssueRow({
 	deleteLabels: Props["deleteLabels"];
 	updateIssuePriority: Props["updateIssuePriority"];
 	updateIssueAssignee: Props["updateIssueAssignee"];
+	onIssueClick: Props["onIssueClick"];
 }) {
 	const {
 		attributes,
@@ -277,7 +280,22 @@ function SortableIssueRow({
 	};
 
 	return (
-		<TableRow ref={setNodeRef} style={style}>
+		<TableRow
+			ref={setNodeRef}
+			style={style}
+			className={onIssueClick ? "cursor-pointer hover:bg-muted/50" : ""}
+			onClick={(e) => {
+				if (
+					e.defaultPrevented ||
+					(e.target as HTMLElement).closest(
+						"button, a, input, select, [role='combobox']",
+					)
+				) {
+					return;
+				}
+				onIssueClick?.(issue.id);
+			}}
+		>
 			<TableCell className="w-[30px]">
 				<button
 					{...attributes}
@@ -400,6 +418,7 @@ function IssuesTable({
 	deleteLabels,
 	updateIssuePriority,
 	updateIssueAssignee,
+	onIssueClick,
 }: {
 	statusIssues: StatusIssues;
 	labels: Props["labels"];
@@ -410,6 +429,7 @@ function IssuesTable({
 	deleteLabels: Props["deleteLabels"];
 	updateIssuePriority: Props["updateIssuePriority"];
 	updateIssueAssignee: Props["updateIssueAssignee"];
+	onIssueClick: Props["onIssueClick"];
 }) {
 	const issueIds = useMemo(
 		() => statusIssues.map((issue) => issue.id),
@@ -447,6 +467,7 @@ function IssuesTable({
 								deleteLabels={deleteLabels}
 								updateIssuePriority={updateIssuePriority}
 								updateIssueAssignee={updateIssueAssignee}
+								onIssueClick={onIssueClick}
 							/>
 						))}
 					</SortableContext>
