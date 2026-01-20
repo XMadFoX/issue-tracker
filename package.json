@@ -9,5 +9,10 @@
 	"keywords": [],
 	"author": "",
 	"license": "ISC",
-	"packageManager": "pnpm@10.17.1"
+	"packageManager": "pnpm@10.17.1",
+	"pnpm": {
+		"overrides": {
+			"pg": "8.17.1"
+		}
+	}
 }
