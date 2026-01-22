@@ -52,7 +52,10 @@ export function IssueDetailSheet({
 
 	return (
 		<Sheet open={true} onOpenChange={(open) => !open && onClose()}>
-			<SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
+			<SheetContent
+				side="right"
+				className="w-full sm:max-w-4xl! overflow-y-auto"
+			>
 				<SheetHeader className="mb-4">
 					<div className="flex items-center justify-between pr-8">
 						<SheetTitle className="sr-only">{issue.title}</SheetTitle>

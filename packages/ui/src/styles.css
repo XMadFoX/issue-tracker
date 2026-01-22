@@ -1,4 +1,6 @@
 /* biome-ignore-all lint/suspicious/noUnknownAtRules: tailwind custom syntax */
+
+@plugin "tailwind-scrollbar-hide";
 @import "tailwindcss";
 @import "tw-animate-css";
 @source ".";
@@ -80,6 +82,7 @@ body {
 	--shadow-2xl: 0px 4px 6px 0px hsl(240 30% 25% / 0.3);
 	--tracking-normal: 0em;
 	--spacing: 0.25rem;
+	--highlight: oklch(0.852 0.199 91.936);
 }
 
 .dark {
@@ -143,6 +146,7 @@ body {
 		0px 4px 6px 0px hsl(240 30% 25% / 0.12), 0px 8px 10px -1px
 		hsl(240 30% 25% / 0.12);
 	--shadow-2xl: 0px 4px 6px 0px hsl(240 30% 25% / 0.3);
+	--highlight: oklch(0.852 0.199 91.936);
 }
 
 @theme inline {
@@ -196,6 +200,7 @@ body {
 	--shadow-lg: var(--shadow-lg);
 	--shadow-xl: var(--shadow-xl);
 	--shadow-2xl: var(--shadow-2xl);
+	--color-highlight: var(--highlight);
 }
 
 @layer base {

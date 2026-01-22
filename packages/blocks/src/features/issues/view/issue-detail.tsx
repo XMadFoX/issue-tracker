@@ -11,6 +11,7 @@ import {
 import { cn } from "@prism/ui/lib/utils";
 import { Check } from "lucide-react";
 import { type ComponentProps, useState } from "react";
+import DescriptionEditor from "@/components/description-editor";
 import { IssueLabelSelect } from "../components/issue-label-select";
 
 type Props = {
@@ -247,14 +248,11 @@ export function IssueDetail({
 			</div>
 
 			<div className="prose dark:prose-invert max-w-none">
-				{issue.description ? (
-					// biome-ignore lint/security/noDangerouslySetInnerHtml: TEMPORARY until rich text editor implemented
-					<div dangerouslySetInnerHTML={{ __html: issue.description }} />
-				) : (
-					<p className="text-muted-foreground italic">
-						No description provided.
-					</p>
-				)}
+				<DescriptionEditor
+					issue={issue}
+					workspaceId={workspaceId}
+					onUpdate={onUpdate}
+				/>
 			</div>
 		</div>
 	);
