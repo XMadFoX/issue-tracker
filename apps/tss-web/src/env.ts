@@ -4,6 +4,7 @@ import { z } from "zod";
 export const env = createEnv({
 	server: {
 		HOST_API: z.stringbool().optional(),
+		BUILD_NITRO_PRESET: z.string().optional().default("bun"),
 	},
 
 	/**
