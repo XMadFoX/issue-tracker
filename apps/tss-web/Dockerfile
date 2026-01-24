@@ -1,6 +1,5 @@
 FROM node:24-alpine AS install
 RUN npm install -g pnpm@10.17.1
-RUN pnpm -v
 WORKDIR /app
 COPY package.json .
 COPY pnpm-workspace.yaml .
@@ -27,4 +26,8 @@ ENV NODE_ENV=production
 WORKDIR /app/apps/tss-web
 RUN bun run build
 
-# TODO: runtime
+FROM oven/bun:1.3-alpine AS runtime
+WORKDIR /app
+COPY --from=build /app/apps/tss-web/.output /app
+EXPOSE 3000
+CMD ["bun", "./server/index.mjs"]
