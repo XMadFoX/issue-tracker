@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 FROM node:24-alpine AS install
 RUN npm install -g pnpm@10.17.1
 WORKDIR /app
@@ -24,7 +25,10 @@ COPY packages/db /app/packages/db
 COPY packages/api /app/packages/api
 ENV NODE_ENV=production
 WORKDIR /app/apps/tss-web
-RUN bun run build
+ENV BUILD_NITRO_PRESET=bun
+RUN --mount=type=secret,id=env \
+    export $(cat /run/secrets/env | xargs) && \
+    bun run build
 
 FROM oven/bun:1.3-alpine AS runtime
 WORKDIR /app
