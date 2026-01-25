@@ -12,28 +12,6 @@ const config = defineConfig({
 		devtools(),
 		nitro({
 			preset: env.BUILD_NITRO_PRESET,
-			externals: {
-				external: [
-					"@opentelemetry/api",
-					"@opentelemetry/sdk-node",
-					"@opentelemetry/resources",
-					"@opentelemetry/instrumentation",
-					"@opentelemetry/sdk-trace-node",
-					"@opentelemetry/sdk-logs",
-					"@opentelemetry/semantic-conventions",
-					"@opentelemetry/exporter-trace-otlp-proto",
-					"@opentelemetry/exporter-logs-otlp-http",
-					"@opentelemetry/exporter-trace-otlp-grpc",
-					"@opentelemetry/exporter-logs-otlp-grpc",
-					"@opentelemetry/instrumentation-http",
-					"@opentelemetry/instrumentation-pg",
-					"@opentelemetry/instrumentation-pino",
-					"@prisma/client",
-					"pino",
-					"pino-pretty",
-					"pg",
-				],
-			},
 		}),
 		// this is the plugin that enables path aliases
 		viteTsConfigPaths({
