@@ -1,4 +1,5 @@
 import type { issueCreateSchema } from "@prism/api/src/features/issues/schema";
+import type { Outputs } from "@prism/api/src/router";
 import { IssueList } from "@prism/blocks/src/features/issues/list/issue-list";
 import { IssueDetailSheet } from "@prism/blocks/src/features/issues/modal/issue-detail-sheet";
 import {
@@ -8,8 +9,9 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { toast } from "sonner";
-import { orpc } from "src/orpc/client";
+import { client, orpc } from "src/orpc/client";
 import z from "zod";
 
 const searchParamsSchema = z.object({
@@ -197,6 +199,55 @@ function RouteComponent() {
 			return { error: err };
 		}
 	};
+
+	// Live updates subscription
+	useEffect(() => {
+		if (!workspaceId || !team.data?.id) return;
+
+		const abortController = new AbortController();
+
+		(async () => {
+			try {
+				const iterator = await client.issue.live(
+					{ workspaceId, teamId: team.data.id },
+					{ signal: abortController.signal },
+				);
+
+				console.log("Live updates connected");
+
+				for await (const event of iterator) {
+					console.log("New issue update event", event);
+					qc.setQueryData<Outputs["issue"]["list"]>(
+						orpc.issue.list.queryKey({
+							input: { workspaceId, teamId: team.data.id },
+						}),
+						(oldData) => {
+							if (!oldData) return oldData;
+
+							if (event.type === "create") {
+								return [...oldData, event.issue];
+							}
+							if (event.type === "update") {
+								return oldData.map((issue) =>
+									issue.id === event.issue.id ? event.issue : issue,
+								);
+							}
+							if (event.type === "delete") {
+								return oldData.filter((issue) => issue.id !== event.issueId);
+							}
+							return oldData;
+						},
+					);
+				}
+			} catch (error) {
+				if (error instanceof Error && error.name !== "AbortError") {
+					console.error("Live updates error:", error);
+				}
+			}
+		})();
+
+		return () => abortController.abort();
+	}, [workspaceId, team.data?.id, qc]);
 
 	if (workspace.isLoading || issues.isLoading || statuses.isLoading) {
 		return (
