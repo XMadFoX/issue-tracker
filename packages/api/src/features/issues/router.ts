@@ -510,6 +510,31 @@ const moveIssue = authedRouter
 		throw new Error("Failed to move issue after rebalancing");
 	});
 
+const liveIssues = authedRouter
+	.input(
+		z.object({
+			workspaceId: z.string(),
+			teamId: z.string().optional(),
+		}),
+	)
+	.errors(commonErrors)
+	.handler(async function* ({ context, input, errors, signal }) {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue:read",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		const stream = issuePublisher.subscribe("issue:changed", { signal });
+
+		for await (const event of stream) {
+			if (event.workspaceId !== input.workspaceId) continue;
+			if (input.teamId && event.teamId !== input.teamId) continue;
+			yield event;
+		}
+	});
+
 export const issueRouter = {
 	list: listIssues,
 	get: getIssue,
@@ -519,6 +544,7 @@ export const issueRouter = {
 	move: moveIssue,
 	updatePriority,
 	updateAssignee,
+	live: liveIssues,
 	labels: {
 		bulkAdd: bulkAddLabels,
 		bulkDelete: bulkDeleteLabels,
