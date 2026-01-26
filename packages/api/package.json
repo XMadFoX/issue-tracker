@@ -28,6 +28,7 @@
 		"@opentelemetry/sdk-logs": "^0.208.0",
 		"@opentelemetry/sdk-node": "^0.208.0",
 		"@opentelemetry/sdk-trace-node": "^2.2.0",
+		"@orpc/experimental-publisher": "^1.13.4",
 		"@orpc/openapi": "^1.11.3",
 		"@orpc/otel": "^1.11.3",
 		"@orpc/server": "^1.11.3",
