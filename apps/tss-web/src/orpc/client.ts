@@ -1,5 +1,6 @@
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
+import { ClientRetryPlugin } from "@orpc/client/plugins";
 import type { RouterClient } from "@orpc/server";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import type { router } from "@prism/api";
@@ -13,6 +14,7 @@ const link = new RPCLink({
 			credentials: "include", // Include cookies for cross-origin requests
 		});
 	},
+	plugins: [new ClientRetryPlugin()],
 });
 
 export const client: RouterClient<typeof router> = createORPCClient(link);
