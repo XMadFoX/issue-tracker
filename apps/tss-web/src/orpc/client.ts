@@ -14,7 +14,27 @@ const link = new RPCLink({
 			credentials: "include", // Include cookies for cross-origin requests
 		});
 	},
-	plugins: [new ClientRetryPlugin()],
+	plugins: [
+		new ClientRetryPlugin({
+			default: {
+				retry: 3,
+				shouldRetry: ({ error }) => {
+					// Don't retry on 4xx client errors
+					if (
+						typeof error === "object" &&
+						error !== null &&
+						"status" in error &&
+						typeof error.status === "number" &&
+						error.status >= 400 &&
+						error.status < 500
+					) {
+						return false;
+					}
+					return true;
+				},
+			},
+		}),
+	],
 });
 
 export const client: RouterClient<typeof router> = createORPCClient(link);
