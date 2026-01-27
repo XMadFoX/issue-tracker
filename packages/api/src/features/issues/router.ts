@@ -3,6 +3,7 @@ import { db } from "db";
 import { issue, issueLabel } from "db/features/tracker/issues.schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { omit } from "remeda";
+import { z } from "zod";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import {
@@ -11,6 +12,8 @@ import {
 	calculateMiddleRank,
 } from "../../utils/lexorank";
 import { rebalanceStatusIssues } from "../../utils/rebalancing";
+import { issuePublisher } from "./publisher";
+import { getIssueWithRelations } from "./queries";
 import {
 	issueCreateSchema,
 	issueDeleteSchema,
@@ -94,25 +97,7 @@ const getIssue = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED;
 
-		const row = await db.query.issue.findFirst({
-			where: (issue, { eq, and }) =>
-				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
-			with: {
-				status: {
-					with: {
-						statusGroup: true,
-					},
-				},
-				priority: true,
-				assignee: true,
-				team: true,
-				labelLinks: {
-					with: {
-						label: true,
-					},
-				},
-			},
-		});
+		const row = await getIssueWithRelations(input.id, input.workspaceId);
 
 		if (!row) throw errors.NOT_FOUND;
 		return row;
@@ -176,6 +161,16 @@ const createIssue = authedRouter
 					return newIssue;
 				});
 
+				const freshIssue = await getIssueWithRelations(created.id, workspaceId);
+				if (freshIssue) {
+					await issuePublisher.publish("issue:changed", {
+						type: "create",
+						workspaceId,
+						teamId: freshIssue.teamId,
+						issue: freshIssue,
+					});
+				}
+
 				return created;
 			} catch (error) {
 				if (attempt === 0) {
@@ -230,6 +225,17 @@ const updateIssue = authedRouter
 			)
 			.returning();
 		if (!updated) throw errors.NOT_FOUND;
+
+		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
+		if (freshIssue) {
+			await issuePublisher.publish("issue:changed", {
+				type: "update",
+				workspaceId: input.workspaceId,
+				teamId: freshIssue.teamId,
+				issue: freshIssue,
+			});
+		}
+
 		return updated;
 	});
 
@@ -251,6 +257,14 @@ const deleteIssue = authedRouter
 			)
 			.returning();
 		if (!deleted) throw errors.NOT_FOUND;
+
+		await issuePublisher.publish("issue:changed", {
+			type: "delete",
+			workspaceId: input.workspaceId,
+			teamId: deleted.teamId,
+			issueId: deleted.id,
+		});
+
 		return deleted;
 	});
 
@@ -276,6 +290,19 @@ const bulkAddLabels = authedRouter
 				})),
 			)
 			.onConflictDoNothing();
+
+		const freshIssue = await getIssueWithRelations(
+			input.issueId,
+			input.workspaceId,
+		);
+		if (freshIssue) {
+			await issuePublisher.publish("issue:changed", {
+				type: "update",
+				workspaceId: input.workspaceId,
+				teamId: freshIssue.teamId,
+				issue: freshIssue,
+			});
+		}
 	});
 
 const bulkDeleteLabels = authedRouter
@@ -299,6 +326,19 @@ const bulkDeleteLabels = authedRouter
 					inArray(issueLabel.labelId, input.labelIds),
 				),
 			);
+
+		const freshIssue = await getIssueWithRelations(
+			input.issueId,
+			input.workspaceId,
+		);
+		if (freshIssue) {
+			await issuePublisher.publish("issue:changed", {
+				type: "update",
+				workspaceId: input.workspaceId,
+				teamId: freshIssue.teamId,
+				issue: freshIssue,
+			});
+		}
 	});
 
 const updatePriority = authedRouter
@@ -320,6 +360,17 @@ const updatePriority = authedRouter
 			)
 			.returning();
 		if (!updated) throw errors.NOT_FOUND;
+
+		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
+		if (freshIssue) {
+			await issuePublisher.publish("issue:changed", {
+				type: "update",
+				workspaceId: input.workspaceId,
+				teamId: freshIssue.teamId,
+				issue: freshIssue,
+			});
+		}
+
 		return updated;
 	});
 
@@ -342,6 +393,17 @@ const updateAssignee = authedRouter
 			)
 			.returning();
 		if (!updated) throw errors.NOT_FOUND;
+
+		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
+		if (freshIssue) {
+			await issuePublisher.publish("issue:changed", {
+				type: "update",
+				workspaceId: input.workspaceId,
+				teamId: freshIssue.teamId,
+				issue: freshIssue,
+			});
+		}
+
 		return updated;
 	});
 
@@ -481,7 +543,22 @@ const moveIssue = authedRouter
 
 		for (let attempt = 0; attempt <= 1; attempt++) {
 			try {
-				return await db.transaction(executeMove);
+				const moved = await db.transaction(executeMove);
+
+				const freshIssue = await getIssueWithRelations(
+					input.id,
+					input.workspaceId,
+				);
+				if (freshIssue) {
+					await issuePublisher.publish("issue:changed", {
+						type: "update",
+						workspaceId: input.workspaceId,
+						teamId: freshIssue.teamId,
+						issue: freshIssue,
+					});
+				}
+
+				return moved;
 			} catch (error) {
 				console.debug("Move issue error caught:", error);
 				if (typeof error === "object") {
@@ -510,6 +587,31 @@ const moveIssue = authedRouter
 		throw new Error("Failed to move issue after rebalancing");
 	});
 
+const liveIssues = authedRouter
+	.input(
+		z.object({
+			workspaceId: z.string(),
+			teamId: z.string().optional(),
+		}),
+	)
+	.errors(commonErrors)
+	.handler(async function* ({ context, input, errors, signal }) {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue:read",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		const stream = issuePublisher.subscribe("issue:changed", { signal });
+
+		for await (const event of stream) {
+			if (event.workspaceId !== input.workspaceId) continue;
+			if (input.teamId && event.teamId !== input.teamId) continue;
+			yield event;
+		}
+	});
+
 export const issueRouter = {
 	list: listIssues,
 	get: getIssue,
@@ -519,6 +621,7 @@ export const issueRouter = {
 	move: moveIssue,
 	updatePriority,
 	updateAssignee,
+	live: liveIssues,
 	labels: {
 		bulkAdd: bulkAddLabels,
 		bulkDelete: bulkDeleteLabels,
