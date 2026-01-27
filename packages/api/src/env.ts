@@ -5,6 +5,7 @@ export const env = createEnv({
 	server: {
 		DATABASE_URL: z.string().url(),
 		PORT: z.coerce.number().optional().default(4000),
+		NATS_URL: z.string().optional().default("nats://localhost:4222"),
 		CORS_ORIGINS: z
 			.string()
 			.optional()
