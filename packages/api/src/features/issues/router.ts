@@ -595,7 +595,7 @@ const liveIssues = authedRouter
 		}),
 	)
 	.errors(commonErrors)
-	.handler(async function* ({ context, input, errors, signal }) {
+	.handler(async function* ({ context, input, errors, signal, lastEventId }) {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
@@ -603,7 +603,10 @@ const liveIssues = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED;
 
-		const stream = issuePublisher.subscribe("issue:changed", { signal });
+		const stream = issuePublisher.subscribe("issue:changed", {
+			signal,
+			lastEventId,
+		});
 
 		for await (const event of stream) {
 			if (event.workspaceId !== input.workspaceId) continue;
