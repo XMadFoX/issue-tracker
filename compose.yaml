@@ -11,6 +11,18 @@ services:
       POSTGRES_DB: issue_tracker
 
 
+  web:
+    image: docker.io/library/tss-web
+    env_file: ./apps/tss-web/.env.prod
+    build:
+      context: ./
+      dockerfile: ./apps/tss-web/Dockerfile
+    ports:
+      - 3000:3000
+    secrets:
+      - source: env
+        target: env
+
   nats:
     image: nats
     ports:
@@ -26,3 +38,7 @@ services:
       DATABASE_URL: postgres://postgres:postgres@pg:5432/issue_tracker
       AUTH_TOKENS: dev
       BIND_ADDR: 0.0.0.0:8080
+
+secrets:
+  env:
+    file: ./apps/tss-web/.env.prod
