@@ -1,8 +1,8 @@
 services:
   pg:
-    image: postgres:17.5
+    image: postgres:18.1-alpine3.23
     volumes:
-      - ./data/pg:/var/lib/postgresql/data
+      - ./data/pg:/var/lib/postgresql
     ports:
       - 5432:5432
     environment:
