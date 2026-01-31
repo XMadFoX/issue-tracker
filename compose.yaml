@@ -1,6 +1,6 @@
 services:
   pg:
-    image: postgres:18.1-alpine3.23
+    image: pgvector/pgvector:0.8.1-pg18-trixie
     volumes:
       - ./data/pg:/var/lib/postgresql
     ports:
