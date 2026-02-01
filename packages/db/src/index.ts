@@ -1,4 +1,4 @@
-import { drizzle } from "drizzle-orm/node-postgres";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { drizzle as drizzleHttp } from "drizzle-orm/pg-proxy";
 import { env } from "./env";
 import * as schema from "./schema";
@@ -79,7 +79,8 @@ function createDb() {
 	}
 }
 
-const db = createDb();
+// inferred type of PgRemoteDatabase is wrong, breaks types of returning(X) which API is actually returning properly
+const db = createDb() as NodePgDatabase<typeof schema>;
 
 export { db };
 export type DB = typeof db;
