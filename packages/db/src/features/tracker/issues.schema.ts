@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import {
 	type AnyPgColumn,
+	customType,
 	index,
 	integer,
 	jsonb,
@@ -8,12 +9,19 @@ import {
 	text,
 	timestamp,
 	uniqueIndex,
+	vector,
 } from "drizzle-orm/pg-core";
 import { user } from "../auth/auth.schema";
 import { issuePriority } from "./issue-priorities.schema";
 import { issueStatus } from "./issue-statuses.schema";
 import { label } from "./labels.schema";
 import { team, workspace } from "./tracker.schema";
+
+const tsvector = customType<{ data: string }>({
+	dataType() {
+		return "tsvector";
+	},
+});
 
 export const issue = pgTable(
 	"issue",
@@ -29,6 +37,9 @@ export const issue = pgTable(
 		number: integer("number").notNull(),
 		title: text("title").notNull(),
 		description: jsonb("description"),
+		searchText: text("search_text"),
+		searchVector: tsvector("search_vector"),
+		embedding: vector("embedding", { dimensions: 1536 }),
 		statusId: text("status_id")
 			.notNull()
 			.references(() => issueStatus.id, { onDelete: "restrict" }),
@@ -74,8 +85,20 @@ export const issue = pgTable(
 		),
 		// Speed up Cycle views
 		// index("issue_cycle_idx").on(table.cycleId),
-		// Speed up searching by Title
-		index("issue_title_search_idx").on(table.title),
+		// Speed up searching by Title (trgm for fuzzy/typo matching)
+		index("issue_title_trgm_idx").using("gin", table.title.op("gin_trgm_ops")),
+		// Trgm index on searchText for fuzzy/typo matching
+		index("issue_search_text_trgm_idx").using(
+			"gin",
+			table.searchText.op("gin_trgm_ops"),
+		),
+		// GIN index on searchVector for full-text search
+		index("issue_search_vector_idx").using("gin", table.searchVector),
+		// HNSW index on embedding for semantic similarity (cosine distance)
+		index("issue_embedding_hnsw_idx").using(
+			"hnsw",
+			table.embedding.op("vector_cosine_ops"),
+		),
 		// Ensure we can quickly find sub-issues
 		index("issue_parent_idx").on(table.parentIssueId),
 	],
