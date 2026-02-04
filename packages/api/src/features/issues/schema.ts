@@ -74,3 +74,37 @@ export const issueMoveSchema = z.object({
 	targetId: issueInsertSchema.shape.id.optional(),
 	after: z.boolean().default(true),
 });
+
+export const issueSearchSchema = z.object({
+	workspaceId: workspaceInsertSchema.shape.id,
+	query: z.string().min(1).max(200),
+	mode: z.enum(["fts", "trigram", "semantic", "hybrid"]).default("hybrid"),
+	filters: z
+		.object({
+			teamId: teamInsertSchema.shape.id.optional(),
+			statusId: issueInsertSchema.shape.statusId.optional(),
+			assigneeId: assigneeIdSchema.optional(),
+			labelIds: z.array(labelInsertSchema.shape.id).optional(),
+			priorityId: issueInsertSchema.shape.priorityId.optional(),
+			reporterId: userInsertSchema.shape.id.optional(),
+			creatorId: userInsertSchema.shape.id.optional(),
+			createdAtFrom: z.iso.datetime().optional(),
+			createdAtTo: z.iso.datetime().optional(),
+			dueDateFrom: z.iso.datetime().optional(),
+			dueDateTo: z.iso.datetime().optional(),
+		})
+		.optional(),
+	options: z
+		.object({
+			minScore: z.number().min(0).max(1).default(0),
+			embeddingThreshold: z.number().min(0).max(1).default(0.7),
+			includeStatus: z.boolean().default(false),
+			includeStatusGroup: z.boolean().default(false),
+			includePriority: z.boolean().default(false),
+			includeAssignee: z.boolean().default(false),
+			includeTeam: z.boolean().default(false),
+			includeLabels: z.boolean().default(false),
+		})
+		.optional(),
+	includeArchived: z.boolean().default(false),
+});
