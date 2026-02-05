@@ -17,6 +17,8 @@ export const env = createEnv({
 						.map((s) => s.trim())
 						.filter(Boolean), // remove empty strings
 			),
+		OPENAI_ENDPOINT: z.string().default("http://localhost:11434/v1"),
+		OPENAI_API_KEY: z.string().default(""),
 	},
 	runtimeEnv: process.env,
 });
