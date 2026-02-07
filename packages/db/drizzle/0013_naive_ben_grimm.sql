@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pg_trgm;--> statement-breakpoint
+CREATE EXTENSION vector;--> statement-breakpoint
 DROP INDEX "issue_title_search_idx";--> statement-breakpoint
 ALTER TABLE "issue" ADD COLUMN "search_text" text;--> statement-breakpoint
 ALTER TABLE "issue" ADD COLUMN "search_vector" "tsvector";--> statement-breakpoint
