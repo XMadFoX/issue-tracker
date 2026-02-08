@@ -2,6 +2,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import { issue, issueLabel } from "db/features/tracker/issues.schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { Value } from "platejs";
 import { omit } from "remeda";
 import { z } from "zod";
 import { authedRouter } from "../../context";
@@ -37,6 +38,17 @@ const updateDeleteErrors = {
 	NOT_FOUND: {},
 	INVALID_MOVE: {},
 	RANK_EXHAUSTED: {},
+};
+
+const buildSearchFields = async (description?: Value | null) => {
+	if (!description) return {};
+
+	const plain = editorToPlainText(description);
+	return {
+		searchText: plain,
+		searchVector: sql`to_tsvector('english', ${plain})` as unknown as string,
+		embedding: await embedText(plain),
+	};
 };
 
 const listIssues = authedRouter
@@ -124,6 +136,7 @@ const createIssue = authedRouter
 			.limit(1);
 
 		const nextNumber = (maxRow?.maxNumber ?? 0) + 1;
+		const searchFields = await buildSearchFields(input.description);
 
 		for (let attempt = 0; attempt <= 1; attempt++) {
 			try {
@@ -144,6 +157,7 @@ const createIssue = authedRouter
 							creatorId: context.auth.session.userId,
 							sortOrder,
 							...omit(input, ["labelIds"]),
+							...searchFields,
 						})
 						.returning();
 
@@ -220,12 +234,7 @@ const updateIssue = authedRouter
 		}
 
 		if (input.description) {
-			const plain = editorToPlainText(input.description);
-			values.searchText = plain;
-			values.searchVector =
-				sql`to_tsvector('english', ${plain})` as unknown as string;
-			const embed = await embedText(plain);
-			values.embedding = embed;
+			Object.assign(values, await buildSearchFields(input.description));
 		}
 
 		const [updated] = await db

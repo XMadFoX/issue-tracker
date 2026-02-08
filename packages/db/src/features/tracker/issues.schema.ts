@@ -11,6 +11,7 @@ import {
 	uniqueIndex,
 	vector,
 } from "drizzle-orm/pg-core";
+import type { Value } from "platejs";
 import { user } from "../auth/auth.schema";
 import { issuePriority } from "./issue-priorities.schema";
 import { issueStatus } from "./issue-statuses.schema";
@@ -36,7 +37,7 @@ export const issue = pgTable(
 		// TODO: projectId: text("project_id").references(() => project.id, { onDelete: "set null" }),
 		number: integer("number").notNull(),
 		title: text("title").notNull(),
-		description: jsonb("description"),
+		description: jsonb("description").$type<Value>(),
 		searchText: text("search_text"),
 		searchVector: tsvector("search_vector"),
 		embedding: vector("embedding", { dimensions: 1536 }),
