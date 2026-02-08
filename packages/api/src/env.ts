@@ -19,6 +19,7 @@ export const env = createEnv({
 			),
 		OPENAI_ENDPOINT: z.string().default("http://localhost:11434/v1"),
 		OPENAI_API_KEY: z.string().default(""),
+		EMBEDDING_MODEL: z.string().default("qwen3-embedding:4b"),
 	},
 	runtimeEnv: process.env,
 });
