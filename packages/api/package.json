@@ -37,6 +37,7 @@
 		"@orpc/shared": "1.11.3",
 		"@orpc/zod": "^1.11.3",
 		"@paralleldrive/cuid2": "^2.2.2",
+		"@platejs/core": "^52.0.17",
 		"@t3-oss/env-core": "^0.13.8",
 		"@types/pg": "8.16.0",
 		"ai": "6.0.72",
