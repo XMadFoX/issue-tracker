@@ -6,6 +6,8 @@ import { omit } from "remeda";
 import { z } from "zod";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
+import { embedText } from "../../lib/ai";
+import { editorToPlainText } from "../../lib/plate";
 import {
 	calculateAfterRank,
 	calculateBeforeRank,
@@ -215,6 +217,15 @@ const updateIssue = authedRouter
 
 				values.sortOrder = calculateBeforeRank(firstRank || "a00");
 			}
+		}
+
+		if (input.description) {
+			const plain = editorToPlainText(input.description);
+			values.searchText = plain;
+			values.searchVector =
+				sql`to_tsvector('english', ${plain})` as unknown as string;
+			const embed = await embedText(plain);
+			values.embedding = embed;
 		}
 
 		const [updated] = await db
