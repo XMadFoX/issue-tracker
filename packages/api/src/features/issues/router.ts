@@ -16,7 +16,7 @@ import {
 } from "../../utils/lexorank";
 import { rebalanceStatusIssues } from "../../utils/rebalancing";
 import { issuePublisher } from "./publisher";
-import { getIssueWithRelations } from "./queries";
+import { getIssueWithRelations, searchIssues } from "./queries";
 import {
 	issueCreateSchema,
 	issueDeleteSchema,
@@ -25,6 +25,7 @@ import {
 	issueListSchema,
 	issueMoveSchema,
 	issuePriorityUpdateSchema,
+	issueSearchSchema,
 	issueUpdateAssigneeSchema,
 	issueUpdateSchema,
 } from "./schema";
@@ -635,6 +636,21 @@ const liveIssues = authedRouter
 		}
 	});
 
+const searchIssuesHandler = authedRouter
+	.input(issueSearchSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "issue:read",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED;
+
+		const results = await searchIssues(input);
+		return { issues: results };
+	});
+
 export const issueRouter = {
 	list: listIssues,
 	get: getIssue,
@@ -644,6 +660,7 @@ export const issueRouter = {
 	move: moveIssue,
 	updatePriority,
 	updateAssignee,
+	search: searchIssuesHandler,
 	live: liveIssues,
 	labels: {
 		bulkAdd: bulkAddLabels,
