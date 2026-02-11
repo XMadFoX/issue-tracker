@@ -41,14 +41,27 @@ const updateDeleteErrors = {
 	RANK_EXHAUSTED: {},
 };
 
-const buildSearchFields = async (description?: Value | null) => {
-	if (!description) return {};
+const buildSearchFields = async ({
+	title,
+	description,
+}: {
+	title?: string | null;
+	description?: Value | null;
+}) => {
+	const searchText = [
+		title?.trim(),
+		description ? editorToPlainText(description) : "",
+	]
+		.filter(Boolean)
+		.join("\n\n");
 
-	const plain = editorToPlainText(description);
+	if (!searchText) return {};
+
 	return {
-		searchText: plain,
-		searchVector: sql`to_tsvector('english', ${plain})` as unknown as string,
-		embedding: await embedText(plain),
+		searchText,
+		searchVector:
+			sql`to_tsvector('english', ${searchText})` as unknown as string,
+		embedding: await embedText(searchText),
 	};
 };
 
@@ -137,7 +150,10 @@ const createIssue = authedRouter
 			.limit(1);
 
 		const nextNumber = (maxRow?.maxNumber ?? 0) + 1;
-		const searchFields = await buildSearchFields(input.description);
+		const searchFields = await buildSearchFields({
+			title: input.title,
+			description: input.description,
+		});
 
 		for (let attempt = 0; attempt <= 1; attempt++) {
 			try {
@@ -234,8 +250,27 @@ const updateIssue = authedRouter
 			}
 		}
 
-		if (input.description) {
-			Object.assign(values, await buildSearchFields(input.description));
+		if (input.title !== undefined || input.description !== undefined) {
+			const [currentIssue] = await db
+				.select({ title: issue.title, description: issue.description })
+				.from(issue)
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
+				.limit(1);
+
+			if (!currentIssue) throw errors.NOT_FOUND;
+
+			Object.assign(
+				values,
+				await buildSearchFields({
+					title: input.title ?? currentIssue.title,
+					description:
+						input.description !== undefined
+							? input.description
+							: currentIssue.description,
+				}),
+			);
 		}
 
 		const [updated] = await db
