@@ -8,6 +8,9 @@ import viteTsConfigPaths from "vite-tsconfig-paths";
 import { env } from "./src/env";
 
 const config = defineConfig({
+	resolve: {
+		dedupe: ["@platejs/core", "platejs"],
+	},
 	plugins: [
 		devtools(),
 		nitro({
