@@ -2,13 +2,10 @@ import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import { issue, issueLabel } from "db/features/tracker/issues.schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import type { Value } from "platejs";
 import { omit } from "remeda";
 import { z } from "zod";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
-import { embedText } from "../../lib/ai";
-import { editorToPlainText } from "../../lib/plate";
 import {
 	calculateAfterRank,
 	calculateBeforeRank,
@@ -29,6 +26,7 @@ import {
 	issueUpdateAssigneeSchema,
 	issueUpdateSchema,
 } from "./schema";
+import { buildIssueSearchFields } from "./search-fields";
 
 const commonErrors = {
 	UNAUTHORIZED: {},
@@ -39,30 +37,6 @@ const updateDeleteErrors = {
 	NOT_FOUND: {},
 	INVALID_MOVE: {},
 	RANK_EXHAUSTED: {},
-};
-
-const buildSearchFields = async ({
-	title,
-	description,
-}: {
-	title?: string | null;
-	description?: Value | null;
-}) => {
-	const searchText = [
-		title?.trim(),
-		description ? editorToPlainText(description) : "",
-	]
-		.filter(Boolean)
-		.join("\n\n");
-
-	if (!searchText) return {};
-
-	return {
-		searchText,
-		searchVector:
-			sql`to_tsvector('english', ${searchText})` as unknown as string,
-		embedding: await embedText(searchText),
-	};
 };
 
 const listIssues = authedRouter
@@ -150,7 +124,7 @@ const createIssue = authedRouter
 			.limit(1);
 
 		const nextNumber = (maxRow?.maxNumber ?? 0) + 1;
-		const searchFields = await buildSearchFields({
+		const searchFields = await buildIssueSearchFields({
 			title: input.title,
 			description: input.description,
 		});
@@ -263,7 +237,7 @@ const updateIssue = authedRouter
 
 			Object.assign(
 				values,
-				await buildSearchFields({
+				await buildIssueSearchFields({
 					title: input.title ?? currentIssue.title,
 					description:
 						input.description !== undefined
