@@ -98,6 +98,7 @@ export const issueSearchSchema = z.object({
 		.object({
 			minScore: z.number().min(0).max(1).default(0),
 			embeddingThreshold: z.number().min(0).max(1).default(0.7),
+			includeDebugInfo: z.boolean().default(false),
 			includeStatus: z.boolean().default(false),
 			includeStatusGroup: z.boolean().default(false),
 			includePriority: z.boolean().default(false),

@@ -37,6 +37,12 @@ export type SearchIssueResult = IssueWithRelations & {
 	assignee?: IssueWithRelations["assignee"];
 	team?: IssueWithRelations["team"];
 	labelLinks?: IssueWithRelations["labelLinks"];
+	debug?: {
+		score: number;
+		ftsScore: number;
+		trigramScore: number;
+		semanticScore: number;
+	};
 };
 
 export async function searchIssues(input: z.infer<typeof issueSearchSchema>) {
@@ -70,11 +76,12 @@ export async function searchIssues(input: z.infer<typeof issueSearchSchema>) {
 		includeAssignee = false,
 		includeTeam = false,
 		includeLabels = false,
-		minScore = 0,
+		includeDebugInfo = false,
+		minScore = 0.2,
 		embeddingThreshold = 0.7,
 	} = options ?? {};
 
-	const queryEmbedding = embedText(searchQuery);
+	const queryEmbedding = await embedText(searchQuery);
 	const conditions = [eq(issue.workspaceId, workspaceId)];
 
 	if (teamId) conditions.push(eq(issue.teamId, teamId));
@@ -171,5 +178,38 @@ export async function searchIssues(input: z.infer<typeof issueSearchSchema>) {
 		limit: 50,
 	});
 
-	return results;
+	if (!includeDebugInfo || results.length === 0) {
+		return results;
+	}
+
+	const resultIds = results.map((result) => result.id);
+	const debugRows = await db
+		.select({
+			id: issue.id,
+			score: hybridScore,
+			ftsScore,
+			trigramScore,
+			semanticScore,
+		})
+		.from(issue)
+		.where(
+			and(eq(issue.workspaceId, workspaceId), inArray(issue.id, resultIds)),
+		);
+
+	const debugById = new Map(
+		debugRows.map((row) => [
+			row.id,
+			{
+				score: row.score,
+				ftsScore: row.ftsScore,
+				trigramScore: row.trigramScore,
+				semanticScore: row.semanticScore,
+			},
+		]),
+	);
+
+	return results.map((result) => ({
+		...result,
+		debug: debugById.get(result.id),
+	}));
 }
