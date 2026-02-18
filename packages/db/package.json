@@ -12,6 +12,7 @@
 		"drizzle-orm": "0.45.1",
 		"pg": "8.17.0",
 		"pino": "^10.1.0",
+		"platejs": "^52.0.17",
 		"zod": "^4.1.12"
 	},
 	"devDependencies": {
