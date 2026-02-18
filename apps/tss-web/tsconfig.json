@@ -20,12 +20,18 @@
 		"noUncheckedSideEffectImports": true,
 		"baseUrl": ".",
 		"paths": {
-			"@prism/api/*": ["../../packages/api/*"]
+			"@/*": [
+				"./src/*",
+				"../../packages/blocks/src/*",
+				"../../packages/ui/src/*"
+			],
+			"@prism/api": ["../../packages/api/src/index.ts"],
+			"@prism/api/*": ["../../packages/api/src/*"],
+			"@prism/blocks/*": ["../../packages/blocks/src/*"],
+			"@prism/ui/*": ["../../packages/ui/src/*"],
+			"db": ["../../packages/db/src/index.ts"],
+			"db/*": ["../../packages/db/src/*"]
 		}
 	},
-	"references": [
-		{ "path": "../../packages/ui/tsconfig.json" },
-		{ "path": "../../packages/blocks/tsconfig.json" },
-		{ "path": "../../packages/api/tsconfig.json" }
-	]
+	"include": ["src", "vite.config.ts"]
 }

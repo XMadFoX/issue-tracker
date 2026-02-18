@@ -1,17 +1,23 @@
 {
 	"compilerOptions": {
 		"strict": true,
-		"composite": true,
 		"esModuleInterop": true,
 		"jsx": "react-jsx",
-		"outDir": "dist",
-		"moduleResolution": "Bundler",
-		"target": "es2022",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"target": "ES2022",
 		"lib": ["DOM", "DOM.Iterable", "ES2022"],
+		"noEmit": true,
 		"skipLibCheck": true,
 		"baseUrl": ".",
 		"paths": {
-			"@/*": ["./src/*"]
+			"@/*": ["./src/*", "../ui/src/*"],
+			"@prism/api": ["../api/src/index.ts"],
+			"@prism/api/*": ["../api/src/*"],
+			"@prism/ui/*": ["../ui/src/*"],
+			"db": ["../db/src/index.ts"],
+			"db/*": ["../db/src/*"]
 		}
-	}
+	},
+	"include": ["src"]
 }

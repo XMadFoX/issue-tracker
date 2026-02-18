@@ -3,7 +3,7 @@
 		// Environment setup & latest features
 		"lib": ["ESNext"],
 		"target": "ESNext",
-		"module": "Preserve",
+		"module": "ESNext",
 		"moduleDetection": "force",
 		"jsx": "react-jsx",
 		"allowJs": true,
@@ -27,5 +27,6 @@
 		"noUnusedParameters": false,
 		"noPropertyAccessFromIndexSignature": false,
 		"types": ["@types/bun"]
-	}
+	},
+	"include": ["src", "drizzle.config.ts"]
 }
