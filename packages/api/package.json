@@ -6,7 +6,7 @@
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"dev": "bun run --watch src/index.ts",
-		"typecheck": "pnpm -w exec tsc --noEmit -p packages/api/tsconfig.json"
+		"typecheck": "bun --cwd ../../ tsc --noEmit -p packages/api/tsconfig.json"
 	},
 	"keywords": [],
 	"author": "",

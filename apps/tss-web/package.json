@@ -10,7 +10,7 @@
 		"format": "biome format",
 		"lint": "biome lint",
 		"check": "biome check",
-		"typecheck": "pnpm -w exec tsc --noEmit -p apps/tss-web/tsconfig.json"
+		"typecheck": "bun --cwd ../../ tsc --noEmit -p apps/tss-web/tsconfig.json"
 	},
 	"dependencies": {
 		"@faker-js/faker": "^10.0.0",
