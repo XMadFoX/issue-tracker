@@ -1,37 +1,35 @@
-# syntax=docker/dockerfile:1.4
-FROM node:24-alpine AS install
-RUN npm install -g pnpm@10.17.1
+# syntax=docker/dockerfile:1.7
+FROM oven/bun:1.3-alpine AS base
 WORKDIR /app
-COPY package.json .
-COPY pnpm-workspace.yaml .
-COPY pnpm-lock.yaml .
-COPY apps/tss-web/package.json ./apps/tss-web/
-COPY packages/ui/package.json ./packages/ui/
-COPY packages/blocks/package.json ./packages/blocks/
-COPY packages/db/package.json ./packages/db/
-COPY packages/api/package.json ./packages/api/
-RUN pnpm install --frozen-lockfile --ignore-scripts
 
-FROM oven/bun:1.3-alpine AS build
-WORKDIR /app
-COPY --from=install /app/apps/tss-web /app/apps/tss-web
-COPY --from=install /app/packages /app/packages
-COPY --from=install /app/node_modules /app/node_modules
-# copy actual source files
-COPY apps/tss-web /app/apps/tss-web
-COPY packages/ui /app/packages/ui
-COPY packages/blocks /app/packages/blocks
-COPY packages/db /app/packages/db
-COPY packages/api /app/packages/api
+FROM base AS deps
+COPY bun.lock package.json ./
+COPY apps/tss-web/package.json ./apps/tss-web/package.json
+COPY packages/api/package.json ./packages/api/package.json
+COPY packages/blocks/package.json ./packages/blocks/package.json
+COPY packages/db/package.json ./packages/db/package.json
+COPY packages/ui/package.json ./packages/ui/package.json
+RUN bun install --frozen-lockfile --filter "./apps/tss-web"
+
+FROM base AS build
 ENV NODE_ENV=production
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/bun.lock ./bun.lock
+COPY --from=deps /app/package.json ./package.json
+COPY apps ./apps
+COPY packages ./packages
+
 WORKDIR /app/apps/tss-web
 ENV BUILD_NITRO_PRESET=bun
-RUN --mount=type=secret,id=env \
-    export $(cat /run/secrets/env | xargs) && \
-    bun run build
+RUN --mount=type=secret,id=env,required=false \
+	if [ -f /run/secrets/env ]; then \
+		set -a && . /run/secrets/env && set +a; \
+	fi; \
+	bun run build
 
-FROM oven/bun:1.3-alpine AS runtime
+FROM base AS runtime
+ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=build /app/apps/tss-web/.output /app
+COPY --from=build /app/apps/tss-web/.output ./
 EXPOSE 3000
 CMD ["bun", "./server/index.mjs"]
