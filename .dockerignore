@@ -1,0 +1,28 @@
+# Dependencies
+**/node_modules
+
+# Build artifacts and caches
+**/.output
+**/dist
+**/.cache
+**/coverage
+
+# Environment files and local secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+
+# VCS and editor metadata
+.git
+.github
+.vscode
+.zed
+
+# Logs
+**/*.log
+bun-debug.log*
+
+# Local runtime data
+data
