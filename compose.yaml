@@ -10,10 +10,8 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: issue_tracker
 
-
   web:
     image: docker.io/library/tss-web
-    env_file: ./apps/tss-web/.env.prod
     build:
       context: .
       dockerfile: apps/tss-web/Dockerfile
@@ -42,4 +40,4 @@ services:
 
 secrets:
   env:
-    file: ./apps/tss-web/.env.prod
+    file: ${WEB_BUILD_ENV_FILE:-/proc/self/environ}

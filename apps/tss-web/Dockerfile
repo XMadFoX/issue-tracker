@@ -22,9 +22,30 @@ COPY packages ./packages
 WORKDIR /app/apps/tss-web
 ENV BUILD_NITRO_PRESET=bun
 RUN --mount=type=secret,id=env,required=false \
+	# Preserve container PATH so host-injected PATH cannot break tooling lookup. \
+	ORIGINAL_PATH="$PATH"; \
 	if [ -f /run/secrets/env ]; then \
-		set -a && . /run/secrets/env && set +a; \
+		# /proc/self/environ is null-delimited; normalize to one KEY=VALUE per line. \
+		tr '\000' '\n' < /run/secrets/env > /tmp/build-env.list; \
+		while IFS= read -r line; do \
+			[ -n "$line" ] || continue; \
+			# Ignore comments and malformed lines so regular .env files also work. \
+			case "$line" in \
+				\#*) continue ;; \
+				*=*) ;; \
+				*) continue ;; \
+			esac; \
+			key=${line%%=*}; \
+			case "$key" in \
+				# Never import host PATH into the container build environment. \
+				PATH) continue ;; \
+				[A-Za-z_][A-Za-z0-9_]*) export "$line" ;; \
+			esac; \
+		done < /tmp/build-env.list; \
+		rm -f /tmp/build-env.list; \
 	fi; \
+	# Restore PATH before running build tools.
+	PATH="$ORIGINAL_PATH"; \
 	bun run build
 
 FROM base AS runtime
