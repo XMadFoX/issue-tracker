@@ -88,9 +88,9 @@ export interface FileRoutesByFullPath {
   '/api/$': typeof ApiSplatRoute
   '/workspace/create': typeof WorkspaceCreateRoute
   '/workspace/$slug/': typeof WorkspaceSlugIndexRoute
-  '/workspace/$slug/teams': typeof WorkspaceSlugTeamsIndexRoute
+  '/workspace/$slug/teams/': typeof WorkspaceSlugTeamsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issues': typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren
-  '/workspace/$slug/settings/labels': typeof WorkspaceSlugSettingsLabelsIndexRoute
+  '/workspace/$slug/settings/labels/': typeof WorkspaceSlugSettingsLabelsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issue/$issueId': typeof WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute
   '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
 }
@@ -129,9 +129,9 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/workspace/create'
     | '/workspace/$slug/'
-    | '/workspace/$slug/teams'
+    | '/workspace/$slug/teams/'
     | '/workspace/$slug/teams/$teamSlug/issues'
-    | '/workspace/$slug/settings/labels'
+    | '/workspace/$slug/settings/labels/'
     | '/workspace/$slug/teams/$teamSlug/issue/$issueId'
     | '/workspace/$slug/teams/$teamSlug/issues/create'
   fileRoutesByTo: FileRoutesByTo
@@ -216,14 +216,14 @@ declare module '@tanstack/react-router' {
     '/workspace/$slug/teams/': {
       id: '/workspace/$slug/teams/'
       path: '/teams'
-      fullPath: '/workspace/$slug/teams'
+      fullPath: '/workspace/$slug/teams/'
       preLoaderRoute: typeof WorkspaceSlugTeamsIndexRouteImport
       parentRoute: typeof WorkspaceSlugRouteRoute
     }
     '/workspace/$slug/settings/labels/': {
       id: '/workspace/$slug/settings/labels/'
       path: '/settings/labels'
-      fullPath: '/workspace/$slug/settings/labels'
+      fullPath: '/workspace/$slug/settings/labels/'
       preLoaderRoute: typeof WorkspaceSlugSettingsLabelsIndexRouteImport
       parentRoute: typeof WorkspaceSlugRouteRoute
     }
