@@ -3,6 +3,7 @@ FROM oven/bun:1.3-alpine AS base
 WORKDIR /app
 
 FROM base AS deps
+ENV NODE_ENV=production
 COPY bun.lock package.json ./
 COPY apps/tss-web/package.json ./apps/tss-web/package.json
 COPY packages/api/package.json ./packages/api/package.json
@@ -21,6 +22,8 @@ COPY packages ./packages
 
 WORKDIR /app/apps/tss-web
 ENV BUILD_NITRO_PRESET=bun
+ARG VITE_MAX_OLD_SPACE_SIZE=3584
+RUN apk add --no-cache nodejs
 RUN --mount=type=secret,id=env,required=false \
 	# Preserve container PATH so host-injected PATH cannot break tooling lookup. \
 	ORIGINAL_PATH="$PATH"; \
@@ -46,7 +49,7 @@ RUN --mount=type=secret,id=env,required=false \
 	fi; \
 	# Restore PATH before running build tools.
 	PATH="$ORIGINAL_PATH"; \
-	bun run build
+	/usr/bin/node --max-old-space-size="${VITE_MAX_OLD_SPACE_SIZE}" /app/node_modules/vite/bin/vite.js build
 
 FROM base AS runtime
 ENV NODE_ENV=production
