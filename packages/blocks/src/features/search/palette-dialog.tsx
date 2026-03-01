@@ -1,4 +1,5 @@
 import { CommandDialog } from "@prism/ui/components/command";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useState } from "react";
 import { PaletteContent } from "./palette";
@@ -65,6 +66,9 @@ export function usePaletteDialog() {
 
 export function PaletteDialog() {
 	const { open, setOpen } = usePaletteDialog();
+	useHotkey("Mod+K", () => {
+		setOpen(true);
+	});
 
 	return (
 		<CommandDialog
