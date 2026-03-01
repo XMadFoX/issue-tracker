@@ -1,3 +1,7 @@
+import {
+	PaletteDialog,
+	PaletteDialogProvider,
+} from "@prism/blocks/features/search/palette-dialog";
 import { Toaster } from "@prism/ui/components/sonner";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import type { QueryClient } from "@tanstack/react-query";
@@ -46,20 +50,23 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 				<HeadContent />
 			</head>
 			<body className="min-h-screen flex flex-col">
-				{children}
-				<Toaster />
-				<TanStackDevtools
-					config={{
-						position: "bottom-right",
-					}}
-					plugins={[
-						{
-							name: "Tanstack Router",
-							render: <TanStackRouterDevtoolsPanel />,
-						},
-						TanStackQueryDevtools,
-					]}
-				/>
+				<PaletteDialogProvider>
+					{children}
+					<PaletteDialog />
+					<Toaster />
+					<TanStackDevtools
+						config={{
+							position: "bottom-right",
+						}}
+						plugins={[
+							{
+								name: "Tanstack Router",
+								render: <TanStackRouterDevtoolsPanel />,
+							},
+							TanStackQueryDevtools,
+						]}
+					/>
+				</PaletteDialogProvider>
 				<Scripts />
 			</body>
 		</html>
