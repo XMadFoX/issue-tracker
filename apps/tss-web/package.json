@@ -74,7 +74,6 @@
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.2.4",
 		"@tanstack/devtools-vite": "^0.5.1",
 		"@testing-library/dom": "^10.4.0",
 		"@testing-library/react": "^16.2.0",
