@@ -7,7 +7,7 @@ import {
 	CommandList,
 	CommandSeparator,
 	CommandShortcut,
-} from "@prism/ui/components/command"
+} from "@prism/ui/components/command";
 import {
 	Calculator,
 	Calendar,
@@ -15,9 +15,9 @@ import {
 	Settings,
 	Smile,
 	User,
-} from "lucide-react"
+} from "lucide-react";
 
-export function PalleteContent() {
+export function PaletteContent() {
 	return (
 		<>
 			<CommandInput placeholder="Type a command or search..." />
@@ -57,5 +57,5 @@ export function PalleteContent() {
 				</CommandGroup>
 			</CommandList>
 		</>
-	)
+	);
 }
