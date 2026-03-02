@@ -2,7 +2,7 @@ import { CommandDialog } from "@prism/ui/components/command";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useState } from "react";
-import { PaletteContent } from "./palette";
+import { PaletteContent, type PaletteIssueSearchResult } from "./palette";
 
 type PaletteDialogContextValue = {
 	open: boolean;
@@ -64,8 +64,29 @@ export function usePaletteDialog() {
 	return context;
 }
 
-export function PaletteDialog() {
+type PaletteDialogProps = {
+	workspaceId?: string;
+	query: string;
+	onQueryChange: (query: string) => void;
+	issues: Array<PaletteIssueSearchResult>;
+	isSearching: boolean;
+	hasSearched: boolean;
+	minQueryLength?: number;
+	onIssueSelect?: (issueId: string) => void;
+};
+
+export function PaletteDialog({
+	workspaceId,
+	query,
+	onQueryChange,
+	issues,
+	isSearching,
+	hasSearched,
+	minQueryLength,
+	onIssueSelect,
+}: PaletteDialogProps) {
 	const { open, setOpen } = usePaletteDialog();
+
 	useHotkey("Mod+K", () => {
 		setOpen(true);
 	});
@@ -76,8 +97,21 @@ export function PaletteDialog() {
 			onOpenChange={setOpen}
 			title="Command palette"
 			description="Search for actions across the app."
+			commandProps={{ shouldFilter: false }}
 		>
-			<PaletteContent />
+			<PaletteContent
+				workspaceId={workspaceId}
+				query={query}
+				onQueryChange={onQueryChange}
+				issues={issues}
+				isSearching={isSearching}
+				hasSearched={hasSearched}
+				minQueryLength={minQueryLength}
+				onIssueSelect={(issueId) => {
+					onIssueSelect?.(issueId);
+					setOpen(false);
+				}}
+			/>
 		</CommandDialog>
 	);
 }
