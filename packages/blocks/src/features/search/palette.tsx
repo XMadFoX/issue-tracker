@@ -1,60 +1,106 @@
 import {
-	Command,
 	CommandEmpty,
 	CommandGroup,
 	CommandInput,
 	CommandItem,
 	CommandList,
-	CommandSeparator,
 	CommandShortcut,
 } from "@prism/ui/components/command";
-import {
-	Calculator,
-	Calendar,
-	CreditCard,
-	Settings,
-	Smile,
-	User,
-} from "lucide-react";
+import { Search } from "lucide-react";
+import { useMemo } from "react";
 
-export function PaletteContent() {
+export type PaletteIssueSearchInput = {
+	workspaceId: string;
+	teamId?: string;
+	query: string;
+};
+
+export type PaletteIssueSearchResult = {
+	id: string;
+	title: string;
+	number?: number | null;
+	team?: {
+		id: string;
+		name: string;
+		key: string;
+	} | null;
+};
+
+type PaletteContentProps = {
+	workspaceId?: string;
+	query: string;
+	onQueryChange: (query: string) => void;
+	issues: Array<PaletteIssueSearchResult>;
+	isSearching: boolean;
+	hasSearched: boolean;
+	minQueryLength?: number;
+	onIssueSelect?: (issueId: string) => void;
+};
+
+const MIN_QUERY_LENGTH = 2;
+
+export function PaletteContent({
+	workspaceId,
+	query,
+	onQueryChange,
+	issues,
+	isSearching,
+	hasSearched,
+	minQueryLength = MIN_QUERY_LENGTH,
+	onIssueSelect,
+}: PaletteContentProps) {
+	const normalizedQuery = useMemo(() => query.trim(), [query]);
+	const canSearch = Boolean(
+		workspaceId && normalizedQuery.length >= minQueryLength,
+	);
+
+	const showOpenIssuesPrompt = !workspaceId;
+	const showQueryLengthPrompt =
+		Boolean(workspaceId) &&
+		normalizedQuery.length > 0 &&
+		normalizedQuery.length < minQueryLength;
+	const showSearching = canSearch && isSearching;
+	const showNoResults =
+		canSearch && hasSearched && !isSearching && issues.length === 0;
+
 	return (
 		<>
-			<CommandInput placeholder="Type a command or search..." />
+			<CommandInput
+				placeholder="Search issues..."
+				value={query}
+				onValueChange={onQueryChange}
+			/>
 			<CommandList>
-				<CommandEmpty>No results found.</CommandEmpty>
-				<CommandGroup heading="Suggestions">
-					<CommandItem>
-						<Calendar />
-						<span>Calendar</span>
-					</CommandItem>
-					<CommandItem>
-						<Smile />
-						<span>Search Emoji</span>
-					</CommandItem>
-					<CommandItem disabled>
-						<Calculator />
-						<span>Calculator</span>
-					</CommandItem>
-				</CommandGroup>
-				<CommandSeparator />
-				<CommandGroup heading="Settings">
-					<CommandItem>
-						<User />
-						<span>Profile</span>
-						<CommandShortcut>⌘P</CommandShortcut>
-					</CommandItem>
-					<CommandItem>
-						<CreditCard />
-						<span>Billing</span>
-						<CommandShortcut>⌘B</CommandShortcut>
-					</CommandItem>
-					<CommandItem>
-						<Settings />
-						<span>Settings</span>
-						<CommandShortcut>⌘S</CommandShortcut>
-					</CommandItem>
-				</CommandGroup>
+				<CommandEmpty>
+					{showOpenIssuesPrompt
+						? "Open a team issues page to search issues."
+						: showQueryLengthPrompt
+							? `Type at least ${minQueryLength} characters.`
+							: showSearching
+								? "Searching issues..."
+								: showNoResults
+									? "No issues found."
+									: "Start typing to search issues."}
+				</CommandEmpty>
+				{issues.length > 0 && (
+					<CommandGroup heading="Issues">
+						{issues.map((issue) => (
+							<CommandItem
+								key={issue.id}
+								value={`${issue.title} ${issue.number ?? ""}`}
+								onSelect={() => {
+									onIssueSelect?.(issue.id);
+								}}
+							>
+								<Search />
+								<span className="truncate">{issue.title}</span>
+								{typeof issue.number === "number" && (
+									<CommandShortcut>#{issue.number}</CommandShortcut>
+								)}
+							</CommandItem>
+						))}
+					</CommandGroup>
+				)}
 			</CommandList>
 		</>
 	);
