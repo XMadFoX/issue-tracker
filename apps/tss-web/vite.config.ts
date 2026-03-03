@@ -7,9 +7,31 @@ import { defineConfig } from "vite";
 import viteTsConfigPaths from "vite-tsconfig-paths";
 import { env } from "./src/env";
 
+const externals = [
+	"@opentelemetry/api",
+	"@opentelemetry/sdk-node",
+	"@opentelemetry/resources",
+	"@opentelemetry/instrumentation",
+	"@opentelemetry/sdk-trace-node",
+	"@opentelemetry/sdk-logs",
+	"@opentelemetry/semantic-conventions",
+	"@opentelemetry/exporter-trace-otlp-proto",
+	"@opentelemetry/exporter-logs-otlp-http",
+	"@opentelemetry/exporter-trace-otlp-grpc",
+	"@opentelemetry/exporter-logs-otlp-grpc",
+	"@opentelemetry/instrumentation-http",
+	"@opentelemetry/instrumentation-pg",
+	"@opentelemetry/instrumentation-pino",
+	"@prisma/client",
+	"pino",
+	"pino-pretty",
+	"pg",
+];
+
 const config = defineConfig({
 	resolve: {
 		dedupe: ["@platejs/core", "platejs"],
+		external: externals,
 	},
 	plugins: [
 		devtools(),
@@ -30,26 +52,7 @@ const config = defineConfig({
 		viteReact(),
 	],
 	ssr: {
-		external: [
-			"@opentelemetry/api",
-			"@opentelemetry/sdk-node",
-			"@opentelemetry/resources",
-			"@opentelemetry/instrumentation",
-			"@opentelemetry/sdk-trace-node",
-			"@opentelemetry/sdk-logs",
-			"@opentelemetry/semantic-conventions",
-			"@opentelemetry/exporter-trace-otlp-proto",
-			"@opentelemetry/exporter-logs-otlp-http",
-			"@opentelemetry/exporter-trace-otlp-grpc",
-			"@opentelemetry/exporter-logs-otlp-grpc",
-			"@opentelemetry/instrumentation-http",
-			"@opentelemetry/instrumentation-pg",
-			"@opentelemetry/instrumentation-pino",
-			"@prisma/client",
-			"pino",
-			"pino-pretty",
-			"pg",
-		],
+		external: externals,
 	},
 });
 
