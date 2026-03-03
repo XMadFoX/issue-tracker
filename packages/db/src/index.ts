@@ -1,3 +1,4 @@
+import { getLogger } from "@logtape/logtape";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { drizzle as drizzleHttp } from "drizzle-orm/pg-proxy";
 import { env } from "./env";
@@ -12,12 +13,7 @@ function customColMapper(value: unknown) {
 	return value;
 }
 
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
-const pino = require("pino");
-
-const logger = pino({ level: "debug" });
+const logger = getLogger(["prism-tracker", "db"]);
 
 function createDb() {
 	if (env.ENV_TYPE === "serverless") {
@@ -27,15 +23,12 @@ function createDb() {
 			async (sql, params, method) => {
 				try {
 					const url = serverlessEnv.PG_PROXY_URL;
-					logger.debug(
-						{
-							url,
-							sql,
-							params,
-							method,
-						},
-						"fetching from pg proxy",
-					);
+					logger.debug("fetching from pg proxy", {
+						url,
+						sql,
+						params,
+						method,
+					});
 					const res = await fetch(url, {
 						body: JSON.stringify({ sql, params, method }),
 						method: "POST",
@@ -45,20 +38,17 @@ function createDb() {
 						},
 					});
 					const text = await res.text();
-					logger.debug({ text }, "raw response from pg proxy server");
+					logger.debug("raw response from pg proxy server", { text });
 					const body = JSON.parse(text);
-					logger.debug({ body }, "parsed json response from pg proxy server");
+					logger.debug("parsed json response from pg proxy server", { body });
 					const { rows: rowsRaw } = body as { rows: unknown[][] };
 					const rows = rowsRaw.map(customColMapper);
-					logger.debug(
-						{
-							sql,
-							params,
-							method,
-							rows,
-						},
-						"fetched from pg proxy",
-					);
+					logger.debug("fetched from pg proxy", {
+						sql,
+						params,
+						method,
+						rows,
+					});
 
 					return { rows: rows };
 				} catch (e: unknown) {
