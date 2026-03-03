@@ -1,14 +1,23 @@
-import { createRequire } from "node:module";
+import { configure, getConsoleSink } from "@logtape/logtape";
+import { getOpenTelemetrySink } from "@logtape/otel";
+import { prettyFormatter } from "@logtape/pretty";
 
-// NOTE: import is not working correctly with otel patching, logs are not send when using esm imports
-// createRequire hack is used to fix require not found in vite
-const require = createRequire(import.meta.url);
-const pino = require("pino");
-
-const logger = pino({
-	transport: {
-		target: "pino-pretty",
+await configure({
+	sinks: {
+		otel: getOpenTelemetrySink({
+			serviceName: "prism-tracker-api",
+			otlpExporterConfig: {
+				url: env.OTEL_EXPORTER_OTLP_ENDPOINT,
+			},
+		}),
+		console: getConsoleSink({ formatter: prettyFormatter }),
 	},
+	loggers: [{ category: [], sinks: ["otel", "console"], lowestLevel: "debug" }],
 });
+
+import { getLogger } from "@logtape/logtape";
+import { env } from "./env";
+
+const logger = getLogger(["prism-tracker", "api"]);
 
 export { logger };
