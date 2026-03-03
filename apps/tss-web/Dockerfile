@@ -22,8 +22,6 @@ COPY packages ./packages
 
 WORKDIR /app/apps/tss-web
 ENV BUILD_NITRO_PRESET=bun
-ARG VITE_MAX_OLD_SPACE_SIZE=3584
-RUN apk add --no-cache nodejs
 RUN --mount=type=secret,id=env,required=false \
 	# Preserve container PATH so host-injected PATH cannot break tooling lookup. \
 	ORIGINAL_PATH="$PATH"; \
@@ -49,7 +47,7 @@ RUN --mount=type=secret,id=env,required=false \
 	fi; \
 	# Restore PATH before running build tools.
 	PATH="$ORIGINAL_PATH"; \
-	/usr/bin/node --max-old-space-size="${VITE_MAX_OLD_SPACE_SIZE}" /app/node_modules/vite/bin/vite.js build
+	bun run build
 
 FROM base AS runtime
 ENV NODE_ENV=production
