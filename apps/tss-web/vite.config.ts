@@ -21,10 +21,7 @@ const externals = [
 	"@opentelemetry/exporter-logs-otlp-grpc",
 	"@opentelemetry/instrumentation-http",
 	"@opentelemetry/instrumentation-pg",
-	"@opentelemetry/instrumentation-pino",
 	"@prisma/client",
-	"pino",
-	"pino-pretty",
 	"pg",
 ];
 
