@@ -1,3 +1,4 @@
+import { getLogger } from "@logtape/logtape";
 import { db } from "db";
 import {
 	entityAttributes,
@@ -22,6 +23,8 @@ const mapEntityAttributes = (
 	}
 	return acc;
 };
+
+const logger = getLogger(["prism-tracker", "api", "abac"]);
 
 /**
  * ABAC helper: isAllowed
@@ -68,7 +71,7 @@ export async function isAllowed({
 			),
 		);
 
-	console.debug("[ABAC] Loaded role assignments", {
+	logger.debug("[ABAC] Loaded role assignments", {
 		userId,
 		workspaceId,
 		teamId,
@@ -96,7 +99,7 @@ export async function isAllowed({
 		!hasMembershipRole &&
 		reqResource !== "workspace"
 	) {
-		console.info("[ABAC] No assignments found, denying", {
+		logger.info("[ABAC] No assignments found, denying", {
 			userId,
 			workspaceId,
 			teamId,
@@ -113,7 +116,7 @@ export async function isAllowed({
 	);
 
 	if (roleIds.length === 0) {
-		console.info("[ABAC] No role IDs resolved, denying", {
+		logger.info("[ABAC] No role IDs resolved, denying", {
 			userId,
 			workspaceId,
 			teamId,
@@ -145,7 +148,7 @@ export async function isAllowed({
 			eq(rolePermissions.constraintId, policyConstraints.id),
 		);
 
-	console.debug("[ABAC] Fetched permissions candidates", {
+	logger.debug("[ABAC] Fetched permissions candidates", {
 		roleIds,
 		permissionKey,
 		totalCandidates: perms.length,
@@ -163,7 +166,7 @@ export async function isAllowed({
 	});
 
 	if (hasGlobalAllow) {
-		console.debug("[ABAC] Global wildcard allow matched, granting access", {
+		logger.debug("[ABAC] Global wildcard allow matched, granting access", {
 			userId,
 			workspaceId,
 			teamId,
@@ -221,7 +224,7 @@ export async function isAllowed({
 		return matchesByKey || matchesByColumns;
 	});
 
-	console.debug("[ABAC] Matching candidates after filter", {
+	logger.debug("[ABAC] Matching candidates after filter", {
 		permissionKey,
 		reqResource,
 		reqAction,
@@ -230,7 +233,7 @@ export async function isAllowed({
 	});
 
 	if (matchingCandidates.length === 0) {
-		console.info("[ABAC] No matching permission candidates", {
+		logger.info("[ABAC] No matching permission candidates", {
 			userId,
 			workspaceId,
 			teamId,
@@ -249,7 +252,7 @@ export async function isAllowed({
 		predicateJson: any,
 		ctx: { subject: any; resource: any; ambient: any },
 	) {
-		console.debug("[ABAC] Evaluating predicate", {
+		logger.debug("[ABAC] Evaluating predicate", {
 			predicateJson,
 			subjectAttributes: ctx.subject?.attributes,
 			resource,
@@ -257,7 +260,7 @@ export async function isAllowed({
 		});
 
 		if (!predicateJson) {
-			console.debug("[ABAC] Predicate empty, default allow", {
+			logger.debug("[ABAC] Predicate empty, default allow", {
 				resource,
 				ambient,
 			});
@@ -266,7 +269,7 @@ export async function isAllowed({
 		// Basic example: support predicateJson = { "always": true } or { "subject": { "attribute_equals": { "k":"v" } } }
 		// For production use integrate a proper predicate engine.
 		if (predicateJson.always === true) {
-			console.debug("[ABAC] Predicate explicit always allow", {
+			logger.debug("[ABAC] Predicate explicit always allow", {
 				resource,
 				ambient,
 			});
@@ -281,7 +284,7 @@ export async function isAllowed({
 				const attrMatch = Object.entries(checks).every(
 					([k, v]) => subjectAttrs[k] === v,
 				);
-				console.debug("[ABAC] Predicate subject attribute check", {
+				logger.debug("[ABAC] Predicate subject attribute check", {
 					checks,
 					subjectAttrs,
 					attrMatch,
@@ -289,7 +292,7 @@ export async function isAllowed({
 				return attrMatch;
 			}
 		} catch (error) {
-			console.warn("[ABAC] Predicate evaluation error", {
+			logger.warn("[ABAC] Predicate evaluation error", {
 				error,
 				predicateJson,
 			});
@@ -297,7 +300,7 @@ export async function isAllowed({
 		}
 
 		// Fallback: if unknown structure, deny (safe default)
-		console.debug("[ABAC] Predicate fell back to deny", {
+		logger.debug("[ABAC] Predicate fell back to deny", {
 			predicateJson,
 		});
 		return false;
@@ -356,7 +359,7 @@ export async function isAllowed({
 				)
 		: [];
 
-	console.debug("[ABAC] Subject context composed", {
+	logger.debug("[ABAC] Subject context composed", {
 		userId,
 		workspaceId,
 		teamId,
@@ -407,7 +410,7 @@ export async function isAllowed({
 		const effect = c.rp.effect; // 'allow' or 'deny'
 		const predicate = c.constraint?.predicateJson ?? null;
 
-		console.debug("[ABAC] Evaluating candidate", {
+		logger.debug("[ABAC] Evaluating candidate", {
 			permissionKey: candidatePermissionKey,
 			effect,
 			constraintId: c.constraint?.id,
@@ -421,7 +424,7 @@ export async function isAllowed({
 			ambient,
 		});
 
-		console.debug("[ABAC] Predicate result for candidate", {
+		logger.debug("[ABAC] Predicate result for candidate", {
 			permissionKey: candidatePermissionKey,
 			roleId: c.rp.roleId,
 			permissionId: c.rp.permissionId,
@@ -429,7 +432,7 @@ export async function isAllowed({
 		});
 
 		if (!predicateResult) {
-			console.debug("[ABAC] Predicate failed, skipping candidate", {
+			logger.debug("[ABAC] Predicate failed, skipping candidate", {
 				permissionKey: candidatePermissionKey,
 				roleId: c.rp.roleId,
 				permissionId: c.rp.permissionId,
@@ -439,7 +442,7 @@ export async function isAllowed({
 
 		if (effect === "deny") {
 			// deny overrides: immediate deny
-			console.warn("[ABAC] Deny effect matched, denying request", {
+			logger.warn("[ABAC] Deny effect matched, denying request", {
 				userId,
 				workspaceId,
 				teamId,
@@ -452,7 +455,7 @@ export async function isAllowed({
 		}
 
 		if (effect === "allow") {
-			console.debug("[ABAC] Allow effect matched", {
+			logger.debug("[ABAC] Allow effect matched", {
 				userId,
 				workspaceId,
 				teamId,
@@ -465,7 +468,7 @@ export async function isAllowed({
 		}
 	}
 
-	console.info("[ABAC] Final decision", {
+	logger.info("[ABAC] Final decision", {
 		userId,
 		workspaceId,
 		teamId,
