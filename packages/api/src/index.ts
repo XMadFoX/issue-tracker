@@ -5,6 +5,12 @@ import { closeNatsConnection } from "./features/issues/publisher";
 import { logger } from "./logger";
 import { router } from "./router";
 
+(async () => {
+	logger.info("Running init in background");
+	await import("./init");
+	logger.info("Init done");
+})();
+
 export { router, prism, Elysia };
 
 const port = env.PORT;

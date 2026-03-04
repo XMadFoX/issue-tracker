@@ -6,13 +6,16 @@ import { issuePerms } from "./features/issues/perms";
 
 await db.transaction(async (tx) => {
 	// add wildcard permission
-	await tx.insert(permissionsCatalog).values({
-		id: createId(),
-		key: "*",
-		action: "*",
-		resourceType: "*",
-		description: "Wildcard permission",
-	});
+	await tx
+		.insert(permissionsCatalog)
+		.values({
+			id: createId(),
+			key: "*",
+			action: "*",
+			resourceType: "*",
+			description: "Wildcard permission",
+		})
+		.onConflictDoNothing?.();
 
 	// add label permissions
 	const labelPerms = [
