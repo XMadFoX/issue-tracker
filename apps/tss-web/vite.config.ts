@@ -7,23 +7,7 @@ import { defineConfig } from "vite";
 import viteTsConfigPaths from "vite-tsconfig-paths";
 import { env } from "./src/env";
 
-const externals = [
-	"@opentelemetry/api",
-	"@opentelemetry/sdk-node",
-	"@opentelemetry/resources",
-	"@opentelemetry/instrumentation",
-	"@opentelemetry/sdk-trace-node",
-	"@opentelemetry/sdk-logs",
-	"@opentelemetry/semantic-conventions",
-	"@opentelemetry/exporter-trace-otlp-proto",
-	"@opentelemetry/exporter-logs-otlp-http",
-	"@opentelemetry/exporter-trace-otlp-grpc",
-	"@opentelemetry/exporter-logs-otlp-grpc",
-	"@opentelemetry/instrumentation-http",
-	"@opentelemetry/instrumentation-pg",
-	"@prisma/client",
-	"pg",
-];
+const externals = ["pg"];
 
 const config = defineConfig({
 	resolve: {
