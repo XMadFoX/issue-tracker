@@ -25,3 +25,7 @@ export const env = createEnv({
 	},
 	runtimeEnv: process.env,
 });
+
+// seems like logtape otel sink reads protocol only from process.env, patch it by setting back from typed env
+process.env.OTEL_EXPORTER_OTLP_PROTOCOL ??= env.OTEL_EXPORTER_OTLP_PROTOCOL;
+process.env.OTEL_EXPORTER_OTLP_ENDPOINT ??= env.OTEL_EXPORTER_OTLP_ENDPOINT;
