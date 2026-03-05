@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { Value } from "platejs";
+import { env } from "../../env";
 import { embedText } from "../../lib/ai";
 import { editorToPlainText } from "../../lib/plate";
 
@@ -41,6 +42,6 @@ export async function buildIssueSearchFields(
 	return {
 		searchText,
 		searchVector: sql<string>`to_tsvector('english', ${searchText})`,
-		embedding: await embedText(searchText),
+		embedding: env.ENABLE_EMBEDDINGS ? await embedText(searchText) : null,
 	};
 }

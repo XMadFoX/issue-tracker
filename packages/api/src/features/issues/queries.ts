@@ -2,6 +2,7 @@ import { db } from "db";
 import { issue, issueLabel } from "db/features/tracker/issues.schema";
 import { and, eq, exists, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { z } from "zod";
+import { env } from "../../env";
 import { embedText } from "../../lib/ai";
 import type { issueSearchSchema } from "./schema";
 
@@ -45,6 +46,7 @@ export type SearchIssueResult = IssueWithRelations & {
 	};
 };
 
+const EMBEDDINGS_ENABLED = env.ENABLE_EMBEDDINGS;
 export async function searchIssues(input: z.infer<typeof issueSearchSchema>) {
 	const {
 		workspaceId,
@@ -81,7 +83,13 @@ export async function searchIssues(input: z.infer<typeof issueSearchSchema>) {
 		embeddingThreshold = 0.7,
 	} = options ?? {};
 
-	const queryEmbedding = await embedText(searchQuery);
+	const searchMode =
+		!EMBEDDINGS_ENABLED && mode === "semantic" ? "trigram" : mode;
+	const shouldCalculateSemantic =
+		EMBEDDINGS_ENABLED && (mode === "semantic" || mode === "hybrid");
+	const queryEmbedding = shouldCalculateSemantic
+		? await embedText(searchQuery)
+		: null;
 	const conditions = [eq(issue.workspaceId, workspaceId)];
 
 	if (teamId) conditions.push(eq(issue.teamId, teamId));
@@ -117,36 +125,48 @@ export async function searchIssues(input: z.infer<typeof issueSearchSchema>) {
 	}
 
 	const ftsScore = sql<number>`
-		CASE WHEN ${mode} IN ('fts', 'hybrid')
+		CASE WHEN ${searchMode} IN ('fts', 'hybrid')
 		THEN COALESCE(ts_rank_cd(${issue.searchVector}, websearch_to_tsquery('english', ${searchQuery})), 0)
 		ELSE 0 END
 	`;
 
 	const trigramScore = sql<number>`
-		CASE WHEN ${mode} IN ('trigram', 'hybrid')
+		CASE WHEN ${searchMode} IN ('trigram', 'hybrid')
 		THEN COALESCE(similarity(${issue.searchText}, ${searchQuery}), 0)
 		ELSE 0 END
 	`;
 
-	const semanticScore = sql<number>`
-		CASE WHEN ${mode} IN ('semantic', 'hybrid')
-		THEN COALESCE(
-			CASE WHEN 1 - (${issue.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector) >= ${embeddingThreshold}
-			THEN 1 - (${issue.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector)
-			ELSE 0 END,
-			0
-		)
-		ELSE 0 END
-	`;
+	const semanticScore =
+		shouldCalculateSemantic && queryEmbedding
+			? sql<number>`
+				CASE WHEN ${searchMode} IN ('semantic', 'hybrid')
+				THEN COALESCE(
+					CASE WHEN 1 - (${issue.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector) >= ${embeddingThreshold}
+					THEN 1 - (${issue.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector)
+					ELSE 0 END,
+					0
+				)
+				ELSE 0 END
+			`
+			: sql<number>`0`;
 
-	const hybridScore = sql<number>`
-		CASE ${mode}
-			WHEN 'fts' THEN ${ftsScore}
-			WHEN 'trigram' THEN ${trigramScore}
-			WHEN 'semantic' THEN ${semanticScore}
-			WHEN 'hybrid' THEN (${ftsScore} + ${trigramScore} + ${semanticScore}) / 3.0
-		END
-	`;
+	const hybridScore = EMBEDDINGS_ENABLED
+		? sql<number>`
+			CASE ${searchMode}
+				WHEN 'fts' THEN ${ftsScore}
+				WHEN 'trigram' THEN ${trigramScore}
+				WHEN 'semantic' THEN ${semanticScore}
+				WHEN 'hybrid' THEN (${ftsScore} + ${trigramScore} + ${semanticScore}) / 3.0
+			END
+		`
+		: sql<number>`
+			CASE ${searchMode}
+				WHEN 'fts' THEN ${ftsScore}
+				WHEN 'trigram' THEN ${trigramScore}
+				WHEN 'semantic' THEN ${semanticScore}
+				WHEN 'hybrid' THEN (${ftsScore} + ${trigramScore}) / 2.0
+			END
+		`;
 
 	const withClause: {
 		status?: { with: { statusGroup: true } } | true;
