@@ -3,14 +3,16 @@ import { Editor, EditorContainer } from "@prism/ui/components/editor/editor";
 import { EditorKit } from "@prism/ui/components/editor/editor-kit";
 import { cn } from "@prism/ui/lib/utils";
 import { useDebouncedCallback } from "@tanstack/react-pacer";
-import type { Value } from "platejs";
+import { KEYS, type Value } from "platejs";
 import { Plate, usePlateEditor } from "platejs/react";
 import { type ComponentProps, useEffect, useRef, useState } from "react";
 
-const EMPTY_VALUE: Value = [];
+const EMPTY_VALUE: Value = [{ type: KEYS.p, children: [{ text: "" }] }];
 
-const getEditorValue = (value: unknown): Value =>
-	Array.isArray(value) ? value : EMPTY_VALUE;
+const getEditorValue = (value: unknown): Value => {
+	if (Array.isArray(value) && value.length > 0) return value;
+	return EMPTY_VALUE;
+};
 
 const serializeValue = (value: unknown) =>
 	JSON.stringify(getEditorValue(value));
