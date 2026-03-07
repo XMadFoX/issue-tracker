@@ -1,10 +1,16 @@
 import { issueCreateSchema } from "@prism/api/src/features/issues/schema";
 import type { Outputs } from "@prism/api/src/router";
 import { Button } from "@prism/ui/components/button";
-import { FieldError } from "@prism/ui/components/field";
+import {
+	Field,
+	FieldContent,
+	FieldError,
+	FieldLabel,
+} from "@prism/ui/components/field";
 import { useAppForm } from "@prism/ui/components/form/form-hooks";
 import { cn } from "@prism/ui/lib/utils";
 import type z from "zod";
+import { DescriptionEditor } from "@/components/description-editor";
 import { LabelMultiSelect } from "@/features/labels/components/label-multi-select";
 
 type Props = {
@@ -35,7 +41,7 @@ export function IssueCreateForm({
 	const form = useAppForm({
 		defaultValues: {
 			title: "",
-			description: undefined, // no support for rich text yet
+			description: [],
 			workspaceId: workspaceId,
 			teamId: teamId,
 			statusId: initialStatusId ?? statuses[0]?.id,
@@ -71,7 +77,30 @@ export function IssueCreateForm({
 				{(field) => <field.Input label="Title" />}
 			</form.AppField>
 			<form.AppField name="description">
-				{(field) => <field.Input label="Description" />}
+				{(field) => {
+					const isInvalid =
+						field.state.meta.isTouched && !field.state.meta.isValid;
+
+					return (
+						<Field data-invalid={isInvalid}>
+							<FieldContent>
+								<FieldLabel>Description</FieldLabel>
+							</FieldContent>
+							<DescriptionEditor
+								value={field.state.value}
+								onChange={field.handleChange}
+								placeholder="Describe the issue..."
+								containerVariant="select"
+								editorVariant="select"
+								className="min-h-32"
+								editorClassName="min-h-32"
+							/>
+							{isInvalid ? (
+								<FieldError errors={field.state.meta.errors} />
+							) : null}
+						</Field>
+					);
+				}}
 			</form.AppField>
 			<form.AppField name="statusId">
 				{(field) => (
