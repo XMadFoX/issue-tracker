@@ -119,6 +119,13 @@ export function LabelList({
 	workspaceId,
 }: LabelListProps) {
 	const columns = useMemo(() => createColumns(updateLabel), [updateLabel]);
+	const scopeLabelByValue = useMemo(() => {
+		return new Map<string, string>([
+			["workspace", "Workspace"],
+			["all", "Workspace & all teams"],
+			...teams.map((team) => [team.id, team.name] as const),
+		]);
+	}, [teams]);
 
 	const table = useReactTable({
 		data: labels,
@@ -156,7 +163,9 @@ export function LabelList({
 					onValueChange={(value) => onScopeChange(value as ScopeSelectorValue)}
 				>
 					<SelectTrigger className="w-[200px]">
-						<SelectValue placeholder="Scope" />
+						<SelectValue placeholder="Scope">
+							{(value) => scopeLabelByValue.get(value) ?? value}
+						</SelectValue>
 					</SelectTrigger>
 					<SelectContent>
 						<SelectItem value="workspace">Workspace</SelectItem>
