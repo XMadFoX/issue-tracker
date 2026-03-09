@@ -2,12 +2,14 @@ import { cors } from "@elysiajs/cors";
 import { record } from "@elysiajs/opentelemetry";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
+import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { ResponseHeadersPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod";
 import { type Context, Elysia } from "elysia";
 import { env } from "./env";
 import { auth } from "./lib/auth";
+import { logger } from "./logger";
 import { instrumentation } from "./otel-instrumentation";
 import { router } from "./router";
 
@@ -27,8 +29,23 @@ const openApiHandler = new OpenAPIHandler(router, {
 	],
 });
 
+const logRpcError = (error: unknown) => {
+	if (error instanceof Error) {
+		const { message, ...errorObj } = error;
+		logger.error(error.message, errorObj);
+		return;
+	}
+
+	logger.error("Unhandled RPC error", { error });
+};
+
 const rpcHandler = new RPCHandler(router, {
 	plugins: [new ResponseHeadersPlugin()],
+	interceptors: [
+		onError((error) => {
+			logRpcError(error);
+		}),
+	],
 });
 
 const betterAuthView = (context: Context) => {
