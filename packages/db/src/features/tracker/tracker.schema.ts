@@ -1,13 +1,11 @@
 import { relations } from "drizzle-orm";
 import {
-	boolean,
 	integer,
 	jsonb,
 	pgTable,
 	text,
 	timestamp,
 	uniqueIndex,
-	uuid,
 } from "drizzle-orm/pg-core";
 import {
 	policyConstraints,
@@ -35,6 +33,7 @@ export const workspace = pgTable(
 
 export const workspaceRelations = relations(workspace, ({ many }) => ({
 	memberships: many(workspaceMembership),
+	invitations: many(workspaceInvitation),
 	teams: many(team),
 	roleDefinitions: many(roleDefinitions),
 	policyConstraints: many(policyConstraints),
@@ -97,6 +96,91 @@ export const workspaceMembershipRelations = relations(
 		role: one(roleDefinitions, {
 			fields: [workspaceMembership.roleId],
 			references: [roleDefinitions.id],
+		}),
+	}),
+);
+
+export const workspaceInvitation = pgTable("workspace_invitation", {
+	id: text("id").primaryKey(),
+	workspaceId: text("workspace_id")
+		.notNull()
+		.references(() => workspace.id, { onDelete: "cascade" }),
+	email: text("email").notNull(),
+	normalizedEmail: text("normalized_email").notNull(),
+	roleId: text("role_id")
+		.notNull()
+		.references(() => roleDefinitions.id, { onDelete: "cascade" }),
+	invitedBy: text("invited_by")
+		.notNull()
+		.references(() => user.id, { onDelete: "restrict" }),
+	tokenHash: text("token_hash").notNull().unique(),
+	status: text("status").notNull(),
+	expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+	acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+	acceptedByUserId: text("accepted_by_user_id").references(() => user.id, {
+		onDelete: "set null",
+	}),
+	createdAt: timestamp("created_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
+
+export const workspaceInvitationRelations = relations(
+	workspaceInvitation,
+	({ one, many }) => ({
+		workspace: one(workspace, {
+			fields: [workspaceInvitation.workspaceId],
+			references: [workspace.id],
+		}),
+		role: one(roleDefinitions, {
+			fields: [workspaceInvitation.roleId],
+			references: [roleDefinitions.id],
+		}),
+		inviter: one(user, {
+			fields: [workspaceInvitation.invitedBy],
+			references: [user.id],
+			relationName: "WorkspaceInvitationInviter",
+		}),
+		acceptedByUser: one(user, {
+			fields: [workspaceInvitation.acceptedByUserId],
+			references: [user.id],
+			relationName: "WorkspaceInvitationAcceptedByUser",
+		}),
+		teams: many(workspaceInvitationTeam),
+	}),
+);
+
+export const workspaceInvitationTeam = pgTable(
+	"workspace_invitation_team",
+	{
+		invitationId: text("invitation_id")
+			.notNull()
+			.references(() => workspaceInvitation.id, { onDelete: "cascade" }),
+		teamId: text("team_id")
+			.notNull()
+			.references(() => team.id, { onDelete: "cascade" }),
+	},
+	(table) => [
+		uniqueIndex("workspace_invitation_team_invitation_team_idx").on(
+			table.invitationId,
+			table.teamId,
+		),
+	],
+);
+
+export const workspaceInvitationTeamRelations = relations(
+	workspaceInvitationTeam,
+	({ one }) => ({
+		invitation: one(workspaceInvitation, {
+			fields: [workspaceInvitationTeam.invitationId],
+			references: [workspaceInvitation.id],
+		}),
+		team: one(team, {
+			fields: [workspaceInvitationTeam.teamId],
+			references: [team.id],
 		}),
 	}),
 );
