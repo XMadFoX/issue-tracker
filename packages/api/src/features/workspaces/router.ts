@@ -1,11 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
-import {
-	permissionsCatalog,
-	roleDefinitions,
-	rolePermissions,
-} from "db/features/abac/abac.schema";
+import { roleDefinitions } from "db/features/abac/abac.schema";
 import { issuePriority } from "db/features/tracker/issue-priorities.schema";
 import {
 	issueStatus,
@@ -21,6 +17,10 @@ import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import { buildDefaultIssuePrioritySeed } from "../issue-priorities/defaults";
 import { buildDefaultIssueStatusSeed } from "../issue-statuses/defaults";
+import {
+	ensureTeamBuiltInRoles,
+	ensureWorkspaceBuiltInRoles,
+} from "./defaults";
 import {
 	workspaceCreateSchema,
 	workspaceDeleteSchema,
@@ -104,41 +104,10 @@ export const create = authedRouter
 			const { priorities } = buildDefaultIssuePrioritySeed(createdWorkspace.id);
 			await tx.insert(issuePriority).values(priorities);
 
-			// Create a default 'Admin' role for the new workspace
-			const [defaultAdminRole] = await tx
-				.insert(roleDefinitions)
-				.values({
-					id: createId(),
-					workspaceId: createdWorkspace.id,
-					scopeLevel: "workspace",
-					name: "Admin",
-					createdBy: context.auth.session.userId,
-					attributes: {},
-				})
-				.returning({ id: roleDefinitions.id });
-			if (!defaultAdminRole) {
-				throw new ORPCError(
-					"Failed to create default admin role for the new workspace",
-				);
-			}
-
-			// Get wildcard permission
-			const [wildcardPermission] = await tx
-				.select()
-				.from(permissionsCatalog)
-				.where(eq(permissionsCatalog.key, "*"));
-			if (!wildcardPermission)
-				throw new ORPCError(
-					"Failed to get wildcard permission, database wasn't seeded properly",
-				);
-
-			// Attach wildcard permission to the admin role (allow, no constraint)
-			await tx.insert(rolePermissions).values({
-				roleId: defaultAdminRole.id,
-				permissionId: wildcardPermission.id,
-				effect: "allow",
-				constraintId: null,
-				attributes: {},
+			const roles = await ensureWorkspaceBuiltInRoles({
+				executor: tx,
+				workspaceId: createdWorkspace.id,
+				createdBy: context.auth.session.userId,
 			});
 
 			// Finally add the user to the workspace members
@@ -147,7 +116,7 @@ export const create = authedRouter
 					id: createId(),
 					workspaceId: createdWorkspace.id,
 					userId: context.auth.session.userId,
-					roleId: defaultAdminRole.id,
+					roleId: roles.adminRoleId,
 					status: "active",
 					invitedBy: null,
 					joinedAt: new Date(),
@@ -174,6 +143,13 @@ export const create = authedRouter
 					"Failed to create default team for the new workspace",
 				);
 			}
+
+			await ensureTeamBuiltInRoles({
+				executor: tx,
+				workspaceId: createdWorkspace.id,
+				teamId: defaultTeam.id,
+				createdBy: context.auth.session.userId,
+			});
 
 			return createdWorkspace;
 		});
