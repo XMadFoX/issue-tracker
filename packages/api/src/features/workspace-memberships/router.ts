@@ -4,10 +4,12 @@ import { db } from "db";
 import { roleDefinitions } from "db/features/abac/abac.schema";
 import { user } from "db/features/auth/auth.schema";
 import {
+	team,
+	teamMembership,
 	workspace,
 	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
-import { and, asc, count, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import {
@@ -362,14 +364,30 @@ const deleteMembership = authedRouter
 			}
 		}
 
-		await db
-			.delete(workspaceMembership)
-			.where(
-				and(
-					eq(workspaceMembership.id, id),
-					eq(workspaceMembership.workspaceId, workspaceId),
-				),
-			);
+		await db.transaction(async (tx) => {
+			const workspaceTeamIds = tx
+				.select({ id: team.id })
+				.from(team)
+				.where(eq(team.workspaceId, workspaceId));
+
+			await tx
+				.delete(teamMembership)
+				.where(
+					and(
+						inArray(teamMembership.teamId, workspaceTeamIds),
+						eq(teamMembership.userId, existing.userId),
+					),
+				);
+
+			await tx
+				.delete(workspaceMembership)
+				.where(
+					and(
+						eq(workspaceMembership.id, id),
+						eq(workspaceMembership.workspaceId, workspaceId),
+					),
+				);
+		});
 
 		return { success: true };
 	});
