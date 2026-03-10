@@ -10,6 +10,7 @@ import { and, DrizzleQueryError, eq } from "drizzle-orm";
 import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
+import { ensureTeamBuiltInRoles } from "../workspaces/defaults";
 import {
 	teamCreateSchema,
 	teamDeleteSchema,
@@ -115,13 +116,28 @@ export const create = authedRouter
 		}
 
 		try {
-			const [createdTeam] = await db
-				.insert(team)
-				.values({
-					id: createId(),
-					...input,
-				})
-				.returning({ id: team.id });
+			const createdTeam = await db.transaction(async (tx) => {
+				const [insertedTeam] = await tx
+					.insert(team)
+					.values({
+						id: createId(),
+						...input,
+					})
+					.returning({ id: team.id });
+
+				if (!insertedTeam) {
+					throw new ORPCError("Failed to create team");
+				}
+
+				await ensureTeamBuiltInRoles({
+					executor: tx,
+					workspaceId: input.workspaceId,
+					teamId: insertedTeam.id,
+					createdBy: context.auth.session.userId,
+				});
+
+				return insertedTeam;
+			});
 
 			if (!createdTeam) {
 				throw new ORPCError("Failed to create team");
