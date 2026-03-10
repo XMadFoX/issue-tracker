@@ -2,14 +2,13 @@ import { Elysia } from "elysia";
 import { prism } from "./app";
 import { env } from "./env";
 import { closeNatsConnection } from "./features/issues/publisher";
+import { ensureApiInit } from "./init";
 import { logger } from "./logger";
 import { router } from "./router";
 
-(async () => {
-	logger.info("Running init in background");
-	await import("./init");
-	logger.info("Init done");
-})();
+logger.info("Running API init");
+await ensureApiInit();
+logger.info("API init done");
 
 export { router, prism, Elysia };
 
