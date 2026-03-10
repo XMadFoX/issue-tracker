@@ -7,7 +7,7 @@ import {
 	workspace,
 	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
-import { and, asc, count, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, count, eq, isNull, ne, sql } from "drizzle-orm";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import {
@@ -81,7 +81,7 @@ export const create = authedRouter
 				.where(
 					and(
 						eq(roleDefinitions.workspaceId, workspaceId),
-						eq(roleDefinitions.name, "member"),
+						eq(sql<string>`lower(${roleDefinitions.name})`, "member"),
 						isNull(roleDefinitions.teamId),
 					),
 				);
@@ -335,8 +335,10 @@ const deleteMembership = authedRouter
 		}
 
 		// Prevent deleting the last active admin to avoid locking out the workspace
-		// role name is not really reliable tho
-		if (existing.roleName === "admin" && existing.status === "active") {
+		if (
+			existing.roleName.toLowerCase() === "admin" &&
+			existing.status === "active"
+		) {
 			const result = await db
 				.select({ count: count() })
 				.from(workspaceMembership)
@@ -347,7 +349,7 @@ const deleteMembership = authedRouter
 				.where(
 					and(
 						eq(workspaceMembership.workspaceId, workspaceId),
-						eq(roleDefinitions.name, "admin"),
+						eq(sql<string>`lower(${roleDefinitions.name})`, "admin"),
 						eq(workspaceMembership.status, "active"),
 						ne(workspaceMembership.id, id),
 					),
