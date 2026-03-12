@@ -12,6 +12,7 @@ import { rolePermissionsRouter } from "./features/permissions/router";
 import { roleRouter } from "./features/roles/router";
 import { teamMembershipRouter } from "./features/team-memberships/router";
 import { teamRouter } from "./features/teams/router";
+import { workspaceInvitationRouter } from "./features/workspace-invitations/router";
 import { workspaceMembershipRouter } from "./features/workspace-memberships/router";
 import { workspaceRouter } from "./features/workspaces/router";
 
@@ -29,6 +30,7 @@ export const router = {
 		permissions: rolePermissionsRouter,
 	},
 	workspaceMembership: workspaceMembershipRouter,
+	workspaceInvitation: workspaceInvitationRouter,
 	teamMembership: teamMembershipRouter,
 };
 
