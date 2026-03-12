@@ -126,4 +126,144 @@ async function getInvitationDetailsByTokenHash(tokenHash: string) {
 	};
 }
 
-export const create = authedRouter;
+export const create = authedRouter
+	.input(workspaceInvitationCreateSchema)
+	.handler(async ({ context, input }) => {
+		const normalizedEmail = normalizeEmail(input.email);
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "workspace:manage_members",
+		});
+		if (!allowed) {
+			throw new ORPCError("Unauthorized to manage workspace invitations");
+		}
+
+		const [selectedWorkspace] = await db
+			.select({ id: workspace.id })
+			.from(workspace)
+			.where(eq(workspace.id, input.workspaceId));
+		if (!selectedWorkspace) {
+			throw new ORPCError("Workspace not found");
+		}
+
+		const [role] = await db
+			.select({
+				id: roleDefinitions.id,
+			})
+			.from(roleDefinitions)
+			.where(
+				and(
+					eq(roleDefinitions.id, input.roleId),
+					eq(roleDefinitions.workspaceId, input.workspaceId),
+					isNull(roleDefinitions.teamId),
+				),
+			);
+		if (!role) {
+			throw new ORPCError("Invalid workspace role");
+		}
+
+		const uniqueTeamIds = [...new Set(input.teamIds)];
+		const selectedTeams = await db
+			.select({
+				id: team.id,
+			})
+			.from(team)
+			.where(
+				and(
+					eq(team.workspaceId, input.workspaceId),
+					inArray(team.id, uniqueTeamIds),
+				),
+			);
+
+		if (selectedTeams.length !== uniqueTeamIds.length) {
+			throw new ORPCError("One or more selected teams are invalid");
+		}
+
+		const [existingUser] = await db
+			.select({
+				id: user.id,
+			})
+			.from(user)
+			.where(eq(sql<string>`lower(${user.email})`, normalizedEmail));
+
+		if (existingUser) {
+			const [existingMembership] = await db
+				.select({
+					id: workspaceMembership.id,
+					status: workspaceMembership.status,
+				})
+				.from(workspaceMembership)
+				.where(
+					and(
+						eq(workspaceMembership.workspaceId, input.workspaceId),
+						eq(workspaceMembership.userId, existingUser.id),
+					),
+				);
+
+			if (existingMembership?.status === "active") {
+				throw new ORPCError("User is already an active workspace member");
+			}
+		}
+
+		const token = createInvitationToken();
+		const tokenHash = hashInvitationToken(token);
+		const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
+
+		const createdInvitation = await db.transaction(async (tx) => {
+			await tx
+				.update(workspaceInvitation)
+				.set({
+					status: "revoked",
+					updatedAt: new Date(),
+				})
+				.where(
+					and(
+						eq(workspaceInvitation.workspaceId, input.workspaceId),
+						eq(workspaceInvitation.normalizedEmail, normalizedEmail),
+						eq(workspaceInvitation.status, "pending"),
+					),
+				);
+
+			const [newInvitation] = await tx
+				.insert(workspaceInvitation)
+				.values({
+					id: createId(),
+					workspaceId: input.workspaceId,
+					email: input.email.trim(),
+					normalizedEmail,
+					roleId: input.roleId,
+					invitedBy: context.auth.session.userId,
+					tokenHash,
+					status: "pending",
+					expiresAt,
+				})
+				.returning({
+					id: workspaceInvitation.id,
+				});
+
+			if (!newInvitation) {
+				throw new ORPCError("Failed to create workspace invitation");
+			}
+
+			await tx.insert(workspaceInvitationTeam).values(
+				uniqueTeamIds.map((teamId) => ({
+					invitationId: newInvitation.id,
+					teamId,
+				})),
+			);
+
+			return newInvitation;
+		});
+
+		return {
+			id: createdInvitation.id,
+			inviteUrl: buildInvitationUrl(token),
+			expiresAt,
+		};
+	});
+
+export const workspaceInvitationRouter = {
+	create,
+};
