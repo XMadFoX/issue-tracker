@@ -264,6 +264,58 @@ export const create = authedRouter
 		};
 	});
 
+export const list = authedRouter
+	.input(workspaceInvitationListSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "workspace:read_members",
+		});
+		if (!allowed) {
+			throw new ORPCError("Unauthorized to read workspace invitations");
+		}
+
+		const invitations = await db
+			.select({
+				id: workspaceInvitation.id,
+				email: workspaceInvitation.email,
+				roleId: workspaceInvitation.roleId,
+				roleName: roleDefinitions.name,
+				status: workspaceInvitation.status,
+				expiresAt: workspaceInvitation.expiresAt,
+				createdAt: workspaceInvitation.createdAt,
+			})
+			.from(workspaceInvitation)
+			.innerJoin(
+				roleDefinitions,
+				eq(workspaceInvitation.roleId, roleDefinitions.id),
+			)
+			.where(
+				and(
+					eq(workspaceInvitation.workspaceId, input.workspaceId),
+					eq(workspaceInvitation.status, "pending"),
+				),
+			)
+			.orderBy(desc(workspaceInvitation.createdAt));
+
+		const teamsByInvitationId = await getInvitationTeams(
+			invitations.map((invitation) => invitation.id),
+		);
+		const now = new Date();
+
+		return invitations.map((invitation) => ({
+			...invitation,
+			status: getEffectiveInvitationStatus(
+				invitation.status,
+				invitation.expiresAt,
+				now,
+			),
+			teams: teamsByInvitationId.get(invitation.id) ?? [],
+		}));
+	});
+
 export const workspaceInvitationRouter = {
 	create,
+	list,
 };
