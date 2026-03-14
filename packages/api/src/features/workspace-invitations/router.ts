@@ -466,9 +466,46 @@ export const accept = authedRouter
 
 		return result;
 	});
+
+export const revoke = authedRouter
+	.input(workspaceInvitationRevokeSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "workspace:manage_members",
+		});
+		if (!allowed) {
+			throw new ORPCError("Unauthorized to revoke workspace invitations");
+		}
+
+		const [updatedInvitation] = await db
+			.update(workspaceInvitation)
+			.set({
+				status: "revoked",
+				updatedAt: new Date(),
+			})
+			.where(
+				and(
+					eq(workspaceInvitation.id, input.id),
+					eq(workspaceInvitation.workspaceId, input.workspaceId),
+				),
+			)
+			.returning({
+				id: workspaceInvitation.id,
+			});
+
+		if (!updatedInvitation) {
+			throw new ORPCError("Invitation not found");
+		}
+
+		return { success: true };
+	});
+
 export const workspaceInvitationRouter = {
 	create,
 	list,
 	getByToken,
 	accept,
+	revoke,
 };
