@@ -315,7 +315,41 @@ export const list = authedRouter
 		}));
 	});
 
+export const getByToken = base
+	.input(workspaceInvitationGetByTokenSchema)
+	.handler(async ({ input }) => {
+		const invitation = await getInvitationDetailsByTokenHash(
+			hashInvitationToken(input.token),
+		);
+		if (!invitation) {
+			throw new ORPCError("Invitation not found");
+		}
+
+		return {
+			id: invitation.id,
+			email: invitation.email,
+			status: getEffectiveInvitationStatus(
+				invitation.status,
+				invitation.expiresAt,
+				new Date(),
+			),
+			expiresAt: invitation.expiresAt,
+			acceptedAt: invitation.acceptedAt,
+			workspace: {
+				id: invitation.workspaceId,
+				name: invitation.workspaceName,
+				slug: invitation.workspaceSlug,
+			},
+			role: {
+				id: invitation.roleId,
+				name: invitation.roleName,
+			},
+			teams: invitation.teams,
+		};
+	});
+
 export const workspaceInvitationRouter = {
 	create,
 	list,
+	getByToken,
 };
