@@ -348,8 +348,127 @@ export const getByToken = base
 		};
 	});
 
+export const accept = authedRouter
+	.input(workspaceInvitationAcceptSchema)
+	.handler(async ({ context, input }) => {
+		const invitation = await getInvitationDetailsByTokenHash(
+			hashInvitationToken(input.token),
+		);
+		if (!invitation) {
+			throw new ORPCError("Invitation not found");
+		}
+
+		const currentStatus = getEffectiveInvitationStatus(
+			invitation.status,
+			invitation.expiresAt,
+			new Date(),
+		);
+		if (currentStatus !== "pending") {
+			throw new ORPCError("Invitation is no longer active");
+		}
+
+		const sessionEmail = normalizeEmail(context.auth.user.email);
+		if (sessionEmail !== invitation.normalizedEmail) {
+			throw new ORPCError("Signed-in email does not match this invitation");
+		}
+
+		const result = await db.transaction(async (tx) => {
+			const membershipRoleId = invitation.roleId;
+
+			const [existingMembership] = await tx
+				.select({
+					id: workspaceMembership.id,
+					status: workspaceMembership.status,
+				})
+				.from(workspaceMembership)
+				.where(
+					and(
+						eq(workspaceMembership.workspaceId, invitation.workspaceId),
+						eq(workspaceMembership.userId, context.auth.session.userId),
+					),
+				);
+
+			if (!existingMembership) {
+				await tx.insert(workspaceMembership).values({
+					id: createId(),
+					workspaceId: invitation.workspaceId,
+					userId: context.auth.session.userId,
+					roleId: membershipRoleId,
+					status: "active",
+					invitedBy: invitation.invitedBy,
+					joinedAt: new Date(),
+					lastSeenAt: new Date(),
+					attributes: {},
+				});
+			} else if (existingMembership.status !== "active") {
+				await tx
+					.update(workspaceMembership)
+					.set({
+						roleId: membershipRoleId,
+						status: "active",
+						lastSeenAt: new Date(),
+						updatedAt: new Date(),
+					})
+					.where(eq(workspaceMembership.id, existingMembership.id));
+			}
+
+			for (const selectedTeam of invitation.teams) {
+				const teamRoles = await ensureTeamBuiltInRoles({
+					executor: tx,
+					workspaceId: invitation.workspaceId,
+					teamId: selectedTeam.id,
+					createdBy: invitation.invitedBy,
+				});
+
+				const [existingTeamMembership] = await tx
+					.select({
+						id: teamMembership.id,
+					})
+					.from(teamMembership)
+					.where(
+						and(
+							eq(teamMembership.teamId, selectedTeam.id),
+							eq(teamMembership.userId, context.auth.session.userId),
+						),
+					);
+
+				if (existingTeamMembership) {
+					continue;
+				}
+
+				await tx.insert(teamMembership).values({
+					id: createId(),
+					teamId: selectedTeam.id,
+					userId: context.auth.session.userId,
+					roleId: teamRoles.memberRoleId,
+					status: "active",
+					invitedBy: invitation.invitedBy,
+					joinedAt: new Date(),
+					lastSeenAt: new Date(),
+					attributes: {},
+				});
+			}
+
+			await tx
+				.update(workspaceInvitation)
+				.set({
+					status: "accepted",
+					acceptedAt: new Date(),
+					acceptedByUserId: context.auth.session.userId,
+					updatedAt: new Date(),
+				})
+				.where(eq(workspaceInvitation.id, invitation.id));
+
+			return {
+				workspaceSlug: invitation.workspaceSlug,
+			};
+		});
+
+		return result;
+	});
 export const workspaceInvitationRouter = {
 	create,
 	list,
 	getByToken,
+	accept,
 };
