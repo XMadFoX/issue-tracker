@@ -12,7 +12,9 @@ await configure({
 		}),
 		console: getConsoleSink({ formatter: prettyFormatter }),
 	},
-	loggers: [{ category: [], sinks: ["otel", "console"], lowestLevel: "debug" }],
+	loggers: [
+		{ category: [], sinks: ["otel", "console"], lowestLevel: env.LOG_LEVEL },
+	],
 });
 
 import { getLogger } from "@logtape/logtape";

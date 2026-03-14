@@ -23,6 +23,10 @@ export const env = createEnv({
 		ENABLE_EMBEDDINGS: z.stringbool().default(false),
 		OTEL_EXPORTER_OTLP_PROTOCOL: z.string().default("grpc"),
 		OTEL_EXPORTER_OTLP_ENDPOINT: z.string().default("http://localhost:4317"),
+		LOG_LEVEL: z
+			.enum(["error", "info", "trace", "debug", "warning", "fatal"])
+			.nullish()
+			.default("info"),
 	},
 	runtimeEnv: process.env,
 });
