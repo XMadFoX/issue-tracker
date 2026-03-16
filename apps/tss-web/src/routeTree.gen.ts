@@ -16,6 +16,7 @@ import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as WorkspaceSlugRouteRouteImport } from './routes/workspace/$slug/route'
 import { Route as WorkspaceSlugIndexRouteImport } from './routes/workspace/$slug/index'
 import { Route as WorkspaceSlugTeamsIndexRouteImport } from './routes/workspace/$slug/teams/index'
+import { Route as WorkspaceSlugSettingsMembersIndexRouteImport } from './routes/workspace/$slug/settings/members/index'
 import { Route as WorkspaceSlugSettingsLabelsIndexRouteImport } from './routes/workspace/$slug/settings/labels/index'
 import { Route as WorkspaceSlugTeamsTeamSlugIssuesRouteRouteImport } from './routes/workspace/$slug/teams/$teamSlug/issues/route'
 import { Route as WorkspaceSlugTeamsTeamSlugIssuesSearchTestRouteImport } from './routes/workspace/$slug/teams/$teamSlug/issues/search-test'
@@ -57,6 +58,12 @@ const WorkspaceSlugTeamsIndexRoute = WorkspaceSlugTeamsIndexRouteImport.update({
   path: '/teams/',
   getParentRoute: () => WorkspaceSlugRouteRoute,
 } as any)
+const WorkspaceSlugSettingsMembersIndexRoute =
+  WorkspaceSlugSettingsMembersIndexRouteImport.update({
+    id: '/settings/members/',
+    path: '/settings/members/',
+    getParentRoute: () => WorkspaceSlugRouteRoute,
+  } as any)
 const WorkspaceSlugSettingsLabelsIndexRoute =
   WorkspaceSlugSettingsLabelsIndexRouteImport.update({
     id: '/settings/labels/',
@@ -98,6 +105,7 @@ export interface FileRoutesByFullPath {
   '/workspace/$slug/teams/': typeof WorkspaceSlugTeamsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issues': typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren
   '/workspace/$slug/settings/labels/': typeof WorkspaceSlugSettingsLabelsIndexRoute
+  '/workspace/$slug/settings/members/': typeof WorkspaceSlugSettingsMembersIndexRoute
   '/workspace/$slug/teams/$teamSlug/issue/$issueId': typeof WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute
   '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
   '/workspace/$slug/teams/$teamSlug/issues/search-test': typeof WorkspaceSlugTeamsTeamSlugIssuesSearchTestRoute
@@ -111,6 +119,7 @@ export interface FileRoutesByTo {
   '/workspace/$slug/teams': typeof WorkspaceSlugTeamsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issues': typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren
   '/workspace/$slug/settings/labels': typeof WorkspaceSlugSettingsLabelsIndexRoute
+  '/workspace/$slug/settings/members': typeof WorkspaceSlugSettingsMembersIndexRoute
   '/workspace/$slug/teams/$teamSlug/issue/$issueId': typeof WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute
   '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
   '/workspace/$slug/teams/$teamSlug/issues/search-test': typeof WorkspaceSlugTeamsTeamSlugIssuesSearchTestRoute
@@ -126,6 +135,7 @@ export interface FileRoutesById {
   '/workspace/$slug/teams/': typeof WorkspaceSlugTeamsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issues': typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren
   '/workspace/$slug/settings/labels/': typeof WorkspaceSlugSettingsLabelsIndexRoute
+  '/workspace/$slug/settings/members/': typeof WorkspaceSlugSettingsMembersIndexRoute
   '/workspace/$slug/teams/$teamSlug/issue/$issueId': typeof WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute
   '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
   '/workspace/$slug/teams/$teamSlug/issues/search-test': typeof WorkspaceSlugTeamsTeamSlugIssuesSearchTestRoute
@@ -142,6 +152,7 @@ export interface FileRouteTypes {
     | '/workspace/$slug/teams/'
     | '/workspace/$slug/teams/$teamSlug/issues'
     | '/workspace/$slug/settings/labels/'
+    | '/workspace/$slug/settings/members/'
     | '/workspace/$slug/teams/$teamSlug/issue/$issueId'
     | '/workspace/$slug/teams/$teamSlug/issues/create'
     | '/workspace/$slug/teams/$teamSlug/issues/search-test'
@@ -155,6 +166,7 @@ export interface FileRouteTypes {
     | '/workspace/$slug/teams'
     | '/workspace/$slug/teams/$teamSlug/issues'
     | '/workspace/$slug/settings/labels'
+    | '/workspace/$slug/settings/members'
     | '/workspace/$slug/teams/$teamSlug/issue/$issueId'
     | '/workspace/$slug/teams/$teamSlug/issues/create'
     | '/workspace/$slug/teams/$teamSlug/issues/search-test'
@@ -169,6 +181,7 @@ export interface FileRouteTypes {
     | '/workspace/$slug/teams/'
     | '/workspace/$slug/teams/$teamSlug/issues'
     | '/workspace/$slug/settings/labels/'
+    | '/workspace/$slug/settings/members/'
     | '/workspace/$slug/teams/$teamSlug/issue/$issueId'
     | '/workspace/$slug/teams/$teamSlug/issues/create'
     | '/workspace/$slug/teams/$teamSlug/issues/search-test'
@@ -233,6 +246,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceSlugTeamsIndexRouteImport
       parentRoute: typeof WorkspaceSlugRouteRoute
     }
+    '/workspace/$slug/settings/members/': {
+      id: '/workspace/$slug/settings/members/'
+      path: '/settings/members'
+      fullPath: '/workspace/$slug/settings/members/'
+      preLoaderRoute: typeof WorkspaceSlugSettingsMembersIndexRouteImport
+      parentRoute: typeof WorkspaceSlugRouteRoute
+    }
     '/workspace/$slug/settings/labels/': {
       id: '/workspace/$slug/settings/labels/'
       path: '/settings/labels'
@@ -294,6 +314,7 @@ interface WorkspaceSlugRouteRouteChildren {
   WorkspaceSlugTeamsIndexRoute: typeof WorkspaceSlugTeamsIndexRoute
   WorkspaceSlugTeamsTeamSlugIssuesRouteRoute: typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren
   WorkspaceSlugSettingsLabelsIndexRoute: typeof WorkspaceSlugSettingsLabelsIndexRoute
+  WorkspaceSlugSettingsMembersIndexRoute: typeof WorkspaceSlugSettingsMembersIndexRoute
   WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute: typeof WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute
 }
 
@@ -303,6 +324,8 @@ const WorkspaceSlugRouteRouteChildren: WorkspaceSlugRouteRouteChildren = {
   WorkspaceSlugTeamsTeamSlugIssuesRouteRoute:
     WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren,
   WorkspaceSlugSettingsLabelsIndexRoute: WorkspaceSlugSettingsLabelsIndexRoute,
+  WorkspaceSlugSettingsMembersIndexRoute:
+    WorkspaceSlugSettingsMembersIndexRoute,
   WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute:
     WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute,
 }
