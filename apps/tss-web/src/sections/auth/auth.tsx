@@ -18,38 +18,20 @@ const signUpSchema = schema.extend({
 export const modeSchema = z.enum(["signin", "signup"]);
 type AuthMode = z.infer<typeof modeSchema>;
 
-export default function AuthForm({
-	initialMode,
-	inviteToken,
-}: {
-	initialMode?: AuthMode;
-	inviteToken?: string;
-}) {
+export default function AuthForm({ initialMode }: { initialMode?: AuthMode }) {
 	const [mode, setMode] = useState<AuthMode>(initialMode || "signin");
 	const session = useSession();
 	const navigate = useNavigate();
 
 	useEffect(() => {
-		if (!session.isPending && session.data?.user) {
-			if (inviteToken) {
-				navigate({
-					to: "/invite/$token",
-					params: { token: inviteToken },
-				});
-				return;
-			}
-
-			navigate({ to: "/" });
+		if (!session.isPending && !session.data?.user) {
+			navigate({ to: "/auth" });
 		}
-	}, [inviteToken, navigate, session]);
+	}, [session, navigate]);
 
 	return (
 		<div className="flex flex-col gap-">
-			{mode === "signin" ? (
-				<SignInForm inviteToken={inviteToken} />
-			) : (
-				<SignUpForm inviteToken={inviteToken} />
-			)}
+			{mode === "signin" ? <SignInForm /> : <SignUpForm />}
 			<div className="h-px bg-muted/50 my-3 w-full" />
 			<div className="text-center text-sm text-muted-foreground">
 				{mode === "signin"
@@ -67,7 +49,7 @@ export default function AuthForm({
 		</div>
 	);
 }
-export function SignInForm({ inviteToken }: { inviteToken?: string }) {
+export function SignInForm() {
 	const navigate = useNavigate();
 
 	const form = useAppForm({
@@ -84,13 +66,6 @@ export function SignInForm({ inviteToken }: { inviteToken?: string }) {
 				const errMsg = res.error.message;
 				form.setErrorMap({ onSubmit: { form: errMsg, fields: {} } });
 				return { form: errMsg };
-			}
-			if (inviteToken) {
-				navigate({
-					to: "/invite/$token",
-					params: { token: inviteToken },
-				});
-				return;
 			}
 			navigate({ to: "/" });
 		},
@@ -125,7 +100,7 @@ export function SignInForm({ inviteToken }: { inviteToken?: string }) {
 		</div>
 	);
 }
-export function SignUpForm({ inviteToken }: { inviteToken?: string }) {
+export function SignUpForm() {
 	const navigate = useNavigate();
 	const form = useAppForm({
 		defaultValues: {
@@ -142,13 +117,6 @@ export function SignUpForm({ inviteToken }: { inviteToken?: string }) {
 				const errMsg = res.error.message;
 				form.setErrorMap({ onSubmit: { form: errMsg, fields: {} } });
 				return { form: errMsg };
-			}
-			if (inviteToken) {
-				navigate({
-					to: "/invite/$token",
-					params: { token: inviteToken },
-				});
-				return;
 			}
 			navigate({ to: "/" });
 		},

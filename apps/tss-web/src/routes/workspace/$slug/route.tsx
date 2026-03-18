@@ -140,6 +140,16 @@ export function WorkspaceSidebar({
 							<SidebarMenuItem>
 								<SidebarMenuButton asChild>
 									<Link
+										to="/workspace/$slug/settings/members"
+										params={{ slug: workspace?.slug ?? "" }}
+									>
+										<span>Members</span>
+									</Link>
+								</SidebarMenuButton>
+							</SidebarMenuItem>
+							<SidebarMenuItem>
+								<SidebarMenuButton asChild>
+									<Link
 										to="/workspace/$slug/settings/labels"
 										params={{ slug: workspace?.slug ?? "" }}
 									>

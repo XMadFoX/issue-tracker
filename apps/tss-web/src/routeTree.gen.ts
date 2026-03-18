@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WorkspaceCreateRouteImport } from './routes/workspace/create'
+import { Route as InviteTokenRouteImport } from './routes/invite/$token'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as WorkspaceSlugRouteRouteImport } from './routes/workspace/$slug/route'
 import { Route as WorkspaceSlugIndexRouteImport } from './routes/workspace/$slug/index'
@@ -36,6 +37,11 @@ const IndexRoute = IndexRouteImport.update({
 const WorkspaceCreateRoute = WorkspaceCreateRouteImport.update({
   id: '/workspace/create',
   path: '/workspace/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
@@ -100,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/workspace/$slug': typeof WorkspaceSlugRouteRouteWithChildren
   '/api/$': typeof ApiSplatRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/workspace/create': typeof WorkspaceCreateRoute
   '/workspace/$slug/': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams/': typeof WorkspaceSlugTeamsIndexRoute
@@ -114,6 +121,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/api/$': typeof ApiSplatRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/workspace/create': typeof WorkspaceCreateRoute
   '/workspace/$slug': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams': typeof WorkspaceSlugTeamsIndexRoute
@@ -130,6 +138,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/workspace/$slug': typeof WorkspaceSlugRouteRouteWithChildren
   '/api/$': typeof ApiSplatRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/workspace/create': typeof WorkspaceCreateRoute
   '/workspace/$slug/': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams/': typeof WorkspaceSlugTeamsIndexRoute
@@ -147,6 +156,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/workspace/$slug'
     | '/api/$'
+    | '/invite/$token'
     | '/workspace/create'
     | '/workspace/$slug/'
     | '/workspace/$slug/teams/'
@@ -161,6 +171,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/api/$'
+    | '/invite/$token'
     | '/workspace/create'
     | '/workspace/$slug'
     | '/workspace/$slug/teams'
@@ -176,6 +187,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/workspace/$slug'
     | '/api/$'
+    | '/invite/$token'
     | '/workspace/create'
     | '/workspace/$slug/'
     | '/workspace/$slug/teams/'
@@ -192,6 +204,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   WorkspaceSlugRouteRoute: typeof WorkspaceSlugRouteRouteWithChildren
   ApiSplatRoute: typeof ApiSplatRoute
+  InviteTokenRoute: typeof InviteTokenRoute
   WorkspaceCreateRoute: typeof WorkspaceCreateRoute
 }
 
@@ -216,6 +229,13 @@ declare module '@tanstack/react-router' {
       path: '/workspace/create'
       fullPath: '/workspace/create'
       preLoaderRoute: typeof WorkspaceCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/$': {
@@ -338,6 +358,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   WorkspaceSlugRouteRoute: WorkspaceSlugRouteRouteWithChildren,
   ApiSplatRoute: ApiSplatRoute,
+  InviteTokenRoute: InviteTokenRoute,
   WorkspaceCreateRoute: WorkspaceCreateRoute,
 }
 export const routeTree = rootRouteImport
