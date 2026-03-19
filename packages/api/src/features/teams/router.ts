@@ -84,7 +84,7 @@ export const getBySlug = authedRouter
 				and(eq(team.key, input.key), eq(team.workspaceId, input.workspaceId)),
 			);
 		if (!res) {
-			throw errors.NOT_FOUND;
+			throw errors.NOT_FOUND();
 		}
 
 		const allowed = await isAllowed({
@@ -95,7 +95,7 @@ export const getBySlug = authedRouter
 		});
 
 		if (!allowed) {
-			throw errors.NOT_FOUND;
+			throw errors.NOT_FOUND();
 		}
 
 		return res.team;

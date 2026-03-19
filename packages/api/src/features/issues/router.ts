@@ -48,7 +48,7 @@ const listIssues = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue:read",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const workspaceCond = eq(issue.workspaceId, input.workspaceId);
 		const rows = await db.query.issue.findMany({
@@ -97,11 +97,11 @@ const getIssue = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue:read",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const row = await getIssueWithRelations(input.id, input.workspaceId);
 
-		if (!row) throw errors.NOT_FOUND;
+		if (!row) throw errors.NOT_FOUND();
 		return row;
 	});
 
@@ -115,7 +115,7 @@ const createIssue = authedRouter
 			workspaceId,
 			permissionKey: "issue:create",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const [maxRow] = await db
 			.select({ maxNumber: sql<number>`max(${issue.number})` })
@@ -200,7 +200,7 @@ const updateIssue = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue:update",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const values = omit(input, ["id", "workspaceId"]);
 
@@ -233,7 +233,7 @@ const updateIssue = authedRouter
 				)
 				.limit(1);
 
-			if (!currentIssue) throw errors.NOT_FOUND;
+			if (!currentIssue) throw errors.NOT_FOUND();
 
 			Object.assign(
 				values,
@@ -254,7 +254,7 @@ const updateIssue = authedRouter
 				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
 			)
 			.returning();
-		if (!updated) throw errors.NOT_FOUND;
+		if (!updated) throw errors.NOT_FOUND();
 
 		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
 		if (freshIssue) {
@@ -278,7 +278,7 @@ const deleteIssue = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue:delete",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const [deleted] = await db
 			.delete(issue)
@@ -286,7 +286,7 @@ const deleteIssue = authedRouter
 				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
 			)
 			.returning();
-		if (!deleted) throw errors.NOT_FOUND;
+		if (!deleted) throw errors.NOT_FOUND();
 
 		await issuePublisher.publish("issue:changed", {
 			type: "delete",
@@ -307,7 +307,7 @@ const bulkAddLabels = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue:update",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		if (input.labelIds.length === 0) return;
 
@@ -344,7 +344,7 @@ const bulkDeleteLabels = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue:update",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		if (input.labelIds.length === 0) return;
 
@@ -380,7 +380,7 @@ const updatePriority = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue:update",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const [updated] = await db
 			.update(issue)
@@ -389,7 +389,7 @@ const updatePriority = authedRouter
 				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
 			)
 			.returning();
-		if (!updated) throw errors.NOT_FOUND;
+		if (!updated) throw errors.NOT_FOUND();
 
 		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
 		if (freshIssue) {
@@ -413,7 +413,7 @@ const updateAssignee = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue:update",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const [updated] = await db
 			.update(issue)
@@ -422,7 +422,7 @@ const updateAssignee = authedRouter
 				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
 			)
 			.returning();
-		if (!updated) throw errors.NOT_FOUND;
+		if (!updated) throw errors.NOT_FOUND();
 
 		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
 		if (freshIssue) {
@@ -447,7 +447,7 @@ const moveIssue = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue:update",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		console.debug("Move issue: fetching current issue", input.id);
 		const [currentIssue] = await db
@@ -457,7 +457,7 @@ const moveIssue = authedRouter
 			.limit(1);
 
 		console.debug("Move issue: current issue found", currentIssue);
-		if (!currentIssue) throw errors.NOT_FOUND;
+		if (!currentIssue) throw errors.NOT_FOUND();
 
 		const executeMove = async (
 			tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
@@ -470,7 +470,7 @@ const moveIssue = authedRouter
 				.for("update");
 
 			console.debug("Move issue: issue record locked", issueRecord);
-			if (!issueRecord) throw errors.NOT_FOUND;
+			if (!issueRecord) throw errors.NOT_FOUND();
 
 			let targetStatusId = issueRecord.statusId;
 			let newSortOrder: string;
@@ -484,8 +484,8 @@ const moveIssue = authedRouter
 					.for("update");
 
 				console.debug("Move issue: target issue found", targetIssue);
-				if (!targetIssue) throw errors.NOT_FOUND;
-				if (input.targetId === input.id) throw errors.INVALID_MOVE;
+				if (!targetIssue) throw errors.NOT_FOUND();
+				if (input.targetId === input.id) throw errors.INVALID_MOVE();
 
 				targetStatusId = targetIssue.statusId;
 
@@ -567,7 +567,7 @@ const moveIssue = authedRouter
 				.where(eq(issue.id, input.id))
 				.returning();
 
-			if (!updated) throw errors.NOT_FOUND;
+			if (!updated) throw errors.NOT_FOUND();
 			return updated;
 		};
 
@@ -594,7 +594,7 @@ const moveIssue = authedRouter
 				if (typeof error === "object") {
 					try {
 						console.debug("Error details:", JSON.stringify(error, null, 2));
-					} catch (e) {
+					} catch (_e) {
 						console.debug("Error details (stringify failed):", error);
 					}
 				}
@@ -631,7 +631,7 @@ const liveIssues = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue:read",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const stream = issuePublisher.subscribe("issue:changed", {
 			signal,
@@ -654,7 +654,7 @@ const searchIssuesHandler = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue:read",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const results = await searchIssues(input);
 		return { issues: results };

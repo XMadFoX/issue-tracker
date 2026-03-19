@@ -26,7 +26,7 @@ export const listPriorities = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue_priority:read",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const rows = await db
 			.select()
@@ -48,7 +48,7 @@ export const createPriority = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue_priority:create",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const [created] = await db
 			.insert(issuePriority)
@@ -66,7 +66,7 @@ export const updatePriority = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue_priority:update",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const values = omit(input, ["id", "workspaceId"]);
 		const [updated] = await db
@@ -74,7 +74,7 @@ export const updatePriority = authedRouter
 			.set(values)
 			.where(eq(issuePriority.id, input.id))
 			.returning();
-		if (!updated) throw errors.NOT_FOUND;
+		if (!updated) throw errors.NOT_FOUND();
 		return updated;
 	});
 
@@ -87,7 +87,7 @@ export const deletePriority = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue_priority:delete",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const [deleted] = await db
 			.delete(issuePriority)
@@ -105,7 +105,7 @@ export const reorderPriorities = authedRouter
 			workspaceId: input.workspaceId,
 			permissionKey: "issue_priority:reorder",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		// verify all ordered IDs exist in the workspace
 		const existingPriorities = await db
@@ -119,7 +119,7 @@ export const reorderPriorities = authedRouter
 			);
 
 		if (existingPriorities.length !== input.orderedIds.length) {
-			throw errors.NOT_FOUND;
+			throw errors.NOT_FOUND();
 		}
 
 		const TEMP_RANK_OFFSET = 1000000;

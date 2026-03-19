@@ -64,14 +64,14 @@ export const getBySlug = authedRouter
 			.from(workspace)
 			.where(eq(workspace.slug, input.slug));
 
-		if (!res) throw errors.NOT_FOUND;
+		if (!res) throw errors.NOT_FOUND();
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: res.id,
 			permissionKey: "workspace:read",
 		});
 		if (!allowed) {
-			throw errors.NOT_FOUND;
+			throw errors.NOT_FOUND();
 		}
 
 		return res;

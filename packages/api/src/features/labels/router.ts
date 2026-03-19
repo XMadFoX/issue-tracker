@@ -26,7 +26,7 @@ export const listLabels = authedRouter
 			teamId: input.scope === "team" ? (input.teamId ?? undefined) : undefined,
 			permissionKey: "label:read",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const where = (() => {
 			if (input.scope === "workspace") {
@@ -70,7 +70,7 @@ export const createLabel = authedRouter
 			teamId: input.teamId ?? undefined,
 			permissionKey: "label:create",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const [created] = await db
 			.insert(label)
@@ -88,7 +88,7 @@ export const updateLabel = authedRouter
 			.from(label)
 			.where(eq(label.id, input.id))
 			.limit(1);
-		if (!existingLabel) throw errors.NOT_FOUND;
+		if (!existingLabel) throw errors.NOT_FOUND();
 
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
@@ -96,7 +96,7 @@ export const updateLabel = authedRouter
 			teamId: existingLabel.teamId ?? undefined,
 			permissionKey: "label:update",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const values = omit(input, ["id"]);
 		const [updated] = await db
@@ -104,7 +104,7 @@ export const updateLabel = authedRouter
 			.set(values)
 			.where(eq(label.id, input.id))
 			.returning();
-		if (!updated) throw errors.NOT_FOUND;
+		if (!updated) throw errors.NOT_FOUND();
 		return updated;
 	});
 
@@ -117,7 +117,7 @@ export const deleteLabel = authedRouter
 			.from(label)
 			.where(eq(label.id, input.id))
 			.limit(1);
-		if (!existingLabel) throw errors.NOT_FOUND;
+		if (!existingLabel) throw errors.NOT_FOUND();
 
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
@@ -125,13 +125,13 @@ export const deleteLabel = authedRouter
 			teamId: existingLabel.teamId ?? undefined,
 			permissionKey: "label:delete",
 		});
-		if (!allowed) throw errors.UNAUTHORIZED;
+		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const [deleted] = await db
 			.delete(label)
 			.where(eq(label.id, input.id))
 			.returning();
-		if (!deleted) throw errors.NOT_FOUND;
+		if (!deleted) throw errors.NOT_FOUND();
 		return deleted;
 	});
 
