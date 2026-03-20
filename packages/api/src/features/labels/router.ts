@@ -23,7 +23,10 @@ export const listLabels = authedRouter
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
-			teamId: input.scope === "team" ? (input.teamId ?? undefined) : undefined,
+			teamId:
+				input.scope === "team" || input.scope === "all"
+					? (input.teamId ?? undefined)
+					: undefined,
 			permissionKey: "label:read",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
