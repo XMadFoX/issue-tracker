@@ -46,6 +46,7 @@ const listIssues = authedRouter
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
+			teamId: input.teamId,
 			permissionKey: "issue:read",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
@@ -195,9 +196,24 @@ const updateIssue = authedRouter
 	.input(issueUpdateSchema)
 	.errors(updateDeleteErrors)
 	.handler(async ({ context, input, errors }) => {
+		const [existingIssue] = await db
+			.select({
+				teamId: issue.teamId,
+				statusId: issue.statusId,
+				title: issue.title,
+				description: issue.description,
+			})
+			.from(issue)
+			.where(
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			)
+			.limit(1);
+		if (!existingIssue) throw errors.NOT_FOUND();
+
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
+			teamId: existingIssue.teamId,
 			permissionKey: "issue:update",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
@@ -206,13 +222,7 @@ const updateIssue = authedRouter
 
 		// move to another status col with changing sortOrder to top
 		if (input.statusId) {
-			const [currentIssue] = await db
-				.select()
-				.from(issue)
-				.where(eq(issue.id, input.id))
-				.limit(1);
-
-			if (currentIssue && currentIssue.statusId !== input.statusId) {
+			if (existingIssue.statusId !== input.statusId) {
 				const firstRank = await db
 					.select({ minSort: sql<string>`min(${issue.sortOrder})` })
 					.from(issue)
@@ -225,24 +235,14 @@ const updateIssue = authedRouter
 		}
 
 		if (input.title !== undefined || input.description !== undefined) {
-			const [currentIssue] = await db
-				.select({ title: issue.title, description: issue.description })
-				.from(issue)
-				.where(
-					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
-				)
-				.limit(1);
-
-			if (!currentIssue) throw errors.NOT_FOUND();
-
 			Object.assign(
 				values,
 				await buildIssueSearchFields({
-					title: input.title ?? currentIssue.title,
+					title: input.title ?? existingIssue.title,
 					description:
 						input.description !== undefined
 							? input.description
-							: currentIssue.description,
+							: existingIssue.description,
 				}),
 			);
 		}
