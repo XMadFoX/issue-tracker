@@ -121,6 +121,10 @@ export function WorkspaceMembersView({
 		() => [...roles].sort((left, right) => left.name.localeCompare(right.name)),
 		[roles],
 	);
+	const roleLabelById = useMemo(
+		() => new Map(roles.map((role) => [role.id, role.name] as const)),
+		[roles],
+	);
 
 	const canSubmitInvite =
 		email.trim().length > 0 && roleId !== null && selectedTeamIds.length > 0;
@@ -189,7 +193,9 @@ export function WorkspaceMembersView({
 							</label>
 							<Select value={roleId} onValueChange={handleInviteRoleChange}>
 								<SelectTrigger id="invite-role" className="w-full">
-									<SelectValue placeholder="Select role" />
+									<SelectValue placeholder="Select role">
+										{(value) => roleLabelById.get(value) ?? value}
+									</SelectValue>
 								</SelectTrigger>
 								<SelectContent>
 									{sortedRoles.map((role) => (
@@ -354,8 +360,10 @@ export function WorkspaceMembersView({
 												)
 											}
 										>
-											<SelectTrigger className="w-44">
-												<SelectValue />
+											<SelectTrigger className="w-full max-w-48">
+												<SelectValue className="overflow-hidden text-ellipsis">
+													{(value) => roleLabelById.get(value) ?? value}
+												</SelectValue>
 											</SelectTrigger>
 											<SelectContent>
 												{sortedRoles.map((role) => (
