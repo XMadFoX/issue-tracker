@@ -19,9 +19,11 @@ export const modeSchema = z.enum(["signin", "signup"]);
 type AuthMode = z.infer<typeof modeSchema>;
 
 export default function AuthForm({
+	initialEmail,
 	initialMode,
 	inviteToken,
 }: {
+	initialEmail?: string;
 	initialMode?: AuthMode;
 	inviteToken?: string;
 }) {
@@ -46,9 +48,9 @@ export default function AuthForm({
 	return (
 		<div className="flex flex-col gap-">
 			{mode === "signin" ? (
-				<SignInForm inviteToken={inviteToken} />
+				<SignInForm initialEmail={initialEmail} inviteToken={inviteToken} />
 			) : (
-				<SignUpForm inviteToken={inviteToken} />
+				<SignUpForm initialEmail={initialEmail} inviteToken={inviteToken} />
 			)}
 			<div className="h-px bg-muted/50 my-3 w-full" />
 			<div className="text-center text-sm text-muted-foreground">
@@ -67,12 +69,18 @@ export default function AuthForm({
 		</div>
 	);
 }
-export function SignInForm({ inviteToken }: { inviteToken?: string }) {
+export function SignInForm({
+	initialEmail,
+	inviteToken,
+}: {
+	initialEmail?: string;
+	inviteToken?: string;
+}) {
 	const navigate = useNavigate();
 
 	const form = useAppForm({
 		defaultValues: {
-			email: "",
+			email: initialEmail ?? "",
 			password: "",
 		},
 		validators: {
@@ -125,12 +133,18 @@ export function SignInForm({ inviteToken }: { inviteToken?: string }) {
 		</div>
 	);
 }
-export function SignUpForm({ inviteToken }: { inviteToken?: string }) {
+export function SignUpForm({
+	initialEmail,
+	inviteToken,
+}: {
+	initialEmail?: string;
+	inviteToken?: string;
+}) {
 	const navigate = useNavigate();
 	const form = useAppForm({
 		defaultValues: {
 			name: "",
-			email: "",
+			email: initialEmail ?? "",
 			password: "",
 		},
 		validators: {

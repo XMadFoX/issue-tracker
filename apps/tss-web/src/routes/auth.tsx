@@ -3,6 +3,7 @@ import AuthForm, { modeSchema } from "src/sections/auth/auth";
 import z from "zod";
 
 const searchParamsSchema = z.object({
+	email: z.string().optional(),
 	initialMode: modeSchema.default("signin"),
 	inviteToken: z.string().optional(),
 });
@@ -13,11 +14,15 @@ export const Route = createFileRoute("/auth")({
 });
 
 function RouteComponent() {
-	const { initialMode, inviteToken } = Route.useSearch();
+	const { email, initialMode, inviteToken } = Route.useSearch();
 
 	return (
 		<div className="flex flex-col items-center justify-center max-w-md mx-auto my-auto">
-			<AuthForm initialMode={initialMode} inviteToken={inviteToken} />
+			<AuthForm
+				initialEmail={email}
+				initialMode={initialMode}
+				inviteToken={inviteToken}
+			/>
 		</div>
 	);
 }

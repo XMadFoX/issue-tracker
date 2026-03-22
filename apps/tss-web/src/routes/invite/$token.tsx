@@ -100,6 +100,7 @@ function RouteComponent() {
 							<Link
 								to="/auth"
 								search={{
+									email: invitation.data.email,
 									initialMode: "signin",
 									inviteToken: token,
 								}}
