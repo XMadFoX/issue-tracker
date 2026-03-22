@@ -4,7 +4,7 @@ import { db } from "db";
 import { roleDefinitions } from "db/features/abac/abac.schema";
 import { user } from "db/features/auth/auth.schema";
 import { team, teamMembership } from "db/features/tracker/tracker.schema";
-import { and, count, desc, eq, ne } from "drizzle-orm";
+import { and, count, desc, eq, ne, sql } from "drizzle-orm";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import { sanitizeAttributes } from "../../lib/permissions-helpers";
@@ -86,7 +86,7 @@ export const create = authedRouter
 				.where(
 					and(
 						eq(roleDefinitions.workspaceId, workspaceId),
-						eq(roleDefinitions.name, "member"),
+						eq(sql<string>`lower(${roleDefinitions.name})`, "member"),
 						eq(roleDefinitions.teamId, teamId),
 					),
 				);
@@ -386,7 +386,10 @@ const deleteMembership = authedRouter
 		}
 
 		// Prevent deleting last active lead/admin if applicable (assuming 'lead' role or similar)
-		if (existing.roleName === "lead" && existing.status === "active") {
+		if (
+			existing.roleName.toLowerCase() === "lead" &&
+			existing.status === "active"
+		) {
 			const [leadCount] = await db
 				.select({ count: count() })
 				.from(teamMembership)
@@ -397,7 +400,7 @@ const deleteMembership = authedRouter
 				.where(
 					and(
 						eq(teamMembership.teamId, teamId),
-						eq(roleDefinitions.name, "lead"),
+						eq(sql<string>`lower(${roleDefinitions.name})`, "lead"),
 						eq(teamMembership.status, "active"),
 						ne(teamMembership.id, id),
 					),

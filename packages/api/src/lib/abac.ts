@@ -8,8 +8,11 @@ import {
 	rolePermissions,
 } from "db/features/abac/abac.schema";
 import { user } from "db/features/auth/auth.schema";
-import { workspaceMembership } from "db/features/tracker/tracker.schema";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import {
+	teamMembership,
+	workspaceMembership,
+} from "db/features/tracker/tracker.schema";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 type Ambient = Record<string, any> | undefined;
 type Resource = { id?: string; attributes?: Record<string, any> } | undefined;
@@ -94,9 +97,25 @@ export async function isAllowed({
 	const membershipRoleId = membershipRow?.roleId ?? null;
 	const hasMembershipRole = Boolean(membershipRoleId);
 
+	const teamMembershipRows =
+		teamId == null
+			? []
+			: await db
+					.select({ roleId: teamMembership.roleId })
+					.from(teamMembership)
+					.where(
+						and(
+							eq(teamMembership.userId, userId),
+							eq(teamMembership.teamId, teamId),
+						),
+					);
+	const teamMembershipRoleIds = teamMembershipRows.map((row) => row.roleId);
+	const hasTeamMembershipRole = teamMembershipRoleIds.length > 0;
+
 	if (
 		(!assignments || assignments.length === 0) &&
 		!hasMembershipRole &&
+		!hasTeamMembershipRole &&
 		reqResource !== "workspace"
 	) {
 		logger.info("[ABAC] No assignments found, denying", {
@@ -112,6 +131,7 @@ export async function isAllowed({
 		new Set([
 			...assignments.map((a) => a.roleId),
 			...(membershipRoleId ? [membershipRoleId] : []),
+			...teamMembershipRoleIds,
 		]),
 	);
 

@@ -12,10 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WorkspaceCreateRouteImport } from './routes/workspace/create'
+import { Route as InviteTokenRouteImport } from './routes/invite/$token'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as WorkspaceSlugRouteRouteImport } from './routes/workspace/$slug/route'
 import { Route as WorkspaceSlugIndexRouteImport } from './routes/workspace/$slug/index'
 import { Route as WorkspaceSlugTeamsIndexRouteImport } from './routes/workspace/$slug/teams/index'
+import { Route as WorkspaceSlugSettingsMembersIndexRouteImport } from './routes/workspace/$slug/settings/members/index'
 import { Route as WorkspaceSlugSettingsLabelsIndexRouteImport } from './routes/workspace/$slug/settings/labels/index'
 import { Route as WorkspaceSlugTeamsTeamSlugIssuesRouteRouteImport } from './routes/workspace/$slug/teams/$teamSlug/issues/route'
 import { Route as WorkspaceSlugTeamsTeamSlugIssuesSearchTestRouteImport } from './routes/workspace/$slug/teams/$teamSlug/issues/search-test'
@@ -35,6 +37,11 @@ const IndexRoute = IndexRouteImport.update({
 const WorkspaceCreateRoute = WorkspaceCreateRouteImport.update({
   id: '/workspace/create',
   path: '/workspace/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
@@ -57,6 +64,12 @@ const WorkspaceSlugTeamsIndexRoute = WorkspaceSlugTeamsIndexRouteImport.update({
   path: '/teams/',
   getParentRoute: () => WorkspaceSlugRouteRoute,
 } as any)
+const WorkspaceSlugSettingsMembersIndexRoute =
+  WorkspaceSlugSettingsMembersIndexRouteImport.update({
+    id: '/settings/members/',
+    path: '/settings/members/',
+    getParentRoute: () => WorkspaceSlugRouteRoute,
+  } as any)
 const WorkspaceSlugSettingsLabelsIndexRoute =
   WorkspaceSlugSettingsLabelsIndexRouteImport.update({
     id: '/settings/labels/',
@@ -93,11 +106,13 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/workspace/$slug': typeof WorkspaceSlugRouteRouteWithChildren
   '/api/$': typeof ApiSplatRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/workspace/create': typeof WorkspaceCreateRoute
   '/workspace/$slug/': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams/': typeof WorkspaceSlugTeamsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issues': typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren
   '/workspace/$slug/settings/labels/': typeof WorkspaceSlugSettingsLabelsIndexRoute
+  '/workspace/$slug/settings/members/': typeof WorkspaceSlugSettingsMembersIndexRoute
   '/workspace/$slug/teams/$teamSlug/issue/$issueId': typeof WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute
   '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
   '/workspace/$slug/teams/$teamSlug/issues/search-test': typeof WorkspaceSlugTeamsTeamSlugIssuesSearchTestRoute
@@ -106,11 +121,13 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/api/$': typeof ApiSplatRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/workspace/create': typeof WorkspaceCreateRoute
   '/workspace/$slug': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams': typeof WorkspaceSlugTeamsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issues': typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren
   '/workspace/$slug/settings/labels': typeof WorkspaceSlugSettingsLabelsIndexRoute
+  '/workspace/$slug/settings/members': typeof WorkspaceSlugSettingsMembersIndexRoute
   '/workspace/$slug/teams/$teamSlug/issue/$issueId': typeof WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute
   '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
   '/workspace/$slug/teams/$teamSlug/issues/search-test': typeof WorkspaceSlugTeamsTeamSlugIssuesSearchTestRoute
@@ -121,11 +138,13 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/workspace/$slug': typeof WorkspaceSlugRouteRouteWithChildren
   '/api/$': typeof ApiSplatRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/workspace/create': typeof WorkspaceCreateRoute
   '/workspace/$slug/': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams/': typeof WorkspaceSlugTeamsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issues': typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren
   '/workspace/$slug/settings/labels/': typeof WorkspaceSlugSettingsLabelsIndexRoute
+  '/workspace/$slug/settings/members/': typeof WorkspaceSlugSettingsMembersIndexRoute
   '/workspace/$slug/teams/$teamSlug/issue/$issueId': typeof WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute
   '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
   '/workspace/$slug/teams/$teamSlug/issues/search-test': typeof WorkspaceSlugTeamsTeamSlugIssuesSearchTestRoute
@@ -137,11 +156,13 @@ export interface FileRouteTypes {
     | '/auth'
     | '/workspace/$slug'
     | '/api/$'
+    | '/invite/$token'
     | '/workspace/create'
     | '/workspace/$slug/'
     | '/workspace/$slug/teams/'
     | '/workspace/$slug/teams/$teamSlug/issues'
     | '/workspace/$slug/settings/labels/'
+    | '/workspace/$slug/settings/members/'
     | '/workspace/$slug/teams/$teamSlug/issue/$issueId'
     | '/workspace/$slug/teams/$teamSlug/issues/create'
     | '/workspace/$slug/teams/$teamSlug/issues/search-test'
@@ -150,11 +171,13 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/api/$'
+    | '/invite/$token'
     | '/workspace/create'
     | '/workspace/$slug'
     | '/workspace/$slug/teams'
     | '/workspace/$slug/teams/$teamSlug/issues'
     | '/workspace/$slug/settings/labels'
+    | '/workspace/$slug/settings/members'
     | '/workspace/$slug/teams/$teamSlug/issue/$issueId'
     | '/workspace/$slug/teams/$teamSlug/issues/create'
     | '/workspace/$slug/teams/$teamSlug/issues/search-test'
@@ -164,11 +187,13 @@ export interface FileRouteTypes {
     | '/auth'
     | '/workspace/$slug'
     | '/api/$'
+    | '/invite/$token'
     | '/workspace/create'
     | '/workspace/$slug/'
     | '/workspace/$slug/teams/'
     | '/workspace/$slug/teams/$teamSlug/issues'
     | '/workspace/$slug/settings/labels/'
+    | '/workspace/$slug/settings/members/'
     | '/workspace/$slug/teams/$teamSlug/issue/$issueId'
     | '/workspace/$slug/teams/$teamSlug/issues/create'
     | '/workspace/$slug/teams/$teamSlug/issues/search-test'
@@ -179,6 +204,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   WorkspaceSlugRouteRoute: typeof WorkspaceSlugRouteRouteWithChildren
   ApiSplatRoute: typeof ApiSplatRoute
+  InviteTokenRoute: typeof InviteTokenRoute
   WorkspaceCreateRoute: typeof WorkspaceCreateRoute
 }
 
@@ -203,6 +229,13 @@ declare module '@tanstack/react-router' {
       path: '/workspace/create'
       fullPath: '/workspace/create'
       preLoaderRoute: typeof WorkspaceCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/$': {
@@ -231,6 +264,13 @@ declare module '@tanstack/react-router' {
       path: '/teams'
       fullPath: '/workspace/$slug/teams/'
       preLoaderRoute: typeof WorkspaceSlugTeamsIndexRouteImport
+      parentRoute: typeof WorkspaceSlugRouteRoute
+    }
+    '/workspace/$slug/settings/members/': {
+      id: '/workspace/$slug/settings/members/'
+      path: '/settings/members'
+      fullPath: '/workspace/$slug/settings/members/'
+      preLoaderRoute: typeof WorkspaceSlugSettingsMembersIndexRouteImport
       parentRoute: typeof WorkspaceSlugRouteRoute
     }
     '/workspace/$slug/settings/labels/': {
@@ -294,6 +334,7 @@ interface WorkspaceSlugRouteRouteChildren {
   WorkspaceSlugTeamsIndexRoute: typeof WorkspaceSlugTeamsIndexRoute
   WorkspaceSlugTeamsTeamSlugIssuesRouteRoute: typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren
   WorkspaceSlugSettingsLabelsIndexRoute: typeof WorkspaceSlugSettingsLabelsIndexRoute
+  WorkspaceSlugSettingsMembersIndexRoute: typeof WorkspaceSlugSettingsMembersIndexRoute
   WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute: typeof WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute
 }
 
@@ -303,6 +344,8 @@ const WorkspaceSlugRouteRouteChildren: WorkspaceSlugRouteRouteChildren = {
   WorkspaceSlugTeamsTeamSlugIssuesRouteRoute:
     WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren,
   WorkspaceSlugSettingsLabelsIndexRoute: WorkspaceSlugSettingsLabelsIndexRoute,
+  WorkspaceSlugSettingsMembersIndexRoute:
+    WorkspaceSlugSettingsMembersIndexRoute,
   WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute:
     WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute,
 }
@@ -315,6 +358,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   WorkspaceSlugRouteRoute: WorkspaceSlugRouteRouteWithChildren,
   ApiSplatRoute: ApiSplatRoute,
+  InviteTokenRoute: InviteTokenRoute,
   WorkspaceCreateRoute: WorkspaceCreateRoute,
 }
 export const routeTree = rootRouteImport

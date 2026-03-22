@@ -4,10 +4,12 @@ import { db } from "db";
 import { roleDefinitions } from "db/features/abac/abac.schema";
 import { user } from "db/features/auth/auth.schema";
 import {
+	team,
+	teamMembership,
 	workspace,
 	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
-import { and, asc, count, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import {
@@ -81,7 +83,7 @@ export const create = authedRouter
 				.where(
 					and(
 						eq(roleDefinitions.workspaceId, workspaceId),
-						eq(roleDefinitions.name, "member"),
+						eq(sql<string>`lower(${roleDefinitions.name})`, "member"),
 						isNull(roleDefinitions.teamId),
 					),
 				);
@@ -335,8 +337,10 @@ const deleteMembership = authedRouter
 		}
 
 		// Prevent deleting the last active admin to avoid locking out the workspace
-		// role name is not really reliable tho
-		if (existing.roleName === "admin" && existing.status === "active") {
+		if (
+			existing.roleName.toLowerCase() === "admin" &&
+			existing.status === "active"
+		) {
 			const result = await db
 				.select({ count: count() })
 				.from(workspaceMembership)
@@ -347,7 +351,7 @@ const deleteMembership = authedRouter
 				.where(
 					and(
 						eq(workspaceMembership.workspaceId, workspaceId),
-						eq(roleDefinitions.name, "admin"),
+						eq(sql<string>`lower(${roleDefinitions.name})`, "admin"),
 						eq(workspaceMembership.status, "active"),
 						ne(workspaceMembership.id, id),
 					),
@@ -360,17 +364,34 @@ const deleteMembership = authedRouter
 			}
 		}
 
-		await db
-			.delete(workspaceMembership)
-			.where(
-				and(
-					eq(workspaceMembership.id, id),
-					eq(workspaceMembership.workspaceId, workspaceId),
-				),
-			);
+		await db.transaction(async (tx) => {
+			const workspaceTeamIds = tx
+				.select({ id: team.id })
+				.from(team)
+				.where(eq(team.workspaceId, workspaceId));
+
+			await tx
+				.delete(teamMembership)
+				.where(
+					and(
+						inArray(teamMembership.teamId, workspaceTeamIds),
+						eq(teamMembership.userId, existing.userId),
+					),
+				);
+
+			await tx
+				.delete(workspaceMembership)
+				.where(
+					and(
+						eq(workspaceMembership.id, id),
+						eq(workspaceMembership.workspaceId, workspaceId),
+					),
+				);
+		});
 
 		return { success: true };
 	});
+
 export const workspaceMembershipRouter = {
 	create,
 	list,

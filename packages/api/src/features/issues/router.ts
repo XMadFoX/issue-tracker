@@ -30,14 +30,24 @@ import { buildIssueSearchFields } from "./search-fields";
 
 const commonErrors = {
 	UNAUTHORIZED: {},
+	NOT_FOUND: {},
 };
 
 const updateDeleteErrors = {
 	...commonErrors,
-	NOT_FOUND: {},
 	INVALID_MOVE: {},
 	RANK_EXHAUSTED: {},
 };
+
+async function getIssueTeamId(id: string, workspaceId: string) {
+	const [row] = await db
+		.select({ teamId: issue.teamId })
+		.from(issue)
+		.where(and(eq(issue.id, id), eq(issue.workspaceId, workspaceId)))
+		.limit(1);
+
+	return row?.teamId ?? null;
+}
 
 const listIssues = authedRouter
 	.input(issueListSchema)
@@ -46,6 +56,7 @@ const listIssues = authedRouter
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
+			teamId: input.teamId,
 			permissionKey: "issue:read",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
@@ -92,9 +103,13 @@ const getIssue = authedRouter
 	.input(issueGetSchema)
 	.errors(updateDeleteErrors)
 	.handler(async ({ context, input, errors }) => {
+		const teamId = await getIssueTeamId(input.id, input.workspaceId);
+		if (!teamId) throw errors.NOT_FOUND();
+
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
+			teamId,
 			permissionKey: "issue:read",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
@@ -113,6 +128,7 @@ const createIssue = authedRouter
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId,
+			teamId,
 			permissionKey: "issue:create",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
@@ -195,9 +211,24 @@ const updateIssue = authedRouter
 	.input(issueUpdateSchema)
 	.errors(updateDeleteErrors)
 	.handler(async ({ context, input, errors }) => {
+		const [existingIssue] = await db
+			.select({
+				teamId: issue.teamId,
+				statusId: issue.statusId,
+				title: issue.title,
+				description: issue.description,
+			})
+			.from(issue)
+			.where(
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			)
+			.limit(1);
+		if (!existingIssue) throw errors.NOT_FOUND();
+
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
+			teamId: existingIssue.teamId,
 			permissionKey: "issue:update",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
@@ -206,13 +237,7 @@ const updateIssue = authedRouter
 
 		// move to another status col with changing sortOrder to top
 		if (input.statusId) {
-			const [currentIssue] = await db
-				.select()
-				.from(issue)
-				.where(eq(issue.id, input.id))
-				.limit(1);
-
-			if (currentIssue && currentIssue.statusId !== input.statusId) {
+			if (existingIssue.statusId !== input.statusId) {
 				const firstRank = await db
 					.select({ minSort: sql<string>`min(${issue.sortOrder})` })
 					.from(issue)
@@ -225,24 +250,14 @@ const updateIssue = authedRouter
 		}
 
 		if (input.title !== undefined || input.description !== undefined) {
-			const [currentIssue] = await db
-				.select({ title: issue.title, description: issue.description })
-				.from(issue)
-				.where(
-					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
-				)
-				.limit(1);
-
-			if (!currentIssue) throw errors.NOT_FOUND();
-
 			Object.assign(
 				values,
 				await buildIssueSearchFields({
-					title: input.title ?? currentIssue.title,
+					title: input.title ?? existingIssue.title,
 					description:
 						input.description !== undefined
 							? input.description
-							: currentIssue.description,
+							: existingIssue.description,
 				}),
 			);
 		}
@@ -273,9 +288,13 @@ const deleteIssue = authedRouter
 	.input(issueDeleteSchema)
 	.errors(updateDeleteErrors)
 	.handler(async ({ context, input, errors }) => {
+		const teamId = await getIssueTeamId(input.id, input.workspaceId);
+		if (!teamId) throw errors.NOT_FOUND();
+
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
+			teamId,
 			permissionKey: "issue:delete",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
@@ -302,9 +321,13 @@ const bulkAddLabels = authedRouter
 	.input(issueLabelsSchema)
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
+		const teamId = await getIssueTeamId(input.issueId, input.workspaceId);
+		if (!teamId) throw errors.NOT_FOUND();
+
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
+			teamId,
 			permissionKey: "issue:update",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
@@ -339,9 +362,13 @@ const bulkDeleteLabels = authedRouter
 	.input(issueLabelsSchema)
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
+		const teamId = await getIssueTeamId(input.issueId, input.workspaceId);
+		if (!teamId) throw errors.NOT_FOUND();
+
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
+			teamId,
 			permissionKey: "issue:update",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
@@ -375,9 +402,13 @@ const updatePriority = authedRouter
 	.input(issuePriorityUpdateSchema)
 	.errors(updateDeleteErrors)
 	.handler(async ({ context, input, errors }) => {
+		const teamId = await getIssueTeamId(input.id, input.workspaceId);
+		if (!teamId) throw errors.NOT_FOUND();
+
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
+			teamId,
 			permissionKey: "issue:update",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
@@ -408,9 +439,13 @@ const updateAssignee = authedRouter
 	.input(issueUpdateAssigneeSchema)
 	.errors(updateDeleteErrors)
 	.handler(async ({ context, input, errors }) => {
+		const teamId = await getIssueTeamId(input.id, input.workspaceId);
+		if (!teamId) throw errors.NOT_FOUND();
+
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
+			teamId,
 			permissionKey: "issue:update",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
@@ -442,22 +477,26 @@ const moveIssue = authedRouter
 	.errors(updateDeleteErrors)
 	.handler(async ({ context, input, errors }) => {
 		console.debug("Move issue input:", input);
+		const [currentIssue] = await db
+			.select({
+				id: issue.id,
+				teamId: issue.teamId,
+				statusId: issue.statusId,
+			})
+			.from(issue)
+			.where(
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			)
+			.limit(1);
+		if (!currentIssue) throw errors.NOT_FOUND();
+
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
+			teamId: currentIssue.teamId,
 			permissionKey: "issue:update",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
-
-		console.debug("Move issue: fetching current issue", input.id);
-		const [currentIssue] = await db
-			.select()
-			.from(issue)
-			.where(eq(issue.id, input.id))
-			.limit(1);
-
-		console.debug("Move issue: current issue found", currentIssue);
-		if (!currentIssue) throw errors.NOT_FOUND();
 
 		const executeMove = async (
 			tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
@@ -629,6 +668,7 @@ const liveIssues = authedRouter
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
+			teamId: input.teamId,
 			permissionKey: "issue:read",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
@@ -652,6 +692,7 @@ const searchIssuesHandler = authedRouter
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
+			teamId: input.filters?.teamId,
 			permissionKey: "issue:read",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
