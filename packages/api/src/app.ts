@@ -2,7 +2,7 @@ import { cors } from "@elysiajs/cors";
 import { record } from "@elysiajs/opentelemetry";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
-import { onError } from "@orpc/server";
+import { ORPCError, onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { ResponseHeadersPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod";
@@ -29,14 +29,48 @@ const openApiHandler = new OpenAPIHandler(router, {
 	],
 });
 
+const isClientErrorStatus = (status: number) => {
+	return status >= 400 && status < 500;
+};
+
 const logRpcError = (error: unknown) => {
-	if (error instanceof Error) {
-		const { message, ...errorObj } = error;
-		logger.error(error.message, errorObj);
+	if (error instanceof ORPCError) {
+		const properties = {
+			error,
+			code: error.code,
+			status: error.status,
+			defined: error.defined,
+			data: error.data,
+		};
+
+		if (error.defined && isClientErrorStatus(error.status)) {
+			logger.debug(
+				"RPC request failed with defined client error: {error}",
+				properties,
+			);
+			return;
+		}
+
+		if (isClientErrorStatus(error.status)) {
+			logger.warning(
+				"RPC request failed with undefined client error: {error}",
+				properties,
+			);
+			return;
+		}
+
+		logger.error("RPC request failed: {error}", properties);
 		return;
 	}
 
-	logger.error("Unhandled RPC error", { error });
+	if (error instanceof Error) {
+		logger.error("RPC request failed: {error}", { error });
+		return;
+	}
+
+	logger.error("RPC request failed with non-Error throwable: {thrown}", {
+		thrown: error,
+	});
 };
 
 const rpcHandler = new RPCHandler(router, {
