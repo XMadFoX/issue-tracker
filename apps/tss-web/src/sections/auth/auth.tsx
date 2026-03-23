@@ -209,6 +209,15 @@ export function SignUpForm({
 					{(field) => <field.Input label="Password" type="password" />}
 				</form.AppField>
 				<Button type="submit">Sign Up</Button>
+				<form.Subscribe selector={(state) => [state.errorMap]}>
+					{([errorMap]) =>
+						errorMap.onSubmit ? (
+							<FieldError className="form-error">
+								{errorMap.onSubmit.toString()}
+							</FieldError>
+						) : null
+					}
+				</form.Subscribe>
 			</form>
 		</div>
 	);
