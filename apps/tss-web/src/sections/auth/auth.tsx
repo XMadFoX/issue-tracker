@@ -87,20 +87,31 @@ export function SignInForm({
 			onSubmit: schema,
 		},
 		onSubmit: async ({ value: values }) => {
-			const res = await signIn.email({ ...values });
-			if (res.error) {
-				const errMsg = res.error.message;
+			try {
+				const res = await signIn.email({ ...values });
+				if (res.error) {
+					const errMsg = res.error.message;
+					form.setErrorMap({ onSubmit: { form: errMsg, fields: {} } });
+					return { form: errMsg };
+				}
+				if (inviteToken) {
+					navigate({
+						to: "/invite/$token",
+						params: { token: inviteToken },
+					});
+					return;
+				}
+				navigate({ to: "/" });
+			} catch (err) {
+				let errMsg = "Unknown error";
+
+				if (err instanceof Error) {
+					errMsg = err.message;
+				}
+
 				form.setErrorMap({ onSubmit: { form: errMsg, fields: {} } });
 				return { form: errMsg };
 			}
-			if (inviteToken) {
-				navigate({
-					to: "/invite/$token",
-					params: { token: inviteToken },
-				});
-				return;
-			}
-			navigate({ to: "/" });
 		},
 	});
 
@@ -151,20 +162,31 @@ export function SignUpForm({
 			onSubmit: signUpSchema,
 		},
 		onSubmit: async ({ value: values }) => {
-			const res = await signUp.email({ ...values });
-			if (res.error) {
-				const errMsg = res.error.message;
+			try {
+				const res = await signUp.email({ ...values });
+				if (res.error) {
+					const errMsg = res.error.message;
+					form.setErrorMap({ onSubmit: { form: errMsg, fields: {} } });
+					return { form: errMsg };
+				}
+				if (inviteToken) {
+					navigate({
+						to: "/invite/$token",
+						params: { token: inviteToken },
+					});
+					return;
+				}
+				navigate({ to: "/" });
+			} catch (err) {
+				let errMsg = "Unknown error";
+
+				if (err instanceof Error) {
+					errMsg = err.message;
+				}
+
 				form.setErrorMap({ onSubmit: { form: errMsg, fields: {} } });
 				return { form: errMsg };
 			}
-			if (inviteToken) {
-				navigate({
-					to: "/invite/$token",
-					params: { token: inviteToken },
-				});
-				return;
-			}
-			navigate({ to: "/" });
 		},
 	});
 
