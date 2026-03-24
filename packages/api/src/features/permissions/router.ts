@@ -5,7 +5,7 @@ import {
 	roleDefinitions,
 	rolePermissions,
 } from "db/features/abac/abac.schema";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import {
@@ -13,12 +13,40 @@ import {
 	detectPermissionCycle,
 } from "../../lib/permissions-helpers";
 import {
+	permissionCatalogListSchema,
 	rolePermissionsCreateSchema,
 	rolePermissionsDeleteSchema,
 	rolePermissionsGetSchema,
 	rolePermissionsListSchema,
 	rolePermissionsUpdateSchema,
 } from "./schema";
+
+/**
+ * Lists the available permission catalog entries for a workspace.
+ * @throws ORPCError if unauthorized
+ */
+export const catalog = authedRouter
+	.input(permissionCatalogListSchema)
+	.handler(async ({ context, input }) => {
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			permissionKey: "role:read",
+		});
+		if (!allowed) {
+			throw new ORPCError("FORBIDDEN", {
+				message: "Unauthorized",
+			});
+		}
+
+		return db
+			.select()
+			.from(permissionsCatalog)
+			.orderBy(
+				asc(permissionsCatalog.resourceType),
+				asc(permissionsCatalog.action),
+			);
+	});
 
 /**
  * Assigns a permission to a role in a workspace.
@@ -344,6 +372,7 @@ export const deletePerm = authedRouter
 	});
 
 export const rolePermissionsRouter = {
+	catalog,
 	create,
 	list,
 	get,

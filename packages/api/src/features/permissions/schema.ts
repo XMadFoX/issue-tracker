@@ -8,6 +8,10 @@ import { workspaceInsertSchema } from "../workspaces/schema";
 
 export const rolePermissionsInsertSchema = createInsertSchema(rolePermissions);
 
+export const permissionCatalogListSchema = z.object({
+	workspaceId: workspaceInsertSchema.shape.id,
+});
+
 export const rolePermissionsCreateSchema = rolePermissionsInsertSchema.extend({
 	workspaceId: workspaceInsertSchema.shape.id,
 	attributes: z
