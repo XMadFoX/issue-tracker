@@ -33,11 +33,7 @@ type Props = {
 		constraintId: string | null;
 		effect: "allow" | "deny";
 	}) => Promise<void>;
-	onRemovePermission: (input: {
-		roleId: string;
-		permissionId: string;
-		constraintId: string | null;
-	}) => Promise<void>;
+	onRequestRemovePermission: (permission: RolePermissionAssignment) => void;
 };
 
 function formatResourceType(resourceType: string) {
@@ -51,7 +47,7 @@ export function AssignedPermissionsCard({
 	assignedPermissions,
 	isPermissionsLoading = false,
 	onUpdatePermissionEffect,
-	onRemovePermission,
+	onRequestRemovePermission,
 }: Props) {
 	return (
 		<Card>
@@ -124,13 +120,7 @@ export function AssignedPermissionsCard({
 										<Button
 											type="button"
 											variant="ghost"
-											onClick={() =>
-												onRemovePermission({
-													roleId: permission.roleId,
-													permissionId: permission.permissionId,
-													constraintId: permission.constraintId,
-												})
-											}
+											onClick={() => onRequestRemovePermission(permission)}
 										>
 											Remove
 										</Button>
