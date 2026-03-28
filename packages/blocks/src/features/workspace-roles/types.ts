@@ -1,33 +1,47 @@
-import type { roleCreateSchema } from "@prism/api/src/features/roles/schema";
-import type z from "zod";
+import type { Inputs, Outputs } from "@prism/api/src/router";
 
 export type SubmitResult = { success: true } | { error: unknown };
 
-export type WorkspaceRole = {
-	id: string;
-	name: string;
-	description: string | null;
-	scopeLevel: "workspace" | "team";
-	teamId: string | null;
-};
+type ArrayItem<T> = T extends readonly (infer Item)[] ? Item : never;
 
-export type PermissionCatalogEntry = {
-	id: string;
-	key: string;
-	resourceType: string;
-	action: string;
-	description: string | null;
-};
+type RoleListItem = ArrayItem<Outputs["role"]["list"]>;
+type PermissionCatalogListItem = ArrayItem<
+	Outputs["role"]["permissions"]["catalog"]
+>;
+type RolePermissionListItem = ArrayItem<Outputs["role"]["permissions"]["list"]>;
 
-export type RolePermissionAssignment = {
-	roleId: string;
-	permissionId: string;
-	key: string;
-	resourceType: string;
-	action: string;
-	description: string | null;
-	effect: "allow" | "deny";
-	constraintId: string | null;
-};
+type RolePermissionFromRow<Row> = Row extends {
+	rolePermissions: infer RolePermission;
+}
+	? RolePermission
+	: Row extends {
+				role_permissions: infer RolePermission;
+			}
+		? RolePermission
+		: never;
 
-export type CreateWorkspaceRoleInput = z.input<typeof roleCreateSchema>;
+type PermissionCatalogFromRow<Row> = Row extends {
+	permissionsCatalog: infer PermissionCatalog;
+}
+	? PermissionCatalog
+	: Row extends {
+				permissions_catalog: infer PermissionCatalog;
+			}
+		? PermissionCatalog
+		: never;
+
+export type WorkspaceRole = Pick<
+	RoleListItem,
+	"id" | "name" | "description" | "scopeLevel" | "teamId"
+>;
+
+export type PermissionCatalogEntry = Pick<
+	PermissionCatalogListItem,
+	"id" | "key" | "resourceType" | "action" | "description"
+>;
+
+export type RolePermissionAssignment =
+	RolePermissionFromRow<RolePermissionListItem> &
+		PermissionCatalogFromRow<RolePermissionListItem>;
+
+export type CreateWorkspaceRoleInput = Inputs["role"]["create"];
