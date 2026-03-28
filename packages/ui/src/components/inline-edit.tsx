@@ -12,6 +12,7 @@ interface InlineEditProps {
 	multiline?: boolean;
 	placeholder?: string;
 	className?: string;
+	editIconVisibility?: "empty-only" | "always";
 }
 
 export function InlineEdit({
@@ -20,6 +21,7 @@ export function InlineEdit({
 	multiline = false,
 	placeholder = "Click to edit",
 	className,
+	editIconVisibility = "empty-only",
 }: InlineEditProps) {
 	const [isEditing, setIsEditing] = useState(false);
 	const [editValue, setEditValue] = useState(value);
@@ -58,7 +60,7 @@ export function InlineEdit({
 				type="button"
 			>
 				{value || <span className="text-muted-foreground">{placeholder}</span>}
-				{!value && (
+				{(editIconVisibility === "always" || !value) && (
 					<Pencil className="size-3 opacity-0 group-hover:opacity-100" />
 				)}
 			</button>
@@ -80,7 +82,7 @@ export function InlineEdit({
 						}
 						if (e.key === "Escape") handleCancel();
 					}}
-					className="min-h-[60px] resize-none"
+					className="min-h-15 resize-none"
 				/>
 			) : (
 				<Input
