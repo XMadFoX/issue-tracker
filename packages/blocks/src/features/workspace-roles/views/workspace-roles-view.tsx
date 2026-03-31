@@ -40,7 +40,7 @@ type Props = {
 		name?: string;
 		description?: string | null;
 	}) => Promise<void>;
-	onDeleteRole: (roleId: string) => Promise<void>;
+	onDeleteRole: (roleId: string) => Promise<SubmitResult>;
 	onAssignPermission: (input: {
 		roleId: string;
 		permissionId: string;
@@ -80,8 +80,11 @@ export function WorkspaceRolesView({
 	);
 	const [pendingPermissionRemoval, setPendingPermissionRemoval] =
 		useState<RolePermissionAssignment | null>(null);
+	const [pendingRoleDeletion, setPendingRoleDeletion] =
+		useState<WorkspaceRole | null>(null);
 	const [rememberSkipChoice, setRememberSkipChoice] = useState(false);
 	const [isRemovingPermission, setIsRemovingPermission] = useState(false);
+	const [isDeletingRole, setIsDeletingRole] = useState(false);
 	const selectedRole = useMemo(
 		() => roles.find((role) => role.id === selectedRoleId) ?? null,
 		[roles, selectedRoleId],
@@ -122,6 +125,10 @@ export function WorkspaceRolesView({
 		setPendingPermissionRemoval(permission);
 	};
 
+	const handleRequestDeleteRole = (role: WorkspaceRole) => {
+		setPendingRoleDeletion(role);
+	};
+
 	const handleConfirmPermissionRemoval = async () => {
 		if (!pendingPermissionRemoval || isRemovingPermission) {
 			return;
@@ -140,6 +147,22 @@ export function WorkspaceRolesView({
 
 			setPendingPermissionRemoval(null);
 			setRememberSkipChoice(false);
+		}
+	};
+
+	const handleConfirmRoleDeletion = async () => {
+		if (!pendingRoleDeletion || isDeletingRole) {
+			return;
+		}
+
+		setIsDeletingRole(true);
+
+		const result = await onDeleteRole(pendingRoleDeletion.id);
+
+		setIsDeletingRole(false);
+
+		if ("success" in result) {
+			setPendingRoleDeletion(null);
 		}
 	};
 
@@ -180,7 +203,7 @@ export function WorkspaceRolesView({
 							assignedPermissionsCount={assignedPermissions.length}
 							hasWildcardPermission={wildcardPermission !== null}
 							onUpdateRole={onUpdateRole}
-							onDeleteRole={onDeleteRole}
+							onRequestDeleteRole={handleRequestDeleteRole}
 						/>
 						<AssignedPermissionsCard
 							assignedPermissions={assignedPermissions}
@@ -208,6 +231,26 @@ export function WorkspaceRolesView({
 					</Card>
 				)}
 			</div>
+			<ConfirmActionDialog
+				open={pendingRoleDeletion !== null}
+				onOpenChange={(open) => {
+					if (open || isDeletingRole) {
+						return;
+					}
+
+					setPendingRoleDeletion(null);
+				}}
+				title="Delete role?"
+				description={
+					pendingRoleDeletion
+						? `This will permanently delete "${pendingRoleDeletion.name}". This action cannot be undone.`
+						: "This will permanently delete this role."
+				}
+				confirmLabel="Delete role"
+				confirmingLabel="Deleting..."
+				onConfirm={handleConfirmRoleDeletion}
+				isConfirming={isDeletingRole}
+			/>
 			<ConfirmActionDialog
 				open={pendingPermissionRemoval !== null}
 				onOpenChange={(open) => {

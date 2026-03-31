@@ -24,7 +24,7 @@ type Props = {
 		name?: string;
 		description?: string | null;
 	}) => Promise<void>;
-	onDeleteRole: (roleId: string) => Promise<void>;
+	onRequestDeleteRole: (role: WorkspaceRole) => void;
 	className?: string;
 };
 
@@ -33,7 +33,7 @@ export function RoleDetailsCard({
 	assignedPermissionsCount,
 	hasWildcardPermission,
 	onUpdateRole,
-	onDeleteRole,
+	onRequestDeleteRole,
 	className,
 }: Props) {
 	return (
@@ -79,7 +79,7 @@ export function RoleDetailsCard({
 					type="button"
 					variant="destructive"
 					size="sm"
-					onClick={() => onDeleteRole(role.id)}
+					onClick={() => onRequestDeleteRole(role)}
 				>
 					Delete role
 				</Button>

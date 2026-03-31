@@ -289,10 +289,14 @@ function RouteComponent() {
 
 						await invalidateRoles();
 						toast.success("Role deleted");
+
+						return { success: true };
 					} catch (error) {
 						toast.error(
 							error instanceof Error ? error.message : "Failed to delete role",
 						);
+
+						return { error };
 					}
 				}}
 				onAssignPermission={async (input) => {
