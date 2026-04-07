@@ -25,7 +25,7 @@ export const issueCreateSchema = issueInsertSchema
 		title: z.string().min(1).max(100),
 		teamId: teamInsertSchema.shape.id,
 		assigneeId: assigneeIdSchema.optional(),
-		labelIds: z.array(labelInsertSchema.shape.id).default([]),
+		labelIds: labelInsertSchema.shape.id.array().default([]),
 	});
 
 export const issueUpdateAssigneeSchema = z.object({
@@ -54,13 +54,13 @@ export const issueDeleteSchema = z.object({
 export const issueLabelsSchema = z.object({
 	issueId: issueInsertSchema.shape.id,
 	workspaceId: workspaceInsertSchema.shape.id,
-	labelIds: z.array(labelInsertSchema.shape.id),
+	labelIds: labelInsertSchema.shape.id.array(),
 });
 
 export const issuePriorityUpdateSchema = z.object({
 	id: issueInsertSchema.shape.id,
 	workspaceId: issueInsertSchema.shape.workspaceId,
-	priorityId: issuePriorityInsertSchema.shape.id.or(z.null()),
+	priorityId: issuePriorityInsertSchema.shape.id.nullable(),
 });
 
 export const issueGetSchema = z.object({
@@ -84,7 +84,7 @@ export const issueSearchSchema = z.object({
 			teamId: teamInsertSchema.shape.id.optional(),
 			statusId: issueInsertSchema.shape.statusId.optional(),
 			assigneeId: assigneeIdSchema.optional(),
-			labelIds: z.array(labelInsertSchema.shape.id).optional(),
+			labelIds: labelInsertSchema.shape.id.array().optional(),
 			priorityId: issueInsertSchema.shape.priorityId.optional(),
 			reporterId: userInsertSchema.shape.id.optional(),
 			creatorId: userInsertSchema.shape.id.optional(),
