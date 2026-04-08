@@ -12,6 +12,10 @@ import {
 	calculateMiddleRank,
 } from "../../utils/lexorank";
 import { rebalanceStatusIssues } from "../../utils/rebalancing";
+import {
+	type IssueHierarchyValidationErrorCode,
+	validateIssueParentAssignment,
+} from "./hierarchy";
 import { issuePublisher } from "./publisher";
 import { getIssueWithRelations, searchIssues } from "./queries";
 import {
@@ -24,6 +28,7 @@ import {
 	issuePriorityUpdateSchema,
 	issueSearchSchema,
 	issueUpdateAssigneeSchema,
+	issueUpdateParentSchema,
 	issueUpdateSchema,
 } from "./schema";
 import { buildIssueSearchFields } from "./search-fields";
@@ -33,11 +38,36 @@ const commonErrors = {
 	NOT_FOUND: {},
 };
 
+const hierarchyErrors = {
+	INVALID_PARENT: {},
+	HIERARCHY_LOOP: {},
+	HIERARCHY_DEPTH_EXCEEDED: {},
+};
+
 const updateDeleteErrors = {
 	...commonErrors,
+	...hierarchyErrors,
 	INVALID_MOVE: {},
 	RANK_EXHAUSTED: {},
 };
+
+function throwHierarchyError(
+	errors: {
+		INVALID_PARENT: () => never;
+		HIERARCHY_LOOP: () => never;
+		HIERARCHY_DEPTH_EXCEEDED: () => never;
+	},
+	code: IssueHierarchyValidationErrorCode,
+): never {
+	switch (code) {
+		case "INVALID_PARENT":
+			throw errors.INVALID_PARENT();
+		case "HIERARCHY_LOOP":
+			throw errors.HIERARCHY_LOOP();
+		case "HIERARCHY_DEPTH_EXCEEDED":
+			throw errors.HIERARCHY_DEPTH_EXCEEDED();
+	}
+}
 
 async function getIssueTeamId(id: string, workspaceId: string) {
 	const [row] = await db
@@ -122,7 +152,10 @@ const getIssue = authedRouter
 
 const createIssue = authedRouter
 	.input(issueCreateSchema)
-	.errors(commonErrors)
+	.errors({
+		...commonErrors,
+		...hierarchyErrors,
+	})
 	.handler(async ({ context, input, errors }) => {
 		const { workspaceId, teamId, labelIds } = input;
 		const allowed = await isAllowed({
@@ -132,6 +165,15 @@ const createIssue = authedRouter
 			permissionKey: "issue:create",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
+
+		const hierarchyValidation = await validateIssueParentAssignment(db, {
+			workspaceId,
+			teamId,
+			parentIssueId: input.parentIssueId,
+		});
+		if (!hierarchyValidation.ok) {
+			throwHierarchyError(errors, hierarchyValidation.code);
+		}
 
 		const [maxRow] = await db
 			.select({ maxNumber: sql<number>`max(${issue.number})` })
@@ -265,6 +307,61 @@ const updateIssue = authedRouter
 		const [updated] = await db
 			.update(issue)
 			.set(values)
+			.where(
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			)
+			.returning();
+		if (!updated) throw errors.NOT_FOUND();
+
+		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
+		if (freshIssue) {
+			await issuePublisher.publish("issue:changed", {
+				type: "update",
+				workspaceId: input.workspaceId,
+				teamId: freshIssue.teamId,
+				issue: freshIssue,
+			});
+		}
+
+		return updated;
+	});
+
+const updateParent = authedRouter
+	.input(issueUpdateParentSchema)
+	.errors(updateDeleteErrors)
+	.handler(async ({ context, input, errors }) => {
+		const [existingIssue] = await db
+			.select({
+				teamId: issue.teamId,
+			})
+			.from(issue)
+			.where(
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			)
+			.limit(1);
+		if (!existingIssue) throw errors.NOT_FOUND();
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId: existingIssue.teamId,
+			permissionKey: "issue:update",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED();
+
+		const hierarchyValidation = await validateIssueParentAssignment(db, {
+			workspaceId: input.workspaceId,
+			teamId: existingIssue.teamId,
+			issueId: input.id,
+			parentIssueId: input.parentIssueId,
+		});
+		if (!hierarchyValidation.ok) {
+			throwHierarchyError(errors, hierarchyValidation.code);
+		}
+
+		const [updated] = await db
+			.update(issue)
+			.set({ parentIssueId: input.parentIssueId })
 			.where(
 				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
 			)
@@ -706,6 +803,7 @@ export const issueRouter = {
 	get: getIssue,
 	create: createIssue,
 	update: updateIssue,
+	updateParent,
 	delete: deleteIssue,
 	move: moveIssue,
 	updatePriority,
