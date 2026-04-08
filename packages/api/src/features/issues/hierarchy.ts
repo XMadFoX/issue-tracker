@@ -1,6 +1,6 @@
 import type { db } from "db";
 import { issue } from "db/features/tracker/issues.schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 type DbExecutor =
 	| typeof db
@@ -31,6 +31,15 @@ type ValidateIssueParentAssignmentInput = {
 	parentIssueId?: string | null;
 	issueId?: string;
 };
+
+export async function acquireIssueHierarchyLock(
+	executor: DbExecutor,
+	input: Pick<ValidateIssueParentAssignmentInput, "workspaceId" | "teamId">,
+) {
+	await executor.execute(
+		sql`select pg_advisory_xact_lock(hashtext(${`issue-hierarchy:${input.workspaceId}:${input.teamId}`}))`,
+	);
+}
 
 async function getAncestorIds(
 	executor: DbExecutor,

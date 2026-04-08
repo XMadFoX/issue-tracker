@@ -13,6 +13,7 @@ import {
 } from "../../utils/lexorank";
 import { rebalanceStatusIssues } from "../../utils/rebalancing";
 import {
+	acquireIssueHierarchyLock,
 	type IssueHierarchyValidationErrorCode,
 	validateIssueParentAssignment,
 } from "./hierarchy";
@@ -53,9 +54,9 @@ const updateDeleteErrors = {
 
 function throwHierarchyError(
 	errors: {
-		INVALID_PARENT: () => never;
-		HIERARCHY_LOOP: () => never;
-		HIERARCHY_DEPTH_EXCEEDED: () => never;
+		INVALID_PARENT: () => unknown;
+		HIERARCHY_LOOP: () => unknown;
+		HIERARCHY_DEPTH_EXCEEDED: () => unknown;
 	},
 	code: IssueHierarchyValidationErrorCode,
 ): never {
@@ -166,15 +167,6 @@ const createIssue = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
-		const hierarchyValidation = await validateIssueParentAssignment(db, {
-			workspaceId,
-			teamId,
-			parentIssueId: input.parentIssueId,
-		});
-		if (!hierarchyValidation.ok) {
-			throwHierarchyError(errors, hierarchyValidation.code);
-		}
-
 		const [maxRow] = await db
 			.select({ maxNumber: sql<number>`max(${issue.number})` })
 			.from(issue)
@@ -198,6 +190,17 @@ const createIssue = authedRouter
 				const sortOrder = calculateAfterRank(maxSortRow?.maxSort || "a00");
 
 				const created = await db.transaction(async (tx) => {
+					await acquireIssueHierarchyLock(tx, { workspaceId, teamId });
+
+					const hierarchyValidation = await validateIssueParentAssignment(tx, {
+						workspaceId,
+						teamId,
+						parentIssueId: input.parentIssueId,
+					});
+					if (!hierarchyValidation.ok) {
+						throwHierarchyError(errors, hierarchyValidation.code);
+					}
+
 					const [newIssue] = await tx
 						.insert(issue)
 						.values({
@@ -349,24 +352,46 @@ const updateParent = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
-		const hierarchyValidation = await validateIssueParentAssignment(db, {
-			workspaceId: input.workspaceId,
-			teamId: existingIssue.teamId,
-			issueId: input.id,
-			parentIssueId: input.parentIssueId,
-		});
-		if (!hierarchyValidation.ok) {
-			throwHierarchyError(errors, hierarchyValidation.code);
-		}
+		const updated = await db.transaction(async (tx) => {
+			await acquireIssueHierarchyLock(tx, {
+				workspaceId: input.workspaceId,
+				teamId: existingIssue.teamId,
+			});
 
-		const [updated] = await db
-			.update(issue)
-			.set({ parentIssueId: input.parentIssueId })
-			.where(
-				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
-			)
-			.returning();
-		if (!updated) throw errors.NOT_FOUND();
+			const [lockedIssue] = await tx
+				.select({
+					id: issue.id,
+					teamId: issue.teamId,
+				})
+				.from(issue)
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
+				.limit(1)
+				.for("update");
+			if (!lockedIssue) throw errors.NOT_FOUND();
+
+			const hierarchyValidation = await validateIssueParentAssignment(tx, {
+				workspaceId: input.workspaceId,
+				teamId: lockedIssue.teamId,
+				issueId: input.id,
+				parentIssueId: input.parentIssueId,
+			});
+			if (!hierarchyValidation.ok) {
+				throwHierarchyError(errors, hierarchyValidation.code);
+			}
+
+			const [updatedIssue] = await tx
+				.update(issue)
+				.set({ parentIssueId: input.parentIssueId })
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
+				.returning();
+			if (!updatedIssue) throw errors.NOT_FOUND();
+
+			return updatedIssue;
+		});
 
 		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
 		if (freshIssue) {
