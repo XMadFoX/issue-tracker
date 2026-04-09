@@ -77,7 +77,8 @@ async function getAncestorIds(
 					eq(issue.workspaceId, input.workspaceId),
 				),
 			)
-			.limit(1);
+			.limit(1)
+			.for("update");
 
 		if (!currentIssue || currentIssue.teamId !== input.teamId) {
 			return { ok: false, code: "INVALID_PARENT" };

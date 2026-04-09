@@ -52,6 +52,10 @@ const updateDeleteErrors = {
 	RANK_EXHAUSTED: {},
 };
 
+function isRankExhaustedError(error: unknown): error is Error {
+	return error instanceof Error && error.message.includes("RANK_EXHAUSTED");
+}
+
 function throwHierarchyError(
 	errors: {
 		INVALID_PARENT: () => unknown;
@@ -241,6 +245,10 @@ const createIssue = authedRouter
 
 				return created;
 			} catch (error) {
+				if (!isRankExhaustedError(error)) {
+					throw error;
+				}
+
 				if (attempt === 0) {
 					await rebalanceStatusIssues(input.statusId);
 				} else {
@@ -759,9 +767,7 @@ const moveIssue = authedRouter
 						console.debug("Error details (stringify failed):", error);
 					}
 				}
-				if (
-					!(error instanceof Error && error.message.includes("RANK_EXHAUSTED"))
-				) {
+				if (!isRankExhaustedError(error)) {
 					throw error;
 				}
 
