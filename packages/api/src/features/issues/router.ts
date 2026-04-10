@@ -429,12 +429,36 @@ const deleteIssue = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
-		const [deleted] = await db
-			.delete(issue)
-			.where(
-				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
-			)
-			.returning();
+		const { deleted, affectedChildIds } = await db.transaction(async (tx) => {
+			await acquireIssueHierarchyLock(tx, {
+				workspaceId: input.workspaceId,
+				teamId,
+			});
+
+			const childRows = await tx
+				.select({ id: issue.id })
+				.from(issue)
+				.where(
+					and(
+						eq(issue.workspaceId, input.workspaceId),
+						eq(issue.parentIssueId, input.id),
+					),
+				)
+				.for("update");
+
+			const [deletedIssue] = await tx
+				.delete(issue)
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
+				.returning();
+			if (!deletedIssue) throw errors.NOT_FOUND();
+
+			return {
+				deleted: deletedIssue,
+				affectedChildIds: childRows.map((row) => row.id),
+			};
+		});
 		if (!deleted) throw errors.NOT_FOUND();
 
 		await issuePublisher.publish("issue:changed", {
@@ -443,6 +467,23 @@ const deleteIssue = authedRouter
 			teamId: deleted.teamId,
 			issueId: deleted.id,
 		});
+
+		const affectedChildren = await Promise.all(
+			affectedChildIds.map((childId) =>
+				getIssueWithRelations(childId, input.workspaceId),
+			),
+		);
+
+		for (const childIssue of affectedChildren) {
+			if (!childIssue) continue;
+
+			await issuePublisher.publish("issue:changed", {
+				type: "update",
+				workspaceId: input.workspaceId,
+				teamId: childIssue.teamId,
+				issue: childIssue,
+			});
+		}
 
 		return deleted;
 	});
