@@ -34,6 +34,12 @@ export const issueUpdateAssigneeSchema = z.object({
 	assigneeId: assigneeIdSchema,
 });
 
+export const issueUpdateParentSchema = z.object({
+	id: issueInsertSchema.shape.id,
+	workspaceId: workspaceInsertSchema.shape.id,
+	parentIssueId: issueInsertSchema.shape.id.nullable(),
+});
+
 export const issueListSchema = z.object({
 	workspaceId: workspaceInsertSchema.shape.id,
 	teamId: teamInsertSchema.shape.id.optional(),
@@ -41,10 +47,16 @@ export const issueListSchema = z.object({
 	offset: z.number().min(0).default(0),
 });
 
-export const issueUpdateSchema = issueInsertSchema.partial().required({
-	id: true,
-	workspaceId: true,
-});
+export const issueUpdateSchema = issueInsertSchema
+	.partial()
+	.omit({
+		parentIssueId: true,
+		teamId: true,
+	})
+	.required({
+		id: true,
+		workspaceId: true,
+	});
 
 export const issueDeleteSchema = z.object({
 	id: z.string(),

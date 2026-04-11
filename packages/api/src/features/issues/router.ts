@@ -12,6 +12,11 @@ import {
 	calculateMiddleRank,
 } from "../../utils/lexorank";
 import { rebalanceStatusIssues } from "../../utils/rebalancing";
+import {
+	acquireIssueHierarchyLock,
+	type IssueHierarchyValidationErrorCode,
+	validateIssueParentAssignment,
+} from "./hierarchy";
 import { issuePublisher } from "./publisher";
 import { getIssueWithRelations, searchIssues } from "./queries";
 import {
@@ -24,6 +29,7 @@ import {
 	issuePriorityUpdateSchema,
 	issueSearchSchema,
 	issueUpdateAssigneeSchema,
+	issueUpdateParentSchema,
 	issueUpdateSchema,
 } from "./schema";
 import { buildIssueSearchFields } from "./search-fields";
@@ -33,11 +39,40 @@ const commonErrors = {
 	NOT_FOUND: {},
 };
 
+const hierarchyErrors = {
+	INVALID_PARENT: {},
+	HIERARCHY_LOOP: {},
+	HIERARCHY_DEPTH_EXCEEDED: {},
+};
+
 const updateDeleteErrors = {
 	...commonErrors,
+	...hierarchyErrors,
 	INVALID_MOVE: {},
 	RANK_EXHAUSTED: {},
 };
+
+function isRankExhaustedError(error: unknown): error is Error {
+	return error instanceof Error && error.message.includes("RANK_EXHAUSTED");
+}
+
+function throwHierarchyError(
+	errors: {
+		INVALID_PARENT: () => unknown;
+		HIERARCHY_LOOP: () => unknown;
+		HIERARCHY_DEPTH_EXCEEDED: () => unknown;
+	},
+	code: IssueHierarchyValidationErrorCode,
+): never {
+	switch (code) {
+		case "INVALID_PARENT":
+			throw errors.INVALID_PARENT();
+		case "HIERARCHY_LOOP":
+			throw errors.HIERARCHY_LOOP();
+		case "HIERARCHY_DEPTH_EXCEEDED":
+			throw errors.HIERARCHY_DEPTH_EXCEEDED();
+	}
+}
 
 async function getIssueTeamId(id: string, workspaceId: string) {
 	const [row] = await db
@@ -122,7 +157,10 @@ const getIssue = authedRouter
 
 const createIssue = authedRouter
 	.input(issueCreateSchema)
-	.errors(commonErrors)
+	.errors({
+		...commonErrors,
+		...hierarchyErrors,
+	})
 	.handler(async ({ context, input, errors }) => {
 		const { workspaceId, teamId, labelIds } = input;
 		const allowed = await isAllowed({
@@ -156,6 +194,17 @@ const createIssue = authedRouter
 				const sortOrder = calculateAfterRank(maxSortRow?.maxSort || "a00");
 
 				const created = await db.transaction(async (tx) => {
+					await acquireIssueHierarchyLock(tx, { workspaceId, teamId });
+
+					const hierarchyValidation = await validateIssueParentAssignment(tx, {
+						workspaceId,
+						teamId,
+						parentIssueId: input.parentIssueId,
+					});
+					if (!hierarchyValidation.ok) {
+						throwHierarchyError(errors, hierarchyValidation.code);
+					}
+
 					const [newIssue] = await tx
 						.insert(issue)
 						.values({
@@ -196,6 +245,10 @@ const createIssue = authedRouter
 
 				return created;
 			} catch (error) {
+				if (!isRankExhaustedError(error)) {
+					throw error;
+				}
+
 				if (attempt === 0) {
 					await rebalanceStatusIssues(input.statusId);
 				} else {
@@ -284,6 +337,83 @@ const updateIssue = authedRouter
 		return updated;
 	});
 
+const updateParent = authedRouter
+	.input(issueUpdateParentSchema)
+	.errors(updateDeleteErrors)
+	.handler(async ({ context, input, errors }) => {
+		const [existingIssue] = await db
+			.select({
+				teamId: issue.teamId,
+			})
+			.from(issue)
+			.where(
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			)
+			.limit(1);
+		if (!existingIssue) throw errors.NOT_FOUND();
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId: existingIssue.teamId,
+			permissionKey: "issue:update",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED();
+
+		const updated = await db.transaction(async (tx) => {
+			await acquireIssueHierarchyLock(tx, {
+				workspaceId: input.workspaceId,
+				teamId: existingIssue.teamId,
+			});
+
+			const [lockedIssue] = await tx
+				.select({
+					id: issue.id,
+					teamId: issue.teamId,
+				})
+				.from(issue)
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
+				.limit(1)
+				.for("update");
+			if (!lockedIssue) throw errors.NOT_FOUND();
+
+			const hierarchyValidation = await validateIssueParentAssignment(tx, {
+				workspaceId: input.workspaceId,
+				teamId: lockedIssue.teamId,
+				issueId: input.id,
+				parentIssueId: input.parentIssueId,
+			});
+			if (!hierarchyValidation.ok) {
+				throwHierarchyError(errors, hierarchyValidation.code);
+			}
+
+			const [updatedIssue] = await tx
+				.update(issue)
+				.set({ parentIssueId: input.parentIssueId })
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
+				.returning();
+			if (!updatedIssue) throw errors.NOT_FOUND();
+
+			return updatedIssue;
+		});
+
+		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
+		if (freshIssue) {
+			await issuePublisher.publish("issue:changed", {
+				type: "update",
+				workspaceId: input.workspaceId,
+				teamId: freshIssue.teamId,
+				issue: freshIssue,
+			});
+		}
+
+		return updated;
+	});
+
 const deleteIssue = authedRouter
 	.input(issueDeleteSchema)
 	.errors(updateDeleteErrors)
@@ -299,12 +429,36 @@ const deleteIssue = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
-		const [deleted] = await db
-			.delete(issue)
-			.where(
-				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
-			)
-			.returning();
+		const { deleted, affectedChildIds } = await db.transaction(async (tx) => {
+			await acquireIssueHierarchyLock(tx, {
+				workspaceId: input.workspaceId,
+				teamId,
+			});
+
+			const childRows = await tx
+				.select({ id: issue.id })
+				.from(issue)
+				.where(
+					and(
+						eq(issue.workspaceId, input.workspaceId),
+						eq(issue.parentIssueId, input.id),
+					),
+				)
+				.for("update");
+
+			const [deletedIssue] = await tx
+				.delete(issue)
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
+				.returning();
+			if (!deletedIssue) throw errors.NOT_FOUND();
+
+			return {
+				deleted: deletedIssue,
+				affectedChildIds: childRows.map((row) => row.id),
+			};
+		});
 		if (!deleted) throw errors.NOT_FOUND();
 
 		await issuePublisher.publish("issue:changed", {
@@ -313,6 +467,23 @@ const deleteIssue = authedRouter
 			teamId: deleted.teamId,
 			issueId: deleted.id,
 		});
+
+		const affectedChildren = await Promise.all(
+			affectedChildIds.map((childId) =>
+				getIssueWithRelations(childId, input.workspaceId),
+			),
+		);
+
+		for (const childIssue of affectedChildren) {
+			if (!childIssue) continue;
+
+			await issuePublisher.publish("issue:changed", {
+				type: "update",
+				workspaceId: input.workspaceId,
+				teamId: childIssue.teamId,
+				issue: childIssue,
+			});
+		}
 
 		return deleted;
 	});
@@ -637,9 +808,7 @@ const moveIssue = authedRouter
 						console.debug("Error details (stringify failed):", error);
 					}
 				}
-				if (
-					!(error instanceof Error && error.message.includes("RANK_EXHAUSTED"))
-				) {
+				if (!isRankExhaustedError(error)) {
 					throw error;
 				}
 
@@ -706,6 +875,7 @@ export const issueRouter = {
 	get: getIssue,
 	create: createIssue,
 	update: updateIssue,
+	updateParent,
 	delete: deleteIssue,
 	move: moveIssue,
 	updatePriority,
