@@ -51,6 +51,7 @@ export const issueUpdateSchema = issueInsertSchema
 	.partial()
 	.omit({
 		parentIssueId: true,
+		teamId: true,
 	})
 	.required({
 		id: true,
