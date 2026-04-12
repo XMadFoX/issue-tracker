@@ -7,7 +7,6 @@ import {
 	CommandShortcut,
 } from "@prism/ui/components/command";
 import { Search } from "lucide-react";
-import { useMemo } from "react";
 
 export type PaletteIssueSearchInput = {
 	workspaceId: string;
@@ -38,18 +37,20 @@ type PaletteContentProps = {
 };
 
 const MIN_QUERY_LENGTH = 2;
+const EMPTY_ISSUES: Array<PaletteIssueSearchResult> = [];
+const ignoreQueryChange = () => {};
 
 export function PaletteContent({
 	workspaceId,
-	query,
-	onQueryChange,
-	issues,
-	isSearching,
-	hasSearched,
+	query = "",
+	onQueryChange = ignoreQueryChange,
+	issues = EMPTY_ISSUES,
+	isSearching = false,
+	hasSearched = false,
 	minQueryLength = MIN_QUERY_LENGTH,
 	onIssueSelect,
 }: PaletteContentProps) {
-	const normalizedQuery = useMemo(() => query.trim(), [query]);
+	const normalizedQuery = query.trim();
 	const canSearch = Boolean(
 		workspaceId && normalizedQuery.length >= minQueryLength,
 	);

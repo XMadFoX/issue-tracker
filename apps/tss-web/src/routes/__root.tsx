@@ -1,7 +1,4 @@
-import {
-	PaletteDialog,
-	PaletteDialogProvider,
-} from "@prism/blocks/features/search/palette-dialog";
+import { PaletteDialogProvider } from "@prism/blocks/features/search/palette-dialog";
 import { Toaster } from "@prism/ui/components/sonner";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import type { QueryClient } from "@tanstack/react-query";
@@ -11,6 +8,7 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
+import { AppPaletteDialog } from "@/components/app-palette-dialog";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import appCss from "../styles.css?url";
 
@@ -52,7 +50,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 			<body className="min-h-screen flex flex-col">
 				<PaletteDialogProvider>
 					{children}
-					<PaletteDialog />
+					<AppPaletteDialog />
 					<Toaster />
 					<TanStackDevtools
 						config={{

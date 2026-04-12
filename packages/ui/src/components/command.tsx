@@ -26,19 +26,28 @@ function Command({
 	);
 }
 
+type CommandDialogProps = React.ComponentProps<typeof Dialog> & {
+	title?: string;
+	description?: string;
+	className?: string;
+	showCloseButton?: boolean;
+	commandProps?: Omit<
+		React.ComponentProps<typeof CommandPrimitive>,
+		"children"
+	>;
+};
+
 function CommandDialog({
 	title = "Command Palette",
 	description = "Search for a command to run...",
 	children,
 	className,
 	showCloseButton = true,
+	commandProps,
 	...props
-}: React.ComponentProps<typeof Dialog> & {
-	title?: string;
-	description?: string;
-	className?: string;
-	showCloseButton?: boolean;
-}) {
+}: CommandDialogProps) {
+	const resolvedCommandProps = commandProps ?? {};
+
 	return (
 		<Dialog {...props}>
 			<DialogHeader className="sr-only">
@@ -49,7 +58,13 @@ function CommandDialog({
 				className={cn("overflow-hidden p-0", className)}
 				showCloseButton={showCloseButton}
 			>
-				<Command className="[&_[cmdk-group-heading]]:text-muted-foreground **:data-[slot=command-input-wrapper]:h-12 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
+				<Command
+					{...resolvedCommandProps}
+					className={cn(
+						"[&_[cmdk-group-heading]]:text-muted-foreground **:data-[slot=command-input-wrapper]:h-12 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5",
+						commandProps?.className,
+					)}
+				>
 					{children}
 				</Command>
 			</DialogContent>
