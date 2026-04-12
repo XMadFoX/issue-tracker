@@ -1,10 +1,12 @@
 import { PaletteDialog } from "@prism/blocks/features/search/palette-dialog";
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { orpc } from "src/orpc/client";
 
 const MIN_PALETTE_QUERY_LENGTH = 2;
+const PALETTE_QUERY_DEBOUNCE_MS = 300;
 
 export function AppPaletteDialog() {
 	const [query, setQuery] = useState("");
@@ -17,6 +19,13 @@ export function AppPaletteDialog() {
 	const workspaceSlug = issuesRouteParams ? issuesRouteParams.slug : undefined;
 	const teamSlug = issuesRouteParams ? issuesRouteParams.teamSlug : undefined;
 	const normalizedQuery = query.trim();
+	const [debouncedQuery, debouncer] = useDebouncedValue(
+		normalizedQuery,
+		{ wait: PALETTE_QUERY_DEBOUNCE_MS },
+		(state) => ({ isPending: state.isPending }),
+	);
+	const canSearch = debouncedQuery.length >= MIN_PALETTE_QUERY_LENGTH;
+	const isDebouncing = debouncer.state.isPending;
 
 	const workspace = useQuery(
 		orpc.workspace.getBySlug.queryOptions({
@@ -38,12 +47,10 @@ export function AppPaletteDialog() {
 	const searchResults = useQuery(
 		orpc.issue.search.queryOptions({
 			input:
-				workspaceId &&
-				teamId &&
-				normalizedQuery.length >= MIN_PALETTE_QUERY_LENGTH
+				workspaceId && teamId && canSearch
 					? {
 							workspaceId,
-							query: normalizedQuery,
+							query: debouncedQuery,
 							mode: "hybrid",
 							filters: { teamId },
 							options: { includeTeam: true },
@@ -58,8 +65,8 @@ export function AppPaletteDialog() {
 			workspaceId={workspaceId}
 			query={query}
 			onQueryChange={setQuery}
-			issues={searchResults.data?.issues ?? []}
-			isSearching={searchResults.isFetching}
+			issues={isDebouncing ? [] : (searchResults.data?.issues ?? [])}
+			isSearching={isDebouncing || searchResults.isFetching}
 			hasSearched={searchResults.isFetched}
 			minQueryLength={MIN_PALETTE_QUERY_LENGTH}
 			onIssueSelect={(issueId) => {
