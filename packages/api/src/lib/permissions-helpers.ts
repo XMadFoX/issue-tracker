@@ -1,11 +1,18 @@
 import { db } from "db";
 import {
+	entityAttributes,
 	permissionsCatalog,
+	policyConstraints,
+	roleAssignments,
 	roleDefinitions,
 	rolePermissions,
 } from "db/features/abac/abac.schema";
-import { workspaceMembership } from "db/features/tracker/tracker.schema";
-import { and, eq, isNull } from "drizzle-orm";
+import {
+	team,
+	teamMembership,
+	workspaceMembership,
+} from "db/features/tracker/tracker.schema";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 const DEFAULT_MAX_DEPTH = 2;
@@ -111,6 +118,81 @@ export function buildRolePermWhere(
 		conditions.push(isNull(rolePermissions.constraintId));
 	}
 	return and(...conditions);
+}
+
+function mapEntityAttributes(rows: Array<{ key: string; value: unknown }>) {
+	const attributes: Record<string, unknown> = {};
+	for (const row of rows) {
+		attributes[row.key] = row.value;
+	}
+	return attributes;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toAttributes(value: unknown) {
+	return isRecord(value) ? value : {};
+}
+
+function predicateAllows(
+	predicateJson: unknown,
+	subjectAttributes: Record<string, unknown>,
+) {
+	if (predicateJson == null) return true;
+	if (!isRecord(predicateJson)) return false;
+	if (predicateJson.always === true) return true;
+
+	const subject = predicateJson.subject;
+	if (!isRecord(subject)) return false;
+
+	const attributeEquals = subject.attribute_equals;
+	if (!isRecord(attributeEquals)) return false;
+
+	return Object.entries(attributeEquals).every(
+		([key, value]) => subjectAttributes[key] === value,
+	);
+}
+
+function permissionMatchesKey(
+	permission: {
+		key: string | null;
+		resourceType: string | null;
+		action: string | null;
+	},
+	permissionKey: string,
+) {
+	const [reqResource, reqAction] = permissionKey.split(":");
+	if (!reqResource || !reqAction) return false;
+
+	const matchesByKey = (() => {
+		if (!permission.key) return false;
+		if (permission.key === permissionKey) return true;
+		if (permission.key === "*") return true;
+		if (!permission.key.includes(":")) return false;
+
+		const [resource, action] = permission.key.split(":");
+		if (resource === "*" && action === "*") return true;
+		if (resource === "*" && action === reqAction) return true;
+		if (resource === reqResource && action === "*") return true;
+		return resource === reqResource && action === reqAction;
+	})();
+
+	const matchesByColumns = (() => {
+		if (!permission.resourceType || !permission.action) return false;
+		if (permission.resourceType === "*" && permission.action === "*")
+			return true;
+		if (permission.resourceType === "*" && permission.action === reqAction)
+			return true;
+		if (permission.resourceType === reqResource && permission.action === "*")
+			return true;
+		return (
+			permission.resourceType === reqResource && permission.action === reqAction
+		);
+	})();
+
+	return matchesByKey || matchesByColumns;
 }
 
 // TODO: cover with tests
