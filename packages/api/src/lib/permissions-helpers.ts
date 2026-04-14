@@ -195,6 +195,224 @@ function permissionMatchesKey(
 	return matchesByKey || matchesByColumns;
 }
 
+export async function getReadableTeamIdsForPermission({
+	userId,
+	workspaceId,
+	permissionKey,
+}: {
+	userId: string;
+	workspaceId: string;
+	permissionKey: string;
+}) {
+	const workspaceTeams = await db
+		.select({ id: team.id })
+		.from(team)
+		.where(eq(team.workspaceId, workspaceId));
+
+	const workspaceTeamIds = workspaceTeams.map(
+		(workspaceTeam) => workspaceTeam.id,
+	);
+	if (workspaceTeamIds.length === 0) return [];
+
+	const [workspaceMembershipRow] = await db
+		.select({
+			roleId: workspaceMembership.roleId,
+			attributes: workspaceMembership.attributes,
+		})
+		.from(workspaceMembership)
+		.where(
+			and(
+				eq(workspaceMembership.userId, userId),
+				eq(workspaceMembership.workspaceId, workspaceId),
+				eq(workspaceMembership.status, "active"),
+			),
+		)
+		.limit(1);
+
+	const teamMembershipRows = await db
+		.select({
+			teamId: teamMembership.teamId,
+			roleId: teamMembership.roleId,
+			attributes: teamMembership.attributes,
+		})
+		.from(teamMembership)
+		.innerJoin(team, eq(teamMembership.teamId, team.id))
+		.where(
+			and(
+				eq(teamMembership.userId, userId),
+				eq(team.workspaceId, workspaceId),
+				eq(teamMembership.status, "active"),
+			),
+		);
+
+	const teamAssignmentRows = await db
+		.select({
+			teamId: roleAssignments.teamId,
+			roleId: roleAssignments.roleId,
+			attributes: roleAssignments.attributes,
+		})
+		.from(roleAssignments)
+		.where(
+			and(
+				eq(roleAssignments.userId, userId),
+				eq(roleAssignments.workspaceId, workspaceId),
+				isNotNull(roleAssignments.teamId),
+			),
+		);
+
+	const roleIdsByTeamId = new Map<string, Set<string>>();
+	const teamMembershipAttributesByTeamId = new Map<
+		string,
+		Record<string, unknown>
+	>();
+	const assignmentAttributesByTeamId = new Map<
+		string,
+		Record<string, unknown>
+	>();
+
+	for (const teamId of workspaceTeamIds) {
+		const roleIds = new Set<string>();
+		if (workspaceMembershipRow?.roleId)
+			roleIds.add(workspaceMembershipRow.roleId);
+		roleIdsByTeamId.set(teamId, roleIds);
+	}
+
+	for (const membership of teamMembershipRows) {
+		roleIdsByTeamId.get(membership.teamId)?.add(membership.roleId);
+		teamMembershipAttributesByTeamId.set(
+			membership.teamId,
+			toAttributes(membership.attributes),
+		);
+	}
+
+	for (const assignment of teamAssignmentRows) {
+		if (!assignment.teamId) continue;
+
+		roleIdsByTeamId.get(assignment.teamId)?.add(assignment.roleId);
+		assignmentAttributesByTeamId.set(assignment.teamId, {
+			...(assignmentAttributesByTeamId.get(assignment.teamId) ?? {}),
+			...toAttributes(assignment.attributes),
+		});
+	}
+
+	const roleIds = Array.from(
+		new Set(
+			Array.from(roleIdsByTeamId.values()).flatMap((teamRoleIds) =>
+				Array.from(teamRoleIds),
+			),
+		),
+	);
+	if (roleIds.length === 0) return [];
+
+	const permissionRows = await db
+		.select({
+			roleId: rolePermissions.roleId,
+			effect: rolePermissions.effect,
+			key: permissionsCatalog.key,
+			resourceType: permissionsCatalog.resourceType,
+			action: permissionsCatalog.action,
+			predicateJson: policyConstraints.predicateJson,
+		})
+		.from(rolePermissions)
+		.where(inArray(rolePermissions.roleId, roleIds))
+		.leftJoin(
+			permissionsCatalog,
+			eq(rolePermissions.permissionId, permissionsCatalog.id),
+		)
+		.leftJoin(
+			policyConstraints,
+			eq(rolePermissions.constraintId, policyConstraints.id),
+		);
+
+	const matchingPermissions = permissionRows.filter((permission) =>
+		permissionMatchesKey(permission, permissionKey),
+	);
+	if (matchingPermissions.length === 0) return [];
+
+	const hasConstrainedPermissions = matchingPermissions.some(
+		(permission) => permission.predicateJson != null,
+	);
+	const attributeRows = hasConstrainedPermissions
+		? await db
+				.select({
+					entityType: entityAttributes.entityType,
+					entityId: entityAttributes.entityId,
+					key: entityAttributes.key,
+					value: entityAttributes.value,
+				})
+				.from(entityAttributes)
+				.where(
+					and(
+						inArray(entityAttributes.entityType, ["user", "workspace", "team"]),
+						inArray(entityAttributes.entityId, [
+							userId,
+							workspaceId,
+							...workspaceTeamIds,
+						]),
+					),
+				)
+		: [];
+
+	const userAttributes = mapEntityAttributes(
+		attributeRows.filter(
+			(row) => row.entityType === "user" && row.entityId === userId,
+		),
+	);
+	const workspaceAttributes = mapEntityAttributes(
+		attributeRows.filter(
+			(row) => row.entityType === "workspace" && row.entityId === workspaceId,
+		),
+	);
+	const teamAttributesByTeamId = new Map<string, Record<string, unknown>>();
+	for (const teamId of workspaceTeamIds) {
+		teamAttributesByTeamId.set(
+			teamId,
+			mapEntityAttributes(
+				attributeRows.filter(
+					(row) => row.entityType === "team" && row.entityId === teamId,
+				),
+			),
+		);
+	}
+
+	const readableTeamIds: Array<string> = [];
+	for (const teamId of workspaceTeamIds) {
+		const teamRoleIds = roleIdsByTeamId.get(teamId);
+		if (!teamRoleIds || teamRoleIds.size === 0) continue;
+
+		const subjectAttributes = {
+			...toAttributes(workspaceMembershipRow?.attributes),
+			...(teamMembershipAttributesByTeamId.get(teamId) ?? {}),
+			...(assignmentAttributesByTeamId.get(teamId) ?? {}),
+			...userAttributes,
+			...workspaceAttributes,
+			...(teamAttributesByTeamId.get(teamId) ?? {}),
+		};
+
+		let hasAllow = false;
+		let hasDeny = false;
+
+		for (const permission of matchingPermissions) {
+			if (!teamRoleIds.has(permission.roleId)) continue;
+			if (!predicateAllows(permission.predicateJson, subjectAttributes))
+				continue;
+
+			if (permission.effect === "deny") {
+				hasDeny = true;
+				break;
+			}
+
+			if (permission.effect === "allow") {
+				hasAllow = true;
+			}
+		}
+
+		if (hasAllow && !hasDeny) readableTeamIds.push(teamId);
+	}
+
+	return readableTeamIds;
+}
+
 // TODO: cover with tests
 // ! high severity
 /**
