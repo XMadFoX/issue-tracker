@@ -1,9 +1,11 @@
 import { db } from "db";
 import { issue, issueLabel } from "db/features/tracker/issues.schema";
+import { team } from "db/features/tracker/tracker.schema";
 import { and, eq, exists, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { env } from "../../env";
 import { embedText } from "../../lib/ai";
+import { parseIssueReferenceSearch } from "./reference-search";
 import type { issueSearchSchema } from "./schema";
 
 export async function getIssueWithRelations(id: string, workspaceId: string) {
@@ -47,7 +49,15 @@ export type SearchIssueResult = IssueWithRelations & {
 };
 
 const EMBEDDINGS_ENABLED = env.ENABLE_EMBEDDINGS;
-export async function searchIssues(input: z.infer<typeof issueSearchSchema>) {
+
+type IssueSearchScope = {
+	accessibleTeamIds?: Array<string>;
+};
+
+export async function searchIssues(
+	input: z.infer<typeof issueSearchSchema>,
+	scope: IssueSearchScope = {},
+) {
 	const {
 		workspaceId,
 		query: searchQuery,
@@ -87,12 +97,13 @@ export async function searchIssues(input: z.infer<typeof issueSearchSchema>) {
 		!EMBEDDINGS_ENABLED && mode === "semantic" ? "trigram" : mode;
 	const shouldCalculateSemantic =
 		EMBEDDINGS_ENABLED && (mode === "semantic" || mode === "hybrid");
-	const queryEmbedding = shouldCalculateSemantic
-		? await embedText(searchQuery)
-		: null;
 	const conditions = [eq(issue.workspaceId, workspaceId)];
 
 	if (teamId) conditions.push(eq(issue.teamId, teamId));
+	if (!teamId && scope.accessibleTeamIds) {
+		if (scope.accessibleTeamIds.length === 0) return [];
+		conditions.push(inArray(issue.teamId, scope.accessibleTeamIds));
+	}
 	if (statusId) conditions.push(eq(issue.statusId, statusId));
 	if (assigneeId) conditions.push(eq(issue.assigneeId, assigneeId));
 	if (priorityId) conditions.push(eq(issue.priorityId, priorityId));
@@ -123,6 +134,70 @@ export async function searchIssues(input: z.infer<typeof issueSearchSchema>) {
 			),
 		);
 	}
+
+	const withClause: {
+		status?: { with: { statusGroup: true } } | true;
+		priority?: true;
+		assignee?: true;
+		team?: true;
+		labelLinks?: { with: { label: true } };
+	} = {
+		...(includeStatus
+			? { status: includeStatusGroup ? { with: { statusGroup: true } } : true }
+			: {}),
+		...(includePriority ? { priority: true } : {}),
+		...(includeAssignee ? { assignee: true } : {}),
+		...(includeTeam ? { team: true } : {}),
+		...(includeLabels ? { labelLinks: { with: { label: true } } } : {}),
+	};
+
+	const teamConditions = [eq(team.workspaceId, workspaceId)];
+	if (teamId) teamConditions.push(eq(team.id, teamId));
+	if (!teamId && scope.accessibleTeamIds) {
+		teamConditions.push(inArray(team.id, scope.accessibleTeamIds));
+	}
+
+	const searchableTeams = await db
+		.select({ id: team.id, key: team.key })
+		.from(team)
+		.where(and(...teamConditions));
+	const referenceSearch = parseIssueReferenceSearch(
+		searchQuery,
+		searchableTeams,
+	);
+
+	if (referenceSearch?.kind === "number") {
+		conditions.push(eq(issue.number, referenceSearch.number));
+
+		return await db.query.issue.findMany({
+			where: (_issueTable, { and }) => and(...conditions),
+			with: withClause,
+			orderBy: [sql`${issue.updatedAt} DESC`],
+			limit: 50,
+		});
+	}
+
+	if (
+		referenceSearch?.kind === "teamNumber" &&
+		referenceSearch.candidates.length > 0
+	) {
+		let referenceCondition = sql`false`;
+		for (const candidate of referenceSearch.candidates) {
+			referenceCondition = sql`${referenceCondition} OR (${issue.teamId} = ${candidate.teamId} AND ${issue.number} = ${candidate.number})`;
+		}
+		conditions.push(sql`(${referenceCondition})`);
+
+		return await db.query.issue.findMany({
+			where: (_issueTable, { and }) => and(...conditions),
+			with: withClause,
+			orderBy: [sql`${issue.updatedAt} DESC`],
+			limit: 50,
+		});
+	}
+
+	const queryEmbedding = shouldCalculateSemantic
+		? await embedText(searchQuery)
+		: null;
 
 	const ftsScore = sql<number>`
 		CASE WHEN ${searchMode} IN ('fts', 'hybrid')
@@ -166,23 +241,7 @@ export async function searchIssues(input: z.infer<typeof issueSearchSchema>) {
 				WHEN 'semantic' THEN ${semanticScore}
 				WHEN 'hybrid' THEN (${ftsScore} + ${trigramScore}) / 2.0
 			END
-		`;
-
-	const withClause: {
-		status?: { with: { statusGroup: true } } | true;
-		priority?: true;
-		assignee?: true;
-		team?: true;
-		labelLinks?: { with: { label: true } };
-	} = {
-		...(includeStatus
-			? { status: includeStatusGroup ? { with: { statusGroup: true } } : true }
-			: {}),
-		...(includePriority ? { priority: true } : {}),
-		...(includeAssignee ? { assignee: true } : {}),
-		...(includeTeam ? { team: true } : {}),
-		...(includeLabels ? { labelLinks: { with: { label: true } } } : {}),
-	};
+	`;
 
 	const scoreCondition =
 		minScore > 0 ? sql`(${hybridScore}) >= ${minScore}` : undefined;
