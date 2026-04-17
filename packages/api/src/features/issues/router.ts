@@ -6,6 +6,7 @@ import { omit } from "remeda";
 import { z } from "zod";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
+import { getReadableTeamIdsForPermission } from "../../lib/permissions-helpers";
 import {
 	calculateAfterRank,
 	calculateBeforeRank,
@@ -858,10 +859,33 @@ const searchIssuesHandler = authedRouter
 	.input(issueSearchSchema)
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
+		const userId = context.auth.session.userId;
+
+		if (!input.filters?.teamId) {
+			const workspaceAllowed = await isAllowed({
+				userId,
+				workspaceId: input.workspaceId,
+				permissionKey: "issue:read",
+			});
+
+			if (workspaceAllowed) {
+				const results = await searchIssues(input);
+				return { issues: results };
+			}
+
+			const accessibleTeamIds = await getReadableTeamIdsForPermission({
+				userId,
+				workspaceId: input.workspaceId,
+				permissionKey: "issue:read",
+			});
+			const results = await searchIssues(input, { accessibleTeamIds });
+			return { issues: results };
+		}
+
 		const allowed = await isAllowed({
-			userId: context.auth.session.userId,
+			userId,
 			workspaceId: input.workspaceId,
-			teamId: input.filters?.teamId,
+			teamId: input.filters.teamId,
 			permissionKey: "issue:read",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
