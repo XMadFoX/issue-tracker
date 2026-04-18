@@ -6,10 +6,11 @@ import {
 	teamMembership,
 	workspace,
 } from "db/features/tracker/tracker.schema";
-import { and, DrizzleQueryError, eq } from "drizzle-orm";
+import { and, DrizzleQueryError, eq, inArray } from "drizzle-orm";
 import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
+import { getReadableTeamIdsForPermission } from "../../lib/permissions-helpers";
 import { ensureTeamBuiltInRoles } from "../workspaces/defaults";
 import {
 	teamCreateSchema,
@@ -100,6 +101,38 @@ export const getBySlug = authedRouter
 		}
 
 		return res.team;
+	});
+
+export const listReadableByWorkspace = authedRouter
+	.input(teamListSchema)
+	.handler(async ({ context, input }) => {
+		const userId = context.auth.session.userId;
+		const workspaceAllowed = await isAllowed({
+			userId,
+			workspaceId: input.id,
+			permissionKey: "issue:read",
+		});
+
+		if (workspaceAllowed) {
+			return await db
+				.select({ id: team.id, key: team.key })
+				.from(team)
+				.where(eq(team.workspaceId, input.id));
+		}
+
+		const readableTeamIds = await getReadableTeamIdsForPermission({
+			userId,
+			workspaceId: input.id,
+			permissionKey: "issue:read",
+		});
+		if (readableTeamIds.length === 0) return [];
+
+		return await db
+			.select({ id: team.id, key: team.key })
+			.from(team)
+			.where(
+				and(eq(team.workspaceId, input.id), inArray(team.id, readableTeamIds)),
+			);
 	});
 
 export const create = authedRouter
@@ -219,6 +252,7 @@ export const teamRouter = {
 	listUserTeams,
 	listUserTeamsByWorkspace,
 	listByWorkspace,
+	listReadableByWorkspace,
 	getBySlug,
 	create,
 	update,
