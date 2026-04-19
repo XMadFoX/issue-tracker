@@ -33,12 +33,24 @@ type PaletteContentProps = {
 	isSearching: boolean;
 	hasSearched: boolean;
 	minQueryLength?: number;
-	onIssueSelect?: (issueId: string) => void;
+	onIssueSelect?: (issue: PaletteIssueSearchResult) => void;
 };
 
 const MIN_QUERY_LENGTH = 2;
 const EMPTY_ISSUES: Array<PaletteIssueSearchResult> = [];
 const ignoreQueryChange = () => {};
+
+function getIssueReferenceLabel(issue: PaletteIssueSearchResult) {
+	if (issue.team?.key && typeof issue.number === "number") {
+		return `${issue.team.key}-${issue.number}`;
+	}
+
+	if (typeof issue.number === "number") {
+		return `#${issue.number}`;
+	}
+
+	return null;
+}
 
 export function PaletteContent({
 	workspaceId,
@@ -76,7 +88,7 @@ export function PaletteContent({
 					{showOpenIssuesPrompt
 						? "Open a team issues page to search issues."
 						: showQueryLengthPrompt
-							? `Type at least ${minQueryLength} characters.`
+							? `Type at least ${minQueryLength} characters, or enter an issue number.`
 							: showSearching
 								? "Searching issues..."
 								: showNoResults
@@ -85,21 +97,25 @@ export function PaletteContent({
 				</CommandEmpty>
 				{issues.length > 0 && (
 					<CommandGroup heading="Issues">
-						{issues.map((issue) => (
-							<CommandItem
-								key={issue.id}
-								value={`${issue.title} ${issue.number ?? ""}`}
-								onSelect={() => {
-									onIssueSelect?.(issue.id);
-								}}
-							>
-								<Search />
-								<span className="truncate">{issue.title}</span>
-								{typeof issue.number === "number" && (
-									<CommandShortcut>#{issue.number}</CommandShortcut>
-								)}
-							</CommandItem>
-						))}
+						{issues.map((issue) => {
+							const issueReference = getIssueReferenceLabel(issue);
+
+							return (
+								<CommandItem
+									key={issue.id}
+									value={`${issue.title} ${issueReference ?? ""}`}
+									onSelect={() => {
+										onIssueSelect?.(issue);
+									}}
+								>
+									<Search />
+									<span className="truncate">{issue.title}</span>
+									{issueReference && (
+										<CommandShortcut>{issueReference}</CommandShortcut>
+									)}
+								</CommandItem>
+							);
+						})}
 					</CommandGroup>
 				)}
 			</CommandList>
