@@ -72,7 +72,7 @@ type PaletteDialogProps = {
 	isSearching: boolean;
 	hasSearched: boolean;
 	minQueryLength?: number;
-	onIssueSelect?: (issueId: string) => void;
+	onIssueSelect?: (issue: PaletteIssueSearchResult) => void;
 };
 
 export function PaletteDialog({
@@ -107,8 +107,8 @@ export function PaletteDialog({
 				isSearching={isSearching}
 				hasSearched={hasSearched}
 				minQueryLength={minQueryLength}
-				onIssueSelect={(issueId) => {
-					onIssueSelect?.(issueId);
+				onIssueSelect={(issue) => {
+					onIssueSelect?.(issue);
 					setOpen(false);
 				}}
 			/>
