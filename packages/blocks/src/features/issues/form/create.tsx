@@ -19,12 +19,15 @@ type Props = {
 	priorities: Outputs["priority"]["list"];
 	statuses: Outputs["issue"]["status"]["list"];
 	assignees?: Outputs["teamMembership"]["list"];
-	labels: Outputs["label"]["list"];
+	labels?: Outputs["label"]["list"];
 	onSubmit: (
 		issue: z.input<typeof issueCreateSchema>,
 	) => Promise<{ success: true } | { error: unknown }>;
 	className?: string;
 	initialStatusId?: Outputs["issue"]["status"]["list"][0]["id"];
+	initialParentIssueId?: z.input<typeof issueCreateSchema>["parentIssueId"];
+	initialTitle?: string;
+	initialDescription?: z.input<typeof issueCreateSchema>["description"];
 };
 
 export function IssueCreateForm({
@@ -37,18 +40,24 @@ export function IssueCreateForm({
 	onSubmit,
 	className,
 	initialStatusId,
+	initialParentIssueId = null,
+	initialTitle = "",
+	initialDescription = [],
 }: Props) {
+	const defaultValues: z.input<typeof issueCreateSchema> = {
+		title: initialTitle,
+		description: initialDescription ?? [],
+		workspaceId: workspaceId,
+		teamId: teamId,
+		statusId: initialStatusId ?? statuses[0]?.id ?? "",
+		priorityId: undefined,
+		assigneeId: undefined,
+		labelIds: [],
+		parentIssueId: initialParentIssueId,
+	};
+
 	const form = useAppForm({
-		defaultValues: {
-			title: "",
-			description: [],
-			workspaceId: workspaceId,
-			teamId: teamId,
-			statusId: initialStatusId ?? statuses[0]?.id,
-			priorityId: undefined,
-			assigneeId: undefined,
-			labelIds: [],
-		} as z.input<typeof issueCreateSchema>,
+		defaultValues,
 		validators: {
 			onSubmit: issueCreateSchema,
 		},
@@ -139,7 +148,7 @@ export function IssueCreateForm({
 				{(field) => (
 					<LabelMultiSelect
 						label="Labels"
-						labels={labels}
+						labels={labels ?? []}
 						value={(field.state.value ?? []) as unknown as string[]}
 						onChange={field.handleChange}
 						className="w-full"
