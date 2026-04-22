@@ -20,13 +20,20 @@ type IssueCreateModalProps = {
 	priorities: Outputs["priority"]["list"];
 	statuses: Outputs["issue"]["status"]["list"];
 	assignees?: Outputs["teamMembership"]["list"];
-	labels: Outputs["label"]["list"];
+	labels?: Outputs["label"]["list"];
 	onSubmit: (issue: z.input<typeof issueCreateSchema>) => Promise<SubmitResult>;
 	trigger: React.ReactElement;
 	title?: string;
 	description?: string;
 	className?: string;
 	initialStatusId?: ComponentProps<typeof IssueCreateForm>["initialStatusId"];
+	initialParentIssueId?: ComponentProps<
+		typeof IssueCreateForm
+	>["initialParentIssueId"];
+	initialTitle?: ComponentProps<typeof IssueCreateForm>["initialTitle"];
+	initialDescription?: ComponentProps<
+		typeof IssueCreateForm
+	>["initialDescription"];
 };
 
 export function IssueCreateModal({
@@ -42,6 +49,9 @@ export function IssueCreateModal({
 	description = "Fill in the details below.",
 	className,
 	initialStatusId,
+	initialParentIssueId,
+	initialTitle,
+	initialDescription,
 }: IssueCreateModalProps) {
 	const [open, setOpen] = useState(false);
 
@@ -71,6 +81,9 @@ export function IssueCreateModal({
 						return res;
 					}}
 					initialStatusId={initialStatusId}
+					initialParentIssueId={initialParentIssueId}
+					initialTitle={initialTitle}
+					initialDescription={initialDescription}
 				/>
 			</DialogContent>
 		</Dialog>
