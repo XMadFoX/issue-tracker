@@ -6,6 +6,7 @@ import {
 	SheetTitle,
 } from "@prism/ui/components/sheet";
 import { ExternalLink } from "lucide-react";
+import type { ComponentProps } from "react";
 import { useRouterAdapter } from "../../../router/adapter";
 import { IssueDetail } from "../view/issue-detail";
 
@@ -30,6 +31,14 @@ type Props = {
 	deleteLabels: (
 		input: Inputs["issue"]["labels"]["bulkDelete"],
 	) => Promise<void>;
+	teamId: ComponentProps<typeof IssueDetail>["teamId"];
+	parentIssue?: ComponentProps<typeof IssueDetail>["parentIssue"];
+	subIssues?: ComponentProps<typeof IssueDetail>["subIssues"];
+	subIssueSearch?: ComponentProps<typeof IssueDetail>["subIssueSearch"];
+	onAttachSubIssue?: ComponentProps<typeof IssueDetail>["onAttachSubIssue"];
+	onDetachSubIssue?: ComponentProps<typeof IssueDetail>["onDetachSubIssue"];
+	onCreateSubIssue?: ComponentProps<typeof IssueDetail>["onCreateSubIssue"];
+	getIssueUrl?: ComponentProps<typeof IssueDetail>["getIssueUrl"];
 	fullPageUrl: `/${string}`;
 };
 
@@ -46,6 +55,14 @@ export function IssueDetailSheet({
 	updateIssueAssignee,
 	addLabels,
 	deleteLabels,
+	teamId,
+	parentIssue,
+	subIssues,
+	subIssueSearch,
+	onAttachSubIssue,
+	onDetachSubIssue,
+	onCreateSubIssue,
+	getIssueUrl,
 	fullPageUrl,
 }: Props) {
 	const { Link } = useRouterAdapter();
@@ -80,6 +97,14 @@ export function IssueDetailSheet({
 					updateIssueAssignee={updateIssueAssignee}
 					addLabels={addLabels}
 					deleteLabels={deleteLabels}
+					teamId={teamId}
+					parentIssue={parentIssue}
+					subIssues={subIssues}
+					subIssueSearch={subIssueSearch}
+					onAttachSubIssue={onAttachSubIssue}
+					onDetachSubIssue={onDetachSubIssue}
+					onCreateSubIssue={onCreateSubIssue}
+					getIssueUrl={getIssueUrl}
 					className="px-4"
 				/>
 			</SheetContent>
