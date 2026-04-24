@@ -2,6 +2,7 @@ import type { issueCreateSchema } from "@prism/api/src/features/issues/schema";
 import type { Outputs } from "@prism/api/src/router";
 import { IssueList } from "@prism/blocks/src/features/issues/list/issue-list";
 import { IssueDetailSheet } from "@prism/blocks/src/features/issues/modal/issue-detail-sheet";
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import {
 	skipToken,
 	useMutation,
@@ -9,10 +10,15 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { client, orpc } from "src/orpc/client";
 import z from "zod";
+
+const TEXT_SUB_ISSUE_QUERY_MIN_LENGTH = 2;
+const ISSUE_NUMBER_QUERY_MIN_LENGTH = 1;
+const SUB_ISSUE_QUERY_DEBOUNCE_MS = 300;
+const ISSUE_NUMBER_QUERY_REGEX = /^\d+$/;
 
 const searchParamsSchema = z.object({
 	selectedIssue: z.string().optional(),
@@ -27,10 +33,17 @@ export const Route = createFileRoute("/workspace/$slug/teams/$teamSlug/issues")(
 
 type SubmitResult = { success: true } | { error: unknown };
 
+function getMinSubIssueQueryLength(query: string) {
+	return ISSUE_NUMBER_QUERY_REGEX.test(query)
+		? ISSUE_NUMBER_QUERY_MIN_LENGTH
+		: TEXT_SUB_ISSUE_QUERY_MIN_LENGTH;
+}
+
 function RouteComponent() {
 	const { slug, teamSlug } = Route.useParams();
 	const search = Route.useSearch();
 	const navigate = useNavigate();
+	const [subIssueSearchQuery, setSubIssueSearchQuery] = useState("");
 	const workspace = useQuery(
 		orpc.workspace.getBySlug.queryOptions({ input: { slug } }),
 	);
@@ -170,6 +183,9 @@ function RouteComponent() {
 
 	const qc = useQueryClient();
 	const createIssue = useMutation(orpc.issue.create.mutationOptions());
+	const updateIssueParent = useMutation(
+		orpc.issue.updateParent.mutationOptions(),
+	);
 	const onUpdate = useMutation(
 		orpc.issue.update.mutationOptions({
 			onSuccess: () => {
@@ -184,20 +200,154 @@ function RouteComponent() {
 			},
 		}),
 	);
+	const allIssues = issues.data ?? [];
+	const selectedParentIssue = selectedIssue.data?.parentIssueId
+		? (allIssues.find(
+				(issue) => issue.id === selectedIssue.data?.parentIssueId,
+			) ?? null)
+		: null;
+	const selectedSubIssues = selectedIssue.data
+		? allIssues.filter(
+				(issue) => issue.parentIssueId === selectedIssue.data?.id,
+			)
+		: [];
+	const normalizedSubIssueSearchQuery = subIssueSearchQuery.trim();
+	const [debouncedSubIssueSearchQuery, subIssueSearchDebouncer] =
+		useDebouncedValue(
+			normalizedSubIssueSearchQuery,
+			{ wait: SUB_ISSUE_QUERY_DEBOUNCE_MS },
+			(state) => ({ isPending: state.isPending }),
+		);
+	const minSubIssueSearchQueryLength = getMinSubIssueQueryLength(
+		normalizedSubIssueSearchQuery,
+	);
+	const debouncedMinSubIssueSearchQueryLength = getMinSubIssueQueryLength(
+		debouncedSubIssueSearchQuery,
+	);
+	const canSearchSubIssues = Boolean(
+		workspaceId &&
+			team.data?.id &&
+			selectedIssue.data &&
+			debouncedSubIssueSearchQuery.length >=
+				debouncedMinSubIssueSearchQueryLength,
+	);
+	const subIssueSearch = useQuery(
+		orpc.issue.search.queryOptions({
+			input:
+				workspaceId && team.data?.id && canSearchSubIssues
+					? {
+							workspaceId,
+							query: debouncedSubIssueSearchQuery,
+							mode: "hybrid",
+							filters: { teamId: team.data.id },
+							options: {
+								includeTeam: true,
+								includeStatus: true,
+								includePriority: true,
+								includeAssignee: true,
+							},
+							includeArchived: false,
+						}
+					: skipToken,
+		}),
+	);
+	const excludedSubIssueSearchIds = useMemo(() => {
+		const ids = new Set<string>();
+		if (selectedIssue.data?.id) {
+			ids.add(selectedIssue.data.id);
+		}
+		for (const subIssue of selectedSubIssues) {
+			ids.add(subIssue.id);
+		}
+		return ids;
+	}, [selectedIssue.data?.id, selectedSubIssues]);
+	const attachableSubIssueResults = useMemo(
+		() =>
+			(subIssueSearch.data?.issues ?? []).filter(
+				(issue) => !excludedSubIssueSearchIds.has(issue.id),
+			),
+		[subIssueSearch.data?.issues, excludedSubIssueSearchIds],
+	);
+
+	const invalidateIssue = (issueId: string) => {
+		if (!workspaceId) return;
+		qc.invalidateQueries({
+			queryKey: orpc.issue.get.key({ input: { id: issueId, workspaceId } }),
+		});
+	};
+
+	const invalidateHierarchy = (issueIds: Array<string>) => {
+		qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
+		for (const issueId of issueIds) {
+			invalidateIssue(issueId);
+		}
+	};
 
 	const onIssueSubmit = async (
 		issue: z.input<typeof issueCreateSchema>,
 	): Promise<SubmitResult> => {
 		try {
-			await createIssue.mutateAsync(issue);
+			const createdIssue = await createIssue.mutateAsync(issue);
 			// TODO: optimistic mutation, no full refetch
-			qc.invalidateQueries({ queryKey: orpc.issue.list.key() });
+			invalidateHierarchy(
+				createdIssue.parentIssueId
+					? [createdIssue.id, createdIssue.parentIssueId]
+					: [createdIssue.id],
+			);
 			toast.success("Issue created successfully");
 			return { success: true } as const;
 		} catch (err) {
 			toast.error("Issue creation failed");
 			return { error: err };
 		}
+	};
+
+	const attachSubIssue = async (
+		subIssue: Outputs["issue"]["search"]["issues"][number],
+	) => {
+		if (!workspaceId || !selectedIssue.data) return;
+
+		try {
+			await updateIssueParent.mutateAsync({
+				id: subIssue.id,
+				workspaceId,
+				parentIssueId: selectedIssue.data.id,
+			});
+			invalidateHierarchy(
+				subIssue.parentIssueId
+					? [selectedIssue.data.id, subIssue.id, subIssue.parentIssueId]
+					: [selectedIssue.data.id, subIssue.id],
+			);
+			toast.success("Sub-item added");
+		} catch (error) {
+			toast.error("Failed to add sub-item");
+			throw error;
+		}
+	};
+
+	const detachSubIssue = async (subIssueId: string) => {
+		if (!workspaceId || !selectedIssue.data) return;
+
+		try {
+			await updateIssueParent.mutateAsync({
+				id: subIssueId,
+				workspaceId,
+				parentIssueId: null,
+			});
+			invalidateHierarchy([selectedIssue.data.id, subIssueId]);
+			toast.success("Sub-item detached");
+		} catch (error) {
+			toast.error("Failed to detach sub-item");
+			throw error;
+		}
+	};
+
+	const getIssueUrl = (issue: {
+		id: string;
+		team?: { key: string } | null;
+	}): `/${string}` => {
+		const nextTeamSlug = issue.team?.key ?? teamSlug;
+		return `/workspace/${slug}/teams/${nextTeamSlug}/issue/${issue.id}`;
 	};
 
 	// Live updates subscription
@@ -283,6 +433,7 @@ function RouteComponent() {
 						search: { selectedIssue: issueId },
 					});
 				}}
+				getIssueUrl={getIssueUrl}
 			/>
 			<Outlet />
 			{selectedIssue.data && (
@@ -304,7 +455,24 @@ function RouteComponent() {
 					updateIssueAssignee={updateIssueAssignee.mutateAsync}
 					addLabels={addLabels.mutateAsync}
 					deleteLabels={deleteLabels.mutateAsync}
-					fullPageUrl={`/workspace/$slug/teams/$teamSlug/issue/${search.selectedIssue}`}
+					teamId={team.data?.id ?? ""}
+					parentIssue={selectedParentIssue}
+					subIssues={selectedSubIssues}
+					subIssueSearch={{
+						query: subIssueSearchQuery,
+						onQueryChange: setSubIssueSearchQuery,
+						results: attachableSubIssueResults,
+						isSearching:
+							subIssueSearchDebouncer.state.isPending ||
+							subIssueSearch.isFetching,
+						hasSearched: subIssueSearch.isFetched,
+						minQueryLength: minSubIssueSearchQueryLength,
+					}}
+					onAttachSubIssue={attachSubIssue}
+					onDetachSubIssue={detachSubIssue}
+					onCreateSubIssue={onIssueSubmit}
+					getIssueUrl={getIssueUrl}
+					fullPageUrl={`/workspace/${slug}/teams/${teamSlug}/issue/${search.selectedIssue}`}
 				/>
 			)}
 		</div>

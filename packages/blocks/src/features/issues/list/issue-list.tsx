@@ -20,6 +20,11 @@ import type { Inputs, Outputs } from "@prism/api/src/router";
 import { Badge } from "@prism/ui/components/badge";
 import { Button } from "@prism/ui/components/button";
 import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@prism/ui/components/popover";
+import {
 	Select,
 	SelectContent,
 	SelectItem,
@@ -36,8 +41,18 @@ import {
 } from "@prism/ui/components/table";
 import { GripVertical, Plus } from "lucide-react";
 import { type ComponentProps, useCallback, useMemo, useState } from "react";
+import { useRouterAdapter } from "../../../router/adapter";
 import { IssueLabelSelect } from "../components/issue-label-select";
 import { IssueCreateModal } from "../modal/issue-create-modal";
+
+type IssueListItem = Outputs["issue"]["list"][number];
+type StatusIssues = Outputs["issue"]["list"];
+type IssueLinkTarget = {
+	id: string;
+	team?: {
+		key: string;
+	} | null;
+};
 
 type Props = {
 	issues: Outputs["issue"]["list"];
@@ -58,8 +73,9 @@ type Props = {
 	updateIssueAssignee: (
 		input: Inputs["issue"]["updateAssignee"],
 	) => Promise<Outputs["issue"]["updateAssignee"]>;
-	moveIssue?: (input: Inputs["issue"]["move"]) => Promise<void>;
+	moveIssue?: (input: Inputs["issue"]["move"]) => Promise<unknown>;
 	onIssueClick?: (issueId: string) => void;
+	getIssueUrl?: (issue: IssueLinkTarget) => `/${string}`;
 };
 
 function CreateIssueButton() {
@@ -85,6 +101,7 @@ export function IssueList({
 	updateIssueAssignee,
 	moveIssue,
 	onIssueClick,
+	getIssueUrl,
 }: Props) {
 	const groupedIssues = useMemo(() => {
 		const groups: Record<string, typeof issues> = {};
@@ -157,6 +174,16 @@ export function IssueList({
 	const activeIssue = activeIssueId
 		? issues.find((i) => i.id === activeIssueId)
 		: null;
+	const subIssuesByParentId = useMemo(() => {
+		const groups = new Map<string, Array<IssueListItem>>();
+		for (const issue of issues) {
+			if (!issue.parentIssueId) continue;
+			const current = groups.get(issue.parentIssueId) ?? [];
+			current.push(issue);
+			groups.set(issue.parentIssueId, current);
+		}
+		return groups;
+	}, [issues]);
 
 	return (
 		<DndContext
@@ -206,6 +233,8 @@ export function IssueList({
 									updateIssuePriority={updateIssuePriority}
 									updateIssueAssignee={updateIssueAssignee}
 									onIssueClick={onIssueClick}
+									getIssueUrl={getIssueUrl}
+									subIssuesByParentId={subIssuesByParentId}
 								/>
 							)}
 						</div>
@@ -252,6 +281,8 @@ function SortableIssueRow({
 	updateIssuePriority,
 	updateIssueAssignee,
 	onIssueClick,
+	getIssueUrl,
+	subIssues,
 }: {
 	issue: StatusIssues[number];
 	labels: Props["labels"];
@@ -263,6 +294,8 @@ function SortableIssueRow({
 	updateIssuePriority: Props["updateIssuePriority"];
 	updateIssueAssignee: Props["updateIssueAssignee"];
 	onIssueClick: Props["onIssueClick"];
+	getIssueUrl: Props["getIssueUrl"];
+	subIssues: Array<IssueListItem>;
 }) {
 	const {
 		attributes,
@@ -309,6 +342,13 @@ function SortableIssueRow({
 				{issue.team?.key}-{issue.number}
 			</TableCell>
 			<TableCell className="font-medium">{issue.title}</TableCell>
+			<TableCell>
+				{subIssues.length > 0 ? (
+					<SubItemsPopover subIssues={subIssues} getIssueUrl={getIssueUrl} />
+				) : (
+					<span className="text-muted-foreground">-</span>
+				)}
+			</TableCell>
 			<TableCell>
 				<Select
 					value={issue.priorityId ?? ""}
@@ -419,6 +459,8 @@ function IssuesTable({
 	updateIssuePriority,
 	updateIssueAssignee,
 	onIssueClick,
+	getIssueUrl,
+	subIssuesByParentId,
 }: {
 	statusIssues: StatusIssues;
 	labels: Props["labels"];
@@ -430,6 +472,8 @@ function IssuesTable({
 	updateIssuePriority: Props["updateIssuePriority"];
 	updateIssueAssignee: Props["updateIssueAssignee"];
 	onIssueClick: Props["onIssueClick"];
+	getIssueUrl: Props["getIssueUrl"];
+	subIssuesByParentId: Map<string, Array<IssueListItem>>;
 }) {
 	const issueIds = useMemo(
 		() => statusIssues.map((issue) => issue.id),
@@ -444,6 +488,7 @@ function IssuesTable({
 						<TableHead className="w-[30px]"></TableHead>
 						<TableHead className="w-[100px]">ID</TableHead>
 						<TableHead>Title</TableHead>
+						<TableHead className="w-[130px]">Sub-tasks</TableHead>
 						<TableHead>Priority</TableHead>
 						<TableHead>Label</TableHead>
 						<TableHead>Assignee</TableHead>
@@ -468,11 +513,80 @@ function IssuesTable({
 								updateIssuePriority={updateIssuePriority}
 								updateIssueAssignee={updateIssueAssignee}
 								onIssueClick={onIssueClick}
+								getIssueUrl={getIssueUrl}
+								subIssues={subIssuesByParentId.get(issue.id) ?? []}
 							/>
 						))}
 					</SortableContext>
 				</TableBody>
 			</Table>
 		</div>
+	);
+}
+
+function getIssueReference(
+	issue: IssueLinkTarget & { number?: number | null },
+) {
+	if (issue.team?.key && typeof issue.number === "number") {
+		return `${issue.team.key}-${issue.number}`;
+	}
+
+	if (typeof issue.number === "number") {
+		return `#${issue.number}`;
+	}
+
+	return "Issue";
+}
+
+function SubItemsPopover({
+	subIssues,
+	getIssueUrl,
+}: {
+	subIssues: Array<IssueListItem>;
+	getIssueUrl: Props["getIssueUrl"];
+}) {
+	const { Link } = useRouterAdapter();
+
+	return (
+		<Popover>
+			<PopoverTrigger asChild>
+				<Button type="button" variant="ghost" size="sm" className="h-7 px-1.5">
+					<Badge variant="secondary">{subIssues.length} sub-tasks</Badge>
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-80 p-2">
+				<div className="max-h-72 overflow-y-auto">
+					{subIssues.map((subIssue) => {
+						const issueUrl = getIssueUrl?.(subIssue);
+						return (
+							<div key={subIssue.id} className="rounded-md px-2 py-2">
+								{issueUrl ? (
+									<Link
+										to={issueUrl}
+										className="block hover:text-foreground hover:underline"
+									>
+										<span className="block text-muted-foreground text-xs">
+											{getIssueReference(subIssue)}
+										</span>
+										<span className="block truncate font-medium text-sm">
+											{subIssue.title}
+										</span>
+									</Link>
+								) : (
+									<>
+										<span className="block text-muted-foreground text-xs">
+											{getIssueReference(subIssue)}
+										</span>
+										<span className="block truncate font-medium text-sm">
+											{subIssue.title}
+										</span>
+									</>
+								)}
+							</div>
+						);
+					})}
+				</div>
+			</PopoverContent>
+		</Popover>
 	);
 }
