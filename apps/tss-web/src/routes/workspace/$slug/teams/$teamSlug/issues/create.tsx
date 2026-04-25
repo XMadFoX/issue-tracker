@@ -1,5 +1,5 @@
 import type { issueCreateSchema } from "@prism/api/src/features/issues/schema";
-import { IssueCreateForm } from "@prism/blocks/src/features/issues/form/create";
+import { IssueCreateForm } from "@prism/blocks/src/features/issues";
 import {
 	skipToken,
 	useMutation,
