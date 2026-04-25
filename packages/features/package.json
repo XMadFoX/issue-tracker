@@ -1,0 +1,9 @@
+{
+	"name": "@prism/features",
+	"version": "0.0.0",
+	"scripts": {
+		"typecheck": "bun --cwd ../../ tsc --noEmit -p packages/features/tsconfig.json"
+	},
+	"dependencies": {},
+	"exports": {}
+}
