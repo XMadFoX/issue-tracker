@@ -28,6 +28,7 @@
 			"@prism/api": ["../../packages/api/src/index.ts"],
 			"@prism/api/*": ["../../packages/api/src/*"],
 			"@prism/blocks/*": ["../../packages/blocks/src/*"],
+			"@prism/features/*": ["../../packages/features/src/*"],
 			"@prism/ui/*": ["../../packages/ui/src/*"],
 			"db": ["../../packages/db/src/index.ts"],
 			"db/*": ["../../packages/db/src/*"]

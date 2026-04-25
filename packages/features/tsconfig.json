@@ -11,7 +11,9 @@
 		"skipLibCheck": true,
 		"baseUrl": ".",
 		"paths": {
-			"@/*": ["./src/*"]
+			"@/*": ["./src/*"],
+			"@prism/api": ["../api/src/index.ts"],
+			"@prism/api/*": ["../api/src/*"]
 		}
 	},
 	"include": ["src"]
