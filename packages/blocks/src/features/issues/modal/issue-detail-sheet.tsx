@@ -1,4 +1,3 @@
-import type { Inputs, Outputs } from "@prism/api/src/router";
 import {
 	Sheet,
 	SheetContent,
@@ -6,39 +5,41 @@ import {
 	SheetTitle,
 } from "@prism/ui/components/sheet";
 import { ExternalLink } from "lucide-react";
-import type { ComponentProps } from "react";
 import { useRouterAdapter } from "../../../router/adapter";
+import type {
+	IssueActions,
+	IssueDetailData,
+	IssueListItem,
+	IssueNavigation,
+	IssueStatusList,
+	LabelActions,
+	LabelList,
+	PriorityList,
+	SubIssueActions,
+	SubIssueSearchState,
+	TeamMemberList,
+} from "../types";
 import { IssueDetail } from "../view/issue-detail";
 
 type Props = {
-	issue: Outputs["issue"]["get"];
+	issue: IssueDetailData;
 	onClose: () => void;
-	statuses: Outputs["issue"]["status"]["list"];
-	priorities: Outputs["priority"]["list"];
-	labels: Outputs["label"]["list"];
-	teamMembers: Outputs["teamMembership"]["list"];
+	statuses: IssueStatusList;
+	priorities: PriorityList;
+	labels: LabelList;
+	teamMembers: TeamMemberList;
 	workspaceId: string;
-	onUpdate: (
-		input: Inputs["issue"]["update"],
-	) => Promise<Outputs["issue"]["update"]>;
-	updateIssuePriority: (
-		input: Inputs["issue"]["updatePriority"],
-	) => Promise<Outputs["issue"]["updatePriority"]>;
-	updateIssueAssignee: (
-		input: Inputs["issue"]["updateAssignee"],
-	) => Promise<Outputs["issue"]["updateAssignee"]>;
-	addLabels: (input: Inputs["issue"]["labels"]["bulkAdd"]) => Promise<void>;
-	deleteLabels: (
-		input: Inputs["issue"]["labels"]["bulkDelete"],
-	) => Promise<void>;
-	teamId: ComponentProps<typeof IssueDetail>["teamId"];
-	parentIssue?: ComponentProps<typeof IssueDetail>["parentIssue"];
-	subIssues?: ComponentProps<typeof IssueDetail>["subIssues"];
-	subIssueSearch?: ComponentProps<typeof IssueDetail>["subIssueSearch"];
-	onAttachSubIssue?: ComponentProps<typeof IssueDetail>["onAttachSubIssue"];
-	onDetachSubIssue?: ComponentProps<typeof IssueDetail>["onDetachSubIssue"];
-	onCreateSubIssue?: ComponentProps<typeof IssueDetail>["onCreateSubIssue"];
-	getIssueUrl?: ComponentProps<typeof IssueDetail>["getIssueUrl"];
+	teamId: string;
+	issueActions: Pick<
+		IssueActions,
+		"update" | "updatePriority" | "updateAssignee"
+	>;
+	labelActions: LabelActions;
+	parentIssue?: IssueListItem | null;
+	subIssues?: Array<IssueListItem>;
+	subIssueSearch?: SubIssueSearchState;
+	subIssueActions?: SubIssueActions;
+	navigation?: IssueNavigation;
 	fullPageUrl: `/${string}`;
 };
 
@@ -50,19 +51,14 @@ export function IssueDetailSheet({
 	labels,
 	teamMembers,
 	workspaceId,
-	onUpdate,
-	updateIssuePriority,
-	updateIssueAssignee,
-	addLabels,
-	deleteLabels,
 	teamId,
+	issueActions,
+	labelActions,
 	parentIssue,
 	subIssues,
 	subIssueSearch,
-	onAttachSubIssue,
-	onDetachSubIssue,
-	onCreateSubIssue,
-	getIssueUrl,
+	subIssueActions,
+	navigation,
 	fullPageUrl,
 }: Props) {
 	const { Link } = useRouterAdapter();
@@ -71,14 +67,14 @@ export function IssueDetailSheet({
 		<Sheet open={true} onOpenChange={(open) => !open && onClose()}>
 			<SheetContent
 				side="right"
-				className="w-full sm:max-w-4xl! overflow-y-auto"
+				className="w-full overflow-y-auto sm:max-w-4xl!"
 			>
 				<SheetHeader className="mb-4">
 					<div className="flex items-center justify-between pr-8">
 						<SheetTitle className="sr-only">{issue.title}</SheetTitle>
 						<Link
 							to={fullPageUrl}
-							className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+							className="flex items-center gap-2 text-muted-foreground text-sm transition-colors hover:text-foreground"
 						>
 							<span>Open full page</span>
 							<ExternalLink className="size-4" />
@@ -92,19 +88,14 @@ export function IssueDetailSheet({
 					labels={labels}
 					teamMembers={teamMembers}
 					workspaceId={workspaceId}
-					onUpdate={onUpdate}
-					updateIssuePriority={updateIssuePriority}
-					updateIssueAssignee={updateIssueAssignee}
-					addLabels={addLabels}
-					deleteLabels={deleteLabels}
 					teamId={teamId}
+					issueActions={issueActions}
+					labelActions={labelActions}
 					parentIssue={parentIssue}
 					subIssues={subIssues}
 					subIssueSearch={subIssueSearch}
-					onAttachSubIssue={onAttachSubIssue}
-					onDetachSubIssue={onDetachSubIssue}
-					onCreateSubIssue={onCreateSubIssue}
-					getIssueUrl={getIssueUrl}
+					subIssueActions={subIssueActions}
+					navigation={navigation}
 					className="px-4"
 				/>
 			</SheetContent>
