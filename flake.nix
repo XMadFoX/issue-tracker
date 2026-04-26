@@ -28,6 +28,7 @@
             lefthook
             biome
             commitlint-rs
+            typescript-go
           ];
         };
       }

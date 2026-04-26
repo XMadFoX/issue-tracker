@@ -26,7 +26,6 @@
 		"noUnusedParameters": false,
 		"noPropertyAccessFromIndexSignature": false,
 		"types": ["@types/bun"],
-		"baseUrl": ".",
 		"paths": {
 			"db": ["../db/src/index.ts"],
 			"db/*": ["../db/src/*"]

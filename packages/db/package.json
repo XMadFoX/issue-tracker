@@ -6,7 +6,7 @@
 		"generate": "drizzle-kit generate",
 		"migrate": "drizzle-kit migrate",
 		"studio": "drizzle-kit studio",
-		"typecheck": "bun --cwd ../../ tsc --noEmit -p packages/db/tsconfig.json"
+		"typecheck": "tsgo --noEmit -p tsconfig.json"
 	},
 	"dependencies": {
 		"@logtape/logtape": "^2.0.4",

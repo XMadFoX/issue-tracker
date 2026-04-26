@@ -9,8 +9,8 @@
 		"lib": ["DOM", "DOM.Iterable", "ES2022"],
 		"noEmit": true,
 		"skipLibCheck": true,
-		"baseUrl": ".",
 		"paths": {
+			"*": ["./*"],
 			"@/*": ["./src/*", "../ui/src/*"],
 			"@prism/api": ["../api/src/index.ts"],
 			"@prism/api/*": ["../api/src/*"],
