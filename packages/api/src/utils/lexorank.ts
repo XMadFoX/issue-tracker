@@ -94,16 +94,22 @@ export function calculateAfterRank(last: string, gap = 100): string {
  * @returns True if rebalancing is needed
  */
 export function needsRebalancing(ranks: string[], threshold = 100): boolean {
-	if (ranks.length < 2) return false;
+	const [firstRank, ...remainingRanks] = ranks;
 
-	for (let i = 0; i < ranks.length - 1; i++) {
-		const current = rankToNumber(ranks[i]);
-		const next = rankToNumber(ranks[i + 1]);
+	if (firstRank === undefined || remainingRanks.length === 0) return false;
+
+	let previousRank = firstRank;
+
+	for (const rank of remainingRanks) {
+		const current = rankToNumber(previousRank);
+		const next = rankToNumber(rank);
 		const gap = next - current;
 
 		if (gap < threshold) {
 			return true;
 		}
+
+		previousRank = rank;
 	}
 
 	return false;
