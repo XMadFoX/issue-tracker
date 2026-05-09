@@ -34,6 +34,7 @@ const TEAM_MEMBER_PERMISSION_KEYS = [
 	"issue:read",
 	"issue:create",
 	"issue:update",
+	"cycle:read",
 	"label:read",
 ] as const;
 
@@ -44,6 +45,9 @@ const TEAM_LEAD_PERMISSION_KEYS = [
 	"label:update",
 	"label:delete",
 	"issue:delete",
+	"cycle:create",
+	"cycle:update",
+	"cycle:delete",
 	"issue_priority:create",
 	"issue_priority:update",
 	"issue_priority:delete",

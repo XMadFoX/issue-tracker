@@ -164,6 +164,33 @@ export const issuePerms = [
 	},
 ] as const;
 
+export const cyclePerms = [
+	{
+		key: "cycle:read",
+		resourceType: "cycle",
+		action: "read",
+		description: "Read cycles",
+	},
+	{
+		key: "cycle:create",
+		resourceType: "cycle",
+		action: "create",
+		description: "Create cycles",
+	},
+	{
+		key: "cycle:update",
+		resourceType: "cycle",
+		action: "update",
+		description: "Update cycles",
+	},
+	{
+		key: "cycle:delete",
+		resourceType: "cycle",
+		action: "delete",
+		description: "Delete cycles",
+	},
+] as const;
+
 export const issuePriorityPerms = [
 	{
 		key: "issue_priority:read",
@@ -270,6 +297,7 @@ export const permissionCatalogEntries = [
 	...rolePerms,
 	...labelPerms,
 	...issuePerms,
+	...cyclePerms,
 	...issuePriorityPerms,
 	...issueStatusPerms,
 	...issueStatusGroupPerms,

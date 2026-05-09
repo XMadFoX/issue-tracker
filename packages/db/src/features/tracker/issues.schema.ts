@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { Value } from "platejs";
 import { user } from "../auth/auth.schema";
+import { cycle } from "./cycles.schema";
 import { issuePriority } from "./issue-priorities.schema";
 import { issueStatus } from "./issue-statuses.schema";
 import { label } from "./labels.schema";
@@ -47,7 +48,9 @@ export const issue = pgTable(
 		priorityId: text("priority_id").references(() => issuePriority.id, {
 			onDelete: "set null",
 		}),
-		// TODO: cycleId: text("cycle_id").references(() => cycle.id, { onDelete: "set null" }),
+		cycleId: text("cycle_id").references(() => cycle.id, {
+			onDelete: "set null",
+		}),
 		// TODO: estimate: integer("estimate"),
 		dueDate: timestamp("due_date", { withTimezone: true }),
 		// Sort Order (LexoRank style - custom [letter][digit][digit] format)
@@ -85,7 +88,7 @@ export const issue = pgTable(
 			table.archivedAt,
 		),
 		// Speed up Cycle views
-		// index("issue_cycle_idx").on(table.cycleId),
+		index("issue_cycle_idx").on(table.cycleId),
 		// Speed up searching by Title (trgm for fuzzy/typo matching)
 		index("issue_title_trgm_idx").using("gin", table.title.op("gin_trgm_ops")),
 		// Trgm index on searchText for fuzzy/typo matching
@@ -126,10 +129,10 @@ export const issueRelations = relations(issue, ({ one, many }) => ({
 		fields: [issue.priorityId],
 		references: [issuePriority.id],
 	}),
-	// cycle: one(cycle, {
-	// 	fields: [issue.cycleId],
-	// 	references: [cycle.id],
-	// }),
+	cycle: one(cycle, {
+		fields: [issue.cycleId],
+		references: [cycle.id],
+	}),
 	assignee: one(user, {
 		fields: [issue.assigneeId],
 		references: [user.id],
