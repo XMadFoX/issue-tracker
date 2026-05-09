@@ -1,5 +1,5 @@
 import { cycle, cycleStateEnum } from "db/features/tracker/cycles.schema";
-import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+import { createInsertSchema, createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 
 export const cycleStateSchema = createSelectSchema(cycleStateEnum);
