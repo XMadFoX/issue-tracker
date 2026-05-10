@@ -1,4 +1,3 @@
-import { relations } from "drizzle-orm";
 import {
 	type AnyPgColumn,
 	customType,
@@ -108,52 +107,6 @@ export const issue = pgTable(
 	],
 );
 
-export const issueRelations = relations(issue, ({ one, many }) => ({
-	workspace: one(workspace, {
-		fields: [issue.workspaceId],
-		references: [workspace.id],
-	}),
-	team: one(team, {
-		fields: [issue.teamId],
-		references: [team.id],
-	}),
-	// project: one(project, {
-	// 	fields: [issue.projectId],
-	// 	references: [project.id],
-	// }),
-	status: one(issueStatus, {
-		fields: [issue.statusId],
-		references: [issueStatus.id],
-	}),
-	priority: one(issuePriority, {
-		fields: [issue.priorityId],
-		references: [issuePriority.id],
-	}),
-	cycle: one(cycle, {
-		fields: [issue.cycleId],
-		references: [cycle.id],
-	}),
-	assignee: one(user, {
-		fields: [issue.assigneeId],
-		references: [user.id],
-	}),
-	reporter: one(user, {
-		fields: [issue.reporterId],
-		references: [user.id],
-	}),
-	creator: one(user, {
-		fields: [issue.creatorId],
-		references: [user.id],
-	}),
-	parent: one(issue, {
-		relationName: "ParentIssue",
-		fields: [issue.parentIssueId],
-		references: [issue.id],
-	}),
-	subIssues: many(issue, { relationName: "ParentIssue" }),
-	labelLinks: many(issueLabel),
-}));
-
 export const issueLabel = pgTable(
 	"issue_label",
 	{
@@ -170,14 +123,3 @@ export const issueLabel = pgTable(
 		uniqueIndex("issue_label_pk").on(t.issueId, t.labelId),
 	],
 );
-
-export const issueLabelRelations = relations(issueLabel, ({ one }) => ({
-	issue: one(issue, {
-		fields: [issueLabel.issueId],
-		references: [issue.id],
-	}),
-	label: one(label, {
-		fields: [issueLabel.labelId],
-		references: [label.id],
-	}),
-}));

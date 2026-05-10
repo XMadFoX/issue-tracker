@@ -1,4 +1,3 @@
-import { relations, sql } from "drizzle-orm";
 import {
 	boolean,
 	integer,
@@ -51,13 +50,6 @@ export const issueStatusGroup = pgTable(
 	],
 );
 
-export const issueStatusGroupRelations = relations(
-	issueStatusGroup,
-	({ many }) => ({
-		statuses: many(issueStatus),
-	}),
-);
-
 /**
  * ISSUE_STATUS
  * Statuses just reference a group and store user-facing properties.
@@ -91,18 +83,3 @@ export const issueStatus = pgTable(
 		uniqueIndex("issue_status_workspace_name_key").on(t.workspaceId, t.name),
 	],
 );
-
-export const issueStatusRelations = relations(issueStatus, ({ one }) => ({
-	workspace: one(workspace, {
-		fields: [issueStatus.workspaceId],
-		references: [workspace.id],
-	}),
-	team: one(team, {
-		fields: [issueStatus.teamId],
-		references: [team.id],
-	}),
-	statusGroup: one(issueStatusGroup, {
-		fields: [issueStatus.statusGroupId],
-		references: [issueStatusGroup.id],
-	}),
-}));
