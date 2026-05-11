@@ -1,14 +1,16 @@
+import path from "node:path";
 import { $ } from "bun";
-import { db, init } from "db";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import path from "path";
 
 export default async function setupDb() {
 	console.info("[setupDb] compose up");
 	await $`docker compose -f ../../compose.test.yaml up -d --force-recreate --wait`;
 	const url = "postgres://postgres:postgres@localhost:6432/issue_tracker";
+	process.env.DATABASE_URL = url;
+	process.env.ENV_TYPE = "server";
+
 	console.log("[setupDb] connecting to db");
-	init(url);
+	const { db } = await import("db");
 
 	// run migrations
 	console.log("[setupDb] running migrations");
