@@ -4,12 +4,18 @@ import * as schema from "../../schema";
 export const authRelations = defineRelationsPart(schema, (r) => ({
 	user: {
 		roleDefinitions: r.many.roleDefinitions({
+			from: r.user.id,
+			to: r.roleDefinitions.createdBy,
 			alias: "CreatedRoles",
 		}),
 		assignedRoles: r.many.roleAssignments({
+			from: r.user.id,
+			to: r.roleAssignments.userId,
 			alias: "AssignedUser",
 		}),
 		rolesAssignedBy: r.many.roleAssignments({
+			from: r.user.id,
+			to: r.roleAssignments.assignedBy,
 			alias: "AssignedBy",
 		}),
 	},

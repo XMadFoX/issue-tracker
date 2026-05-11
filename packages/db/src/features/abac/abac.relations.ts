@@ -14,7 +14,7 @@ export const abacRelations = defineRelationsPart(schema, (r) => ({
 			from: r.roleDefinitions.teamId,
 			to: r.team.id,
 		}),
-		createdBy: r.one.user({
+		creator: r.one.user({
 			from: r.roleDefinitions.createdBy,
 			to: r.user.id,
 			alias: "CreatedRoles",
@@ -61,7 +61,7 @@ export const abacRelations = defineRelationsPart(schema, (r) => ({
 			from: r.roleAssignments.teamId,
 			to: r.team.id,
 		}),
-		assignedBy: r.one.user({
+		assigner: r.one.user({
 			from: r.roleAssignments.assignedBy,
 			to: r.user.id,
 			alias: "AssignedBy",

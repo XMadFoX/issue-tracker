@@ -1,0 +1,1 @@
+ALTER TABLE "entity_attributes" DROP CONSTRAINT "entity_attributes_polymorphic_check", ADD CONSTRAINT "entity_attributes_polymorphic_check" CHECK (num_nonnulls("user_id", "workspace_id", "team_id") <= 1);

@@ -6,9 +6,18 @@ export const trackerRelations = defineRelationsPart(schema, (r) => ({
 		memberships: r.many.workspaceMembership(),
 		invitations: r.many.workspaceInvitation(),
 		teams: r.many.team(),
-		roleDefinitions: r.many.roleDefinitions(),
-		policyConstraints: r.many.policyConstraints(),
-		roleAssignments: r.many.roleAssignments(),
+		roleDefinitions: r.many.roleDefinitions({
+			from: r.workspace.id,
+			to: r.roleDefinitions.workspaceId,
+		}),
+		policyConstraints: r.many.policyConstraints({
+			from: r.workspace.id,
+			to: r.policyConstraints.workspaceId,
+		}),
+		roleAssignments: r.many.roleAssignments({
+			from: r.workspace.id,
+			to: r.roleAssignments.workspaceId,
+		}),
 	},
 	workspaceMembership: {
 		workspace: r.one.workspace({
@@ -16,7 +25,7 @@ export const trackerRelations = defineRelationsPart(schema, (r) => ({
 			to: r.workspace.id,
 		}),
 		user: r.one.user({ from: r.workspaceMembership.userId, to: r.user.id }),
-		invitedBy: r.one.user({
+		inviter: r.one.user({
 			from: r.workspaceMembership.invitedBy,
 			to: r.user.id,
 		}),
@@ -60,13 +69,19 @@ export const trackerRelations = defineRelationsPart(schema, (r) => ({
 		}),
 		lead: r.one.user({ from: r.team.leadId, to: r.user.id }),
 		memberships: r.many.teamMembership(),
-		roleDefinitions: r.many.roleDefinitions(),
-		roleAssignments: r.many.roleAssignments(),
+		roleDefinitions: r.many.roleDefinitions({
+			from: r.team.id,
+			to: r.roleDefinitions.teamId,
+		}),
+		roleAssignments: r.many.roleAssignments({
+			from: r.team.id,
+			to: r.roleAssignments.teamId,
+		}),
 	},
 	teamMembership: {
 		team: r.one.team({ from: r.teamMembership.teamId, to: r.team.id }),
 		user: r.one.user({ from: r.teamMembership.userId, to: r.user.id }),
-		invitedBy: r.one.user({ from: r.teamMembership.invitedBy, to: r.user.id }),
+		inviter: r.one.user({ from: r.teamMembership.invitedBy, to: r.user.id }),
 		role: r.one.roleDefinitions({
 			from: r.teamMembership.roleId,
 			to: r.roleDefinitions.id,
