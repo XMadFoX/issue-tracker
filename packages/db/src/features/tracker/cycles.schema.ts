@@ -1,4 +1,3 @@
-import { relations } from "drizzle-orm";
 import {
 	index,
 	integer,
@@ -8,7 +7,6 @@ import {
 	timestamp,
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { issue } from "./issues.schema";
 import { team, workspace } from "./tracker.schema";
 
 export const cycleStateEnum = pgEnum("cycle_state", [
@@ -49,15 +47,3 @@ export const cycle = pgTable(
 		index("cycle_team_state_idx").on(table.teamId, table.state),
 	],
 );
-
-export const cycleRelations = relations(cycle, ({ one, many }) => ({
-	workspace: one(workspace, {
-		fields: [cycle.workspaceId],
-		references: [workspace.id],
-	}),
-	team: one(team, {
-		fields: [cycle.teamId],
-		references: [team.id],
-	}),
-	issues: many(issue),
-}));

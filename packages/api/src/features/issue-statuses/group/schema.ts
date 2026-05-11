@@ -1,5 +1,5 @@
 import { issueStatusGroup } from "db/features/tracker/issue-statuses.schema";
-import { createInsertSchema } from "drizzle-zod";
+import { createInsertSchema } from "drizzle-orm/zod";
 
 export const issueStatusGroupInsertSchema =
 	createInsertSchema(issueStatusGroup);

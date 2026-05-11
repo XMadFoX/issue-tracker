@@ -1,6 +1,6 @@
 import { user } from "db/features/auth/auth.schema";
 import { issue } from "db/features/tracker/issues.schema";
-import { createInsertSchema } from "drizzle-zod";
+import { createInsertSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { issuePriorityInsertSchema } from "../issue-priorities/issue-priority.schema";
 import { labelInsertSchema } from "../labels/schema";

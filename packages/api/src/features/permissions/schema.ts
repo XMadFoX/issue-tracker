@@ -1,5 +1,5 @@
 import { rolePermissions } from "db/features/abac/abac.schema";
-import { createInsertSchema } from "drizzle-zod";
+import { createInsertSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { sanitizeAttributes } from "../../lib/permissions-helpers";
 import { workspaceInsertSchema } from "../workspaces/schema";

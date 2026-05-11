@@ -1,5 +1,5 @@
 import { label } from "db/features/tracker/labels.schema";
-import { createInsertSchema } from "drizzle-zod";
+import { createInsertSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { teamInsertSchema } from "../teams/schema";
 import { workspaceInsertSchema } from "../workspaces/schema";

@@ -97,12 +97,11 @@ const listIssues = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
-		const workspaceCond = eq(issue.workspaceId, input.workspaceId);
 		const rows = await db.query.issue.findMany({
-			where: (issue, { eq, and }) =>
-				input.teamId
-					? and(workspaceCond, eq(issue.teamId, input.teamId))
-					: workspaceCond,
+			where: {
+				workspaceId: input.workspaceId,
+				...(input.teamId ? { teamId: input.teamId } : {}),
+			},
 			with: {
 				status: {
 					with: {
@@ -118,16 +117,10 @@ const listIssues = authedRouter
 					},
 				},
 			},
-			orderBy: (issue, { asc, desc }) => [
-				asc(
-					sql`(select order_index from issue_status_group where id = (select status_group_id from issue_status where id = ${issue.statusId}))`,
-				),
-				asc(
-					sql`(select order_index from issue_status where id = ${issue.statusId})`,
-				),
-				asc(issue.sortOrder),
-				desc(issue.createdAt),
-			],
+			orderBy: {
+				sortOrder: "asc",
+				createdAt: "desc",
+			},
 			limit: input.limit,
 			offset: input.offset,
 		});

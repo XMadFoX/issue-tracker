@@ -1,6 +1,7 @@
 import { db } from "db";
 import { issue, issueLabel } from "db/features/tracker/issues.schema";
 import { team } from "db/features/tracker/tracker.schema";
+import type { SQL } from "drizzle-orm";
 import { and, eq, exists, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { env } from "../../env";
@@ -10,8 +11,10 @@ import type { issueSearchSchema } from "./schema";
 
 export async function getIssueWithRelations(id: string, workspaceId: string) {
 	return db.query.issue.findFirst({
-		where: (issueTable, { eq, and }) =>
-			and(eq(issueTable.id, id), eq(issueTable.workspaceId, workspaceId)),
+		where: {
+			id,
+			workspaceId,
+		},
 		with: {
 			status: {
 				with: {
@@ -53,6 +56,33 @@ const EMBEDDINGS_ENABLED = env.ENABLE_EMBEDDINGS;
 type IssueSearchScope = {
 	accessibleTeamIds?: Array<string>;
 };
+
+function buildIssueSearchWhere(input: {
+	workspaceId: string;
+	teamId?: string | null;
+	statusId?: string | null;
+	assigneeId?: string | null;
+	priorityId?: string | null;
+	reporterId?: string | null;
+	creatorId?: string | null;
+	rawConditions: Array<SQL>;
+}) {
+	const rawWhere =
+		input.rawConditions.length > 0
+			? { RAW: () => and(...input.rawConditions) ?? sql`true` }
+			: {};
+
+	return {
+		workspaceId: input.workspaceId,
+		...(input.teamId ? { teamId: input.teamId } : {}),
+		...(input.statusId ? { statusId: input.statusId } : {}),
+		...(input.assigneeId ? { assigneeId: input.assigneeId } : {}),
+		...(input.priorityId ? { priorityId: input.priorityId } : {}),
+		...(input.reporterId ? { reporterId: input.reporterId } : {}),
+		...(input.creatorId ? { creatorId: input.creatorId } : {}),
+		...rawWhere,
+	};
+}
 
 export async function searchIssues(
 	input: z.infer<typeof issueSearchSchema>,
@@ -97,30 +127,31 @@ export async function searchIssues(
 		!EMBEDDINGS_ENABLED && mode === "semantic" ? "trigram" : mode;
 	const shouldCalculateSemantic =
 		EMBEDDINGS_ENABLED && (mode === "semantic" || mode === "hybrid");
-	const conditions = [eq(issue.workspaceId, workspaceId)];
+	const rawConditions: Array<SQL> = [];
 
-	if (teamId) conditions.push(eq(issue.teamId, teamId));
 	if (!teamId && scope.accessibleTeamIds) {
 		if (scope.accessibleTeamIds.length === 0) return [];
-		conditions.push(inArray(issue.teamId, scope.accessibleTeamIds));
+		rawConditions.push(inArray(issue.teamId, scope.accessibleTeamIds));
 	}
-	if (statusId) conditions.push(eq(issue.statusId, statusId));
-	if (assigneeId) conditions.push(eq(issue.assigneeId, assigneeId));
-	if (priorityId) conditions.push(eq(issue.priorityId, priorityId));
-	if (reporterId) conditions.push(eq(issue.reporterId, reporterId));
-	if (creatorId) conditions.push(eq(issue.creatorId, creatorId));
-	if (createdAtFrom)
-		conditions.push(gte(issue.createdAt, new Date(createdAtFrom)));
-	if (createdAtTo) conditions.push(lte(issue.createdAt, new Date(createdAtTo)));
-	if (dueDateFrom) conditions.push(gte(issue.dueDate, new Date(dueDateFrom)));
-	if (dueDateTo) conditions.push(lte(issue.dueDate, new Date(dueDateTo)));
+	if (createdAtFrom) {
+		rawConditions.push(gte(issue.createdAt, new Date(createdAtFrom)));
+	}
+	if (createdAtTo) {
+		rawConditions.push(lte(issue.createdAt, new Date(createdAtTo)));
+	}
+	if (dueDateFrom) {
+		rawConditions.push(gte(issue.dueDate, new Date(dueDateFrom)));
+	}
+	if (dueDateTo) {
+		rawConditions.push(lte(issue.dueDate, new Date(dueDateTo)));
+	}
 
 	if (!includeArchived) {
-		conditions.push(isNull(issue.archivedAt));
+		rawConditions.push(isNull(issue.archivedAt));
 	}
 
 	if (labelIds?.length) {
-		conditions.push(
+		rawConditions.push(
 			exists(
 				db
 					.select({ one: sql`1` })
@@ -167,12 +198,23 @@ export async function searchIssues(
 	);
 
 	if (referenceSearch?.kind === "number") {
-		conditions.push(eq(issue.number, referenceSearch.number));
+		rawConditions.push(eq(issue.number, referenceSearch.number));
 
 		return await db.query.issue.findMany({
-			where: (_issueTable, { and }) => and(...conditions),
+			where: buildIssueSearchWhere({
+				workspaceId,
+				teamId,
+				statusId,
+				assigneeId,
+				priorityId,
+				reporterId,
+				creatorId,
+				rawConditions,
+			}),
 			with: withClause,
-			orderBy: [sql`${issue.updatedAt} DESC`],
+			orderBy: {
+				updatedAt: "desc",
+			},
 			limit: 50,
 		});
 	}
@@ -185,12 +227,23 @@ export async function searchIssues(
 		for (const candidate of referenceSearch.candidates) {
 			referenceCondition = sql`${referenceCondition} OR (${issue.teamId} = ${candidate.teamId} AND ${issue.number} = ${candidate.number})`;
 		}
-		conditions.push(sql`(${referenceCondition})`);
+		rawConditions.push(sql`(${referenceCondition})`);
 
 		return await db.query.issue.findMany({
-			where: (_issueTable, { and }) => and(...conditions),
+			where: buildIssueSearchWhere({
+				workspaceId,
+				teamId,
+				statusId,
+				assigneeId,
+				priorityId,
+				reporterId,
+				creatorId,
+				rawConditions,
+			}),
 			with: withClause,
-			orderBy: [sql`${issue.updatedAt} DESC`],
+			orderBy: {
+				updatedAt: "desc",
+			},
 			limit: 50,
 		});
 	}
@@ -247,13 +300,24 @@ export async function searchIssues(
 		minScore > 0 ? sql`(${hybridScore}) >= ${minScore}` : undefined;
 
 	if (scoreCondition) {
-		conditions.push(scoreCondition);
+		rawConditions.push(scoreCondition);
 	}
 
 	const results = await db.query.issue.findMany({
-		where: (_issueTable, { and }) => and(...conditions),
+		where: buildIssueSearchWhere({
+			workspaceId,
+			teamId,
+			statusId,
+			assigneeId,
+			priorityId,
+			reporterId,
+			creatorId,
+			rawConditions,
+		}),
 		with: withClause,
-		orderBy: [sql`(${hybridScore}) DESC`, sql`${issue.updatedAt} DESC`],
+		orderBy: {
+			updatedAt: "desc",
+		},
 		limit: 50,
 	});
 

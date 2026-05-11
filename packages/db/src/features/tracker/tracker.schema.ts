@@ -1,4 +1,3 @@
-import { relations } from "drizzle-orm";
 import {
 	integer,
 	jsonb,
@@ -7,11 +6,7 @@ import {
 	timestamp,
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
-import {
-	policyConstraints,
-	roleAssignments,
-	roleDefinitions,
-} from "../abac/abac.schema"; // Import roleDefinitions
+import { roleDefinitions } from "../abac/abac.schema";
 import { user } from "../auth/auth.schema";
 
 export const workspace = pgTable(
@@ -30,15 +25,6 @@ export const workspace = pgTable(
 	},
 	(table) => [uniqueIndex("workspace_slug_key").on(table.slug)],
 );
-
-export const workspaceRelations = relations(workspace, ({ many }) => ({
-	memberships: many(workspaceMembership),
-	invitations: many(workspaceInvitation),
-	teams: many(team),
-	roleDefinitions: many(roleDefinitions),
-	policyConstraints: many(policyConstraints),
-	roleAssignments: many(roleAssignments),
-}));
 
 export const workspaceMembership = pgTable(
 	"workspace_membership",
@@ -78,28 +64,6 @@ export const workspaceMembership = pgTable(
 	],
 );
 
-export const workspaceMembershipRelations = relations(
-	workspaceMembership,
-	({ one }) => ({
-		workspace: one(workspace, {
-			fields: [workspaceMembership.workspaceId],
-			references: [workspace.id],
-		}),
-		user: one(user, {
-			fields: [workspaceMembership.userId],
-			references: [user.id],
-		}),
-		invitedBy: one(user, {
-			fields: [workspaceMembership.invitedBy],
-			references: [user.id],
-		}),
-		role: one(roleDefinitions, {
-			fields: [workspaceMembership.roleId],
-			references: [roleDefinitions.id],
-		}),
-	}),
-);
-
 export const workspaceInvitation = pgTable("workspace_invitation", {
 	id: text("id").primaryKey(),
 	workspaceId: text("workspace_id")
@@ -128,31 +92,6 @@ export const workspaceInvitation = pgTable("workspace_invitation", {
 		.notNull(),
 });
 
-export const workspaceInvitationRelations = relations(
-	workspaceInvitation,
-	({ one, many }) => ({
-		workspace: one(workspace, {
-			fields: [workspaceInvitation.workspaceId],
-			references: [workspace.id],
-		}),
-		role: one(roleDefinitions, {
-			fields: [workspaceInvitation.roleId],
-			references: [roleDefinitions.id],
-		}),
-		inviter: one(user, {
-			fields: [workspaceInvitation.invitedBy],
-			references: [user.id],
-			relationName: "WorkspaceInvitationInviter",
-		}),
-		acceptedByUser: one(user, {
-			fields: [workspaceInvitation.acceptedByUserId],
-			references: [user.id],
-			relationName: "WorkspaceInvitationAcceptedByUser",
-		}),
-		teams: many(workspaceInvitationTeam),
-	}),
-);
-
 export const workspaceInvitationTeam = pgTable(
 	"workspace_invitation_team",
 	{
@@ -169,20 +108,6 @@ export const workspaceInvitationTeam = pgTable(
 			table.teamId,
 		),
 	],
-);
-
-export const workspaceInvitationTeamRelations = relations(
-	workspaceInvitationTeam,
-	({ one }) => ({
-		invitation: one(workspaceInvitation, {
-			fields: [workspaceInvitationTeam.invitationId],
-			references: [workspaceInvitation.id],
-		}),
-		team: one(team, {
-			fields: [workspaceInvitationTeam.teamId],
-			references: [team.id],
-		}),
-	}),
 );
 
 export const team = pgTable(
@@ -212,20 +137,6 @@ export const team = pgTable(
 		uniqueIndex("team_workspace_key_key").on(table.workspaceId, table.key),
 	],
 );
-
-export const teamRelations = relations(team, ({ one, many }) => ({
-	workspace: one(workspace, {
-		fields: [team.workspaceId],
-		references: [workspace.id],
-	}),
-	lead: one(user, {
-		fields: [team.leadId],
-		references: [user.id],
-	}),
-	memberships: many(teamMembership),
-	roleDefinitions: many(roleDefinitions),
-	roleAssignments: many(roleAssignments),
-}));
 
 export const teamMembership = pgTable(
 	"team_membership",
@@ -257,22 +168,3 @@ export const teamMembership = pgTable(
 		uniqueIndex("team_membership_team_user_key").on(table.teamId, table.userId),
 	],
 );
-
-export const teamMembershipRelations = relations(teamMembership, ({ one }) => ({
-	team: one(team, {
-		fields: [teamMembership.teamId],
-		references: [team.id],
-	}),
-	user: one(user, {
-		fields: [teamMembership.userId],
-		references: [user.id],
-	}),
-	invitedBy: one(user, {
-		fields: [teamMembership.invitedBy],
-		references: [user.id],
-	}),
-	role: one(roleDefinitions, {
-		fields: [teamMembership.roleId],
-		references: [roleDefinitions.id],
-	}),
-}));

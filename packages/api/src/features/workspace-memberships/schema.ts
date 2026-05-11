@@ -1,5 +1,5 @@
 import { workspaceMembership } from "db/features/tracker/tracker.schema";
-import { createInsertSchema } from "drizzle-zod";
+import { createInsertSchema } from "drizzle-orm/zod";
 import { roleInsertSchema } from "../roles/schema";
 
 export const workspaceMembershipInsertSchema =

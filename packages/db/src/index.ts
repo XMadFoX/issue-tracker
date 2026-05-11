@@ -2,6 +2,7 @@ import { getLogger } from "@logtape/logtape";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { drizzle as drizzleHttp } from "drizzle-orm/pg-proxy";
 import { env } from "./env";
+import { relations } from "./relations";
 import * as schema from "./schema";
 
 function customColMapper(value: unknown) {
@@ -56,7 +57,7 @@ function createDb() {
 					return { rows: [] };
 				}
 			},
-			{ schema },
+			{ relations },
 		);
 	} else {
 		logger.info("Initializing stateful database connection");
@@ -64,13 +65,13 @@ function createDb() {
 			connection: {
 				connectionString: env.DATABASE_URL,
 			},
-			schema,
+			relations,
 		});
 	}
 }
 
 // inferred type of PgRemoteDatabase is wrong, breaks types of returning(X) which API is actually returning properly
-const db = createDb() as NodePgDatabase<typeof schema>;
+const db = createDb() as NodePgDatabase<typeof relations>;
 
 export { db };
 export type DB = typeof db;

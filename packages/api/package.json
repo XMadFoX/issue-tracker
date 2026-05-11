@@ -46,8 +46,6 @@
 		"ai": "6.0.72",
 		"better-auth": "^1.4.0",
 		"db": "workspace:*",
-		"drizzle-orm": "0.45.1",
-		"drizzle-zod": "^0.8.3",
 		"elysia": "^1.4.16",
 		"platejs": "^52.0.17",
 		"remeda": "^2.32.0",
@@ -58,6 +56,7 @@
 		"@types/bun": "latest"
 	},
 	"peerDependencies": {
+		"drizzle-orm": "1.0.0-rc.2",
 		"typescript": "^5"
 	}
 }

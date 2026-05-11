@@ -2,7 +2,7 @@ import {
 	roleDefinitions,
 	roleScopeLevelEnum,
 } from "db/features/abac/abac.schema";
-import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+import { createInsertSchema, createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { teamInsertSchema } from "../teams/schema";
 
