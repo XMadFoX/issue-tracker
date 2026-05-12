@@ -1,14 +1,21 @@
 import { teamMembership } from "db/features/tracker/tracker.schema";
 import { createInsertSchema } from "drizzle-orm/zod";
+import { z } from "zod";
 
 export const teamMembershipInsertSchema = createInsertSchema(teamMembership);
 
-export const teamMembershipCreateSchema = teamMembershipInsertSchema.omit({
-	id: true,
-	invitedBy: true,
-	joinedAt: true,
-	lastSeenAt: true,
-});
+const attributesSchema = z.record(z.string(), z.unknown());
+
+export const teamMembershipCreateSchema = teamMembershipInsertSchema
+	.omit({
+		id: true,
+		invitedBy: true,
+		joinedAt: true,
+		lastSeenAt: true,
+	})
+	.extend({
+		attributes: attributesSchema.optional(),
+	});
 
 export const teamMembershipListSchema = teamMembershipInsertSchema.pick({
 	teamId: true,
@@ -27,6 +34,9 @@ export const teamMembershipUpdateSchema = teamMembershipInsertSchema
 		roleId: true,
 		status: true,
 		attributes: true,
+	})
+	.extend({
+		attributes: attributesSchema.optional(),
 	})
 	.required({ id: true, teamId: true });
 
