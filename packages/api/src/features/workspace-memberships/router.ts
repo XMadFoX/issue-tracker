@@ -12,6 +12,7 @@ import {
 import { and, asc, count, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
+import { sanitizeAttributes } from "../../lib/permissions-helpers";
 import {
 	workspaceMembershipCreateSchema,
 	workspaceMembershipDeleteSchema,
@@ -119,7 +120,7 @@ export const create = authedRouter
 				invitedBy,
 				joinedAt: new Date(),
 				lastSeenAt: new Date(),
-				attributes,
+				attributes: sanitizeAttributes(attributes),
 			})
 			.returning();
 
@@ -262,7 +263,9 @@ const update = authedRouter
 		const values = {
 			...(roleId && { roleId }),
 			...(status && { status }),
-			...(Object.keys(attributes || {}).length > 0 && { attributes }),
+			...(attributes !== undefined && {
+				attributes: sanitizeAttributes(attributes),
+			}),
 			...(status === "active" && { lastSeenAt: new Date() }), // Update lastSeen only if active
 		};
 
