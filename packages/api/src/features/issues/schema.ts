@@ -1,6 +1,7 @@
 import { user } from "db/features/auth/auth.schema";
 import { issue } from "db/features/tracker/issues.schema";
 import { createInsertSchema } from "drizzle-orm/zod";
+import type { Value } from "platejs";
 import { z } from "zod";
 import { issuePriorityInsertSchema } from "../issue-priorities/issue-priority.schema";
 import { labelInsertSchema } from "../labels/schema";
@@ -11,18 +12,23 @@ export const issueInsertSchema = createInsertSchema(issue);
 export const userInsertSchema = createInsertSchema(user);
 
 const assigneeIdSchema = userInsertSchema.shape.id.nullable();
+const issueDescriptionSchema = z.custom<Value>().nullable();
 
 export const issueCreateSchema = issueInsertSchema
 	.omit({
 		id: true,
 		creatorId: true,
 		number: true,
+		searchText: true,
+		searchVector: true,
+		embedding: true,
 		createdAt: true,
 		updatedAt: true,
 	})
 	.extend({
 		workspaceId: workspaceInsertSchema.shape.id,
 		title: z.string().min(1).max(100),
+		description: issueDescriptionSchema.optional(),
 		teamId: teamInsertSchema.shape.id,
 		assigneeId: assigneeIdSchema.optional(),
 		labelIds: labelInsertSchema.shape.id.array().default([]),
@@ -52,6 +58,12 @@ export const issueUpdateSchema = issueInsertSchema
 	.omit({
 		parentIssueId: true,
 		teamId: true,
+		searchText: true,
+		searchVector: true,
+		embedding: true,
+	})
+	.extend({
+		description: issueDescriptionSchema.optional(),
 	})
 	.required({
 		id: true,
