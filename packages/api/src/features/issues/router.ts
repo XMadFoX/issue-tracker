@@ -1,5 +1,9 @@
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
+import {
+	issueStatus,
+	issueStatusGroup,
+} from "db/features/tracker/issue-statuses.schema";
 import { issue, issueLabel } from "db/features/tracker/issues.schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { omit } from "remeda";
@@ -13,6 +17,7 @@ import {
 	calculateMiddleRank,
 } from "../../utils/lexorank";
 import { rebalanceStatusIssues } from "../../utils/rebalancing";
+import { writeIssueActivity } from "./activity";
 import {
 	acquireIssueHierarchyLock,
 	type IssueHierarchyValidationErrorCode,
@@ -224,6 +229,19 @@ const createIssue = authedRouter
 						);
 					}
 
+					await writeIssueActivity(tx, {
+						workspaceId,
+						teamId,
+						issueId: newIssue.id,
+						actorId: context.auth.session.userId,
+						cycleId: newIssue.cycleId,
+						actionType: "issue.created",
+						metadata: {
+							statusId: newIssue.statusId,
+							estimate: newIssue.estimate,
+							cycleId: newIssue.cycleId,
+						},
+					});
 					return newIssue;
 				});
 
@@ -317,6 +335,84 @@ const updateIssue = authedRouter
 			)
 			.returning();
 		if (!updated) throw errors.NOT_FOUND();
+
+		await writeIssueActivity(db, {
+			workspaceId: input.workspaceId,
+			teamId: existingIssue.teamId,
+			issueId: input.id,
+			actorId: context.auth.session.userId,
+			cycleId: updated.cycleId,
+			actionType: "issue.updated",
+			metadata: {
+				updatedFields: Object.keys(values),
+			},
+		});
+
+		if (input.statusId && existingIssue.statusId !== input.statusId) {
+			await writeIssueActivity(db, {
+				workspaceId: input.workspaceId,
+				teamId: existingIssue.teamId,
+				issueId: input.id,
+				actorId: context.auth.session.userId,
+				cycleId: updated.cycleId,
+				actionType: "issue.status_changed",
+				field: "statusId",
+				fromValue: existingIssue.statusId,
+				toValue: input.statusId,
+				metadata: {
+					toStatusCategory: await getStatusCanonicalCategory(
+						input.statusId,
+						input.workspaceId,
+					),
+					estimate: updated.estimate,
+					cycleId: updated.cycleId,
+				},
+			});
+		}
+
+		if (
+			input.estimate !== undefined &&
+			existingIssue.estimate !== input.estimate
+		) {
+			await writeIssueActivity(db, {
+				workspaceId: input.workspaceId,
+				teamId: existingIssue.teamId,
+				issueId: input.id,
+				actorId: context.auth.session.userId,
+				cycleId: updated.cycleId,
+				actionType: "issue.estimate_changed",
+				field: "estimate",
+				fromValue: existingIssue.estimate,
+				toValue: input.estimate,
+				metadata: {
+					cycleId: updated.cycleId,
+				},
+			});
+		}
+
+		if (
+			input.cycleId !== undefined &&
+			existingIssue.cycleId !== input.cycleId
+		) {
+			const actionType = input.cycleId
+				? "issue.cycle_assigned"
+				: "issue.cycle_unassigned";
+			await writeIssueActivity(db, {
+				workspaceId: input.workspaceId,
+				teamId: existingIssue.teamId,
+				issueId: input.id,
+				actorId: context.auth.session.userId,
+				cycleId: input.cycleId ?? existingIssue.cycleId,
+				actionType,
+				field: "cycleId",
+				fromValue: existingIssue.cycleId,
+				toValue: input.cycleId,
+				metadata: {
+					estimate: updated.estimate,
+					cycleId: input.cycleId ?? existingIssue.cycleId,
+				},
+			});
+		}
 
 		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
 		if (freshIssue) {
@@ -772,6 +868,29 @@ const moveIssue = authedRouter
 				.returning();
 
 			if (!updated) throw errors.NOT_FOUND();
+
+			if (issueRecord.statusId !== targetStatusId) {
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: issueRecord.teamId,
+					issueId: input.id,
+					actorId: context.auth.session.userId,
+					cycleId: updated.cycleId,
+					actionType: "issue.status_changed",
+					field: "statusId",
+					fromValue: issueRecord.statusId,
+					toValue: targetStatusId,
+					metadata: {
+						toStatusCategory: await getStatusCanonicalCategory(
+							targetStatusId,
+							input.workspaceId,
+						),
+						estimate: updated.estimate,
+						cycleId: updated.cycleId,
+					},
+				});
+			}
+
 			return updated;
 		};
 
