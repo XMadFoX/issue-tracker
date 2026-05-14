@@ -50,7 +50,7 @@ export const issue = pgTable(
 		cycleId: text("cycle_id").references(() => cycle.id, {
 			onDelete: "set null",
 		}),
-		// TODO: estimate: integer("estimate"),
+		estimate: integer("estimate"),
 		dueDate: timestamp("due_date", { withTimezone: true }),
 		// Sort Order (LexoRank style - custom [letter][digit][digit] format)
 		sortOrder: text("sort_order").notNull().default("a00"),

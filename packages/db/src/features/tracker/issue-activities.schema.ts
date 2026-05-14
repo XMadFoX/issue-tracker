@@ -1,0 +1,76 @@
+import {
+	index,
+	jsonb,
+	pgEnum,
+	pgTable,
+	text,
+	timestamp,
+} from "drizzle-orm/pg-core";
+import { user } from "../auth/auth.schema";
+import { cycle } from "./cycles.schema";
+import { issue } from "./issues.schema";
+import { team, workspace } from "./tracker.schema";
+
+export const issueActivityActionTypeEnum = pgEnum(
+	"issue_activity_action_type",
+	[
+		"issue.created",
+		"issue.updated",
+		"issue.status_changed",
+		"issue.estimate_changed",
+		"issue.cycle_assigned",
+		"issue.cycle_unassigned",
+	],
+);
+
+export const issueActivity = pgTable(
+	"issue_activity",
+	{
+		id: text("id").primaryKey(),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => workspace.id, { onDelete: "cascade" }),
+		teamId: text("team_id")
+			.notNull()
+			.references(() => team.id, { onDelete: "cascade" }),
+		issueId: text("issue_id")
+			.notNull()
+			.references(() => issue.id, { onDelete: "cascade" }),
+		actorId: text("actor_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		cycleId: text("cycle_id").references(() => cycle.id, {
+			onDelete: "set null",
+		}),
+		actionType: issueActivityActionTypeEnum("action_type").notNull(),
+		field: text("field"),
+		fromValue: jsonb("from_value"),
+		toValue: jsonb("to_value"),
+		metadata: jsonb("metadata"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [
+		index("issue_activity_workspace_issue_created_idx").on(
+			table.workspaceId,
+			table.issueId,
+			table.createdAt,
+		),
+		index("issue_activity_workspace_team_created_idx").on(
+			table.workspaceId,
+			table.teamId,
+			table.createdAt,
+		),
+		index("issue_activity_workspace_action_created_idx").on(
+			table.workspaceId,
+			table.actionType,
+			table.createdAt,
+		),
+		index("issue_activity_workspace_cycle_created_idx").on(
+			table.workspaceId,
+			table.cycleId,
+			table.createdAt,
+		),
+	],
+);
