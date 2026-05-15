@@ -350,92 +350,72 @@ const updateIssue = authedRouter
 			);
 		}
 
-		const [updated] = await db
-			.update(issue)
-			.set(values)
-			.where(
-				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
-			)
-			.returning();
-		if (!updated) throw errors.NOT_FOUND();
+		const updated = await db.transaction(async (tx) => {
+			const [updatedIssue] = await tx
+				.update(issue)
+				.set(values)
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
+				.returning();
+			if (!updatedIssue) throw errors.NOT_FOUND();
 
-		await writeIssueActivity(db, {
-			workspaceId: input.workspaceId,
-			teamId: existingIssue.teamId,
-			issueId: input.id,
-			actorId: context.auth.session.userId,
-			cycleId: updated.cycleId,
-			actionType: "issue.updated",
-			metadata: {
-				updatedFields: Object.keys(values),
-			},
+			await writeIssueActivity(tx, {
+				workspaceId: input.workspaceId,
+				teamId: existingIssue.teamId,
+				issueId: input.id,
+				actorId: context.auth.session.userId,
+				cycleId: updatedIssue.cycleId,
+				actionType: "issue.updated",
+				metadata: {
+					updatedFields: Object.keys(values),
+				},
+			});
+
+			if (input.statusId && existingIssue.statusId !== input.statusId) {
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueId: input.id,
+					actorId: context.auth.session.userId,
+					cycleId: updatedIssue.cycleId,
+					actionType: "issue.status_changed",
+					field: "statusId",
+					fromValue: existingIssue.statusId,
+					toValue: input.statusId,
+					metadata: {
+						toStatusCategory: await getStatusCanonicalCategory(
+							input.statusId,
+							input.workspaceId,
+						),
+						estimate: updatedIssue.estimate,
+						cycleId: updatedIssue.cycleId,
+					},
+				});
+			}
+
+			if (
+				input.estimate !== undefined &&
+				existingIssue.estimate !== input.estimate
+			) {
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueId: input.id,
+					actorId: context.auth.session.userId,
+					cycleId: updatedIssue.cycleId,
+					actionType: "issue.estimate_changed",
+					field: "estimate",
+					fromValue: existingIssue.estimate,
+					toValue: input.estimate,
+					metadata: {
+						cycleId: updatedIssue.cycleId,
+					},
+				});
+			}
+
+			return updatedIssue;
 		});
-
-		if (input.statusId && existingIssue.statusId !== input.statusId) {
-			await writeIssueActivity(db, {
-				workspaceId: input.workspaceId,
-				teamId: existingIssue.teamId,
-				issueId: input.id,
-				actorId: context.auth.session.userId,
-				cycleId: updated.cycleId,
-				actionType: "issue.status_changed",
-				field: "statusId",
-				fromValue: existingIssue.statusId,
-				toValue: input.statusId,
-				metadata: {
-					toStatusCategory: await getStatusCanonicalCategory(
-						input.statusId,
-						input.workspaceId,
-					),
-					estimate: updated.estimate,
-					cycleId: updated.cycleId,
-				},
-			});
-		}
-
-		if (
-			input.estimate !== undefined &&
-			existingIssue.estimate !== input.estimate
-		) {
-			await writeIssueActivity(db, {
-				workspaceId: input.workspaceId,
-				teamId: existingIssue.teamId,
-				issueId: input.id,
-				actorId: context.auth.session.userId,
-				cycleId: updated.cycleId,
-				actionType: "issue.estimate_changed",
-				field: "estimate",
-				fromValue: existingIssue.estimate,
-				toValue: input.estimate,
-				metadata: {
-					cycleId: updated.cycleId,
-				},
-			});
-		}
-
-		if (
-			input.cycleId !== undefined &&
-			existingIssue.cycleId !== input.cycleId
-		) {
-			const actionType = input.cycleId
-				? "issue.cycle_assigned"
-				: "issue.cycle_unassigned";
-			await writeIssueActivity(db, {
-				workspaceId: input.workspaceId,
-				teamId: existingIssue.teamId,
-				issueId: input.id,
-				actorId: context.auth.session.userId,
-				cycleId: input.cycleId ?? existingIssue.cycleId,
-				actionType,
-				field: "cycleId",
-				fromValue: existingIssue.cycleId,
-				toValue: input.cycleId,
-				metadata: {
-					estimate: updated.estimate,
-					cycleId: input.cycleId ?? existingIssue.cycleId,
-				},
-			});
-		}
 
 		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
 		if (freshIssue) {
