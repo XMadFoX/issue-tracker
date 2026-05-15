@@ -17,7 +17,7 @@ import {
 	calculateMiddleRank,
 } from "../../utils/lexorank";
 import { rebalanceStatusIssues } from "../../utils/rebalancing";
-import { writeIssueActivity } from "./activity";
+import { type DbExecutor, writeIssueActivity } from "./activity";
 import {
 	acquireIssueHierarchyLock,
 	type IssueHierarchyValidationErrorCode,
@@ -81,10 +81,11 @@ function throwHierarchyError(
 }
 
 async function getStatusCanonicalCategory(
+	executor: DbExecutor,
 	statusId: (typeof issueStatus.$inferSelect)["id"],
 	workspaceId: (typeof issueStatus.$inferSelect)["workspaceId"],
 ) {
-	const [row] = await db
+	const [row] = await executor
 		.select({ canonicalCategory: issueStatusGroup.canonicalCategory })
 		.from(issueStatus)
 		.innerJoin(
@@ -302,6 +303,7 @@ const updateIssue = authedRouter
 			.select({
 				teamId: issue.teamId,
 				statusId: issue.statusId,
+				cycleId: issue.cycleId,
 				title: issue.title,
 				description: issue.description,
 				estimate: issue.estimate,
@@ -385,6 +387,7 @@ const updateIssue = authedRouter
 					toValue: input.statusId,
 					metadata: {
 						toStatusCategory: await getStatusCanonicalCategory(
+							tx,
 							input.statusId,
 							input.workspaceId,
 						),
@@ -411,6 +414,26 @@ const updateIssue = authedRouter
 					metadata: {
 						cycleId: updatedIssue.cycleId,
 					},
+				});
+			}
+
+			if (
+				input.cycleId !== undefined &&
+				existingIssue.cycleId !== updatedIssue.cycleId
+			) {
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueId: input.id,
+					actorId: context.auth.session.userId,
+					cycleId: updatedIssue.cycleId,
+					actionType:
+						updatedIssue.cycleId === null
+							? "issue.cycle_unassigned"
+							: "issue.cycle_assigned",
+					field: "cycleId",
+					fromValue: existingIssue.cycleId,
+					toValue: updatedIssue.cycleId,
 				});
 			}
 
@@ -885,6 +908,7 @@ const moveIssue = authedRouter
 					toValue: targetStatusId,
 					metadata: {
 						toStatusCategory: await getStatusCanonicalCategory(
+							tx,
 							targetStatusId,
 							input.workspaceId,
 						),
