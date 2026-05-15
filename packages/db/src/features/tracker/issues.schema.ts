@@ -80,6 +80,11 @@ export const issue = pgTable(
 	},
 	(table) => [
 		uniqueIndex("issue_team_number_key").on(table.teamId, table.number),
+		uniqueIndex("issue_id_workspace_team_key").on(
+			table.id,
+			table.workspaceId,
+			table.teamId,
+		),
 		// Speed up Kanban boards (Filtering by Team + Status + Archive state)
 		index("issue_team_status_idx").on(
 			table.teamId,

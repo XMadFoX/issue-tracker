@@ -1,0 +1,4 @@
+CREATE UNIQUE INDEX "issue_id_workspace_team_key" ON "issue" ("id","workspace_id","team_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "team_id_workspace_key" ON "team" ("id","workspace_id");--> statement-breakpoint
+ALTER TABLE "issue_activity" ADD CONSTRAINT "issue_activity_team_workspace_fkey" FOREIGN KEY ("team_id","workspace_id") REFERENCES "team"("id","workspace_id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "issue_activity" ADD CONSTRAINT "issue_activity_issue_workspace_team_fkey" FOREIGN KEY ("issue_id","workspace_id","team_id") REFERENCES "issue"("id","workspace_id","team_id") ON DELETE CASCADE;
