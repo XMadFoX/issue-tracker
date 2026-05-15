@@ -13,6 +13,7 @@ export const userInsertSchema = createInsertSchema(user);
 
 const assigneeIdSchema = userInsertSchema.shape.id.nullable();
 const issueDescriptionSchema = z.custom<Value>().nullable();
+const estimateSchema = z.number().int().min(0).nullable();
 
 export const issueCreateSchema = issueInsertSchema
 	.omit({
@@ -31,6 +32,7 @@ export const issueCreateSchema = issueInsertSchema
 		description: issueDescriptionSchema.optional(),
 		teamId: teamInsertSchema.shape.id,
 		assigneeId: assigneeIdSchema.optional(),
+		estimate: estimateSchema.optional(),
 		labelIds: labelInsertSchema.shape.id.array().default([]),
 	});
 
@@ -64,6 +66,9 @@ export const issueUpdateSchema = issueInsertSchema
 	})
 	.extend({
 		description: issueDescriptionSchema.optional(),
+	})
+	.extend({
+		estimate: estimateSchema.optional(),
 	})
 	.required({
 		id: true,
