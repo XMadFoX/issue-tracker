@@ -80,6 +80,28 @@ function throwHierarchyError(
 	}
 }
 
+async function getStatusCanonicalCategory(
+	statusId: (typeof issueStatus.$inferSelect)["id"],
+	workspaceId: (typeof issueStatus.$inferSelect)["workspaceId"],
+) {
+	const [row] = await db
+		.select({ canonicalCategory: issueStatusGroup.canonicalCategory })
+		.from(issueStatus)
+		.innerJoin(
+			issueStatusGroup,
+			eq(issueStatus.statusGroupId, issueStatusGroup.id),
+		)
+		.where(
+			and(
+				eq(issueStatus.id, statusId),
+				eq(issueStatus.workspaceId, workspaceId),
+			),
+		)
+		.limit(1);
+
+	return row?.canonicalCategory ?? null;
+}
+
 async function getIssueTeamId(id: string, workspaceId: string) {
 	const [row] = await db
 		.select({ teamId: issue.teamId })
@@ -282,6 +304,7 @@ const updateIssue = authedRouter
 				statusId: issue.statusId,
 				title: issue.title,
 				description: issue.description,
+				estimate: issue.estimate,
 			})
 			.from(issue)
 			.where(
