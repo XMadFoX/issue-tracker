@@ -1,4 +1,5 @@
 import {
+	foreignKey,
 	index,
 	jsonb,
 	pgEnum,
@@ -23,6 +24,14 @@ export const issueActivityActionTypeEnum = pgEnum(
 	],
 );
 
+export type IssueActivityJson =
+	| string
+	| number
+	| boolean
+	| null
+	| IssueActivityJson[]
+	| { [key: string]: IssueActivityJson };
+
 export const issueActivity = pgTable(
 	"issue_activity",
 	{
@@ -44,9 +53,9 @@ export const issueActivity = pgTable(
 		}),
 		actionType: issueActivityActionTypeEnum("action_type").notNull(),
 		field: text("field"),
-		fromValue: jsonb("from_value"),
-		toValue: jsonb("to_value"),
-		metadata: jsonb("metadata"),
+		fromValue: jsonb("from_value").$type<IssueActivityJson>(),
+		toValue: jsonb("to_value").$type<IssueActivityJson>(),
+		metadata: jsonb("metadata").$type<IssueActivityJson>(),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
