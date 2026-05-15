@@ -1,40 +1,24 @@
 import { createId } from "@paralleldrive/cuid2";
 import type { db } from "db";
-import { issueActivity } from "db/features/tracker/issue-activities.schema";
+import {
+	issueActivity,
+	issueActivityActionTypeEnum,
+} from "db/features/tracker/issue-activities.schema";
+
+export const ISSUE_ACTIVITY_ACTION_TYPES =
+	issueActivityActionTypeEnum.enumValues;
 
 export type IssueActivityActionType =
-	| "issue.created"
-	| "issue.updated"
-	| "issue.status_changed"
-	| "issue.estimate_changed"
-	| "issue.cycle_assigned"
-	| "issue.cycle_unassigned";
-
-export const ISSUE_ACTIVITY_ACTION_TYPES: IssueActivityActionType[] = [
-	"issue.created",
-	"issue.updated",
-	"issue.status_changed",
-	"issue.estimate_changed",
-	"issue.cycle_assigned",
-	"issue.cycle_unassigned",
-];
+	(typeof ISSUE_ACTIVITY_ACTION_TYPES)[number];
 
 type DbExecutor =
 	| typeof db
 	| Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-type WriteIssueActivityInput = {
-	workspaceId: string;
-	teamId: string;
-	issueId: string;
-	actorId?: string | null;
-	cycleId?: string | null;
-	actionType: IssueActivityActionType;
-	field?: string | null;
-	fromValue?: unknown;
-	toValue?: unknown;
-	metadata?: unknown;
-};
+type WriteIssueActivityInput = Omit<
+	typeof issueActivity.$inferInsert,
+	"createdAt" | "id"
+>;
 
 export async function writeIssueActivity(
 	executor: DbExecutor,
