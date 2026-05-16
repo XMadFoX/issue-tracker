@@ -1,5 +1,6 @@
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
+import { cycle } from "db/features/tracker/cycles.schema";
 import {
 	issueStatus,
 	issueStatusGroup,
@@ -51,15 +52,45 @@ const hierarchyErrors = {
 	HIERARCHY_DEPTH_EXCEEDED: {},
 };
 
+const issueRelationErrors = {
+	INVALID_CYCLE: {},
+};
+
 const updateDeleteErrors = {
 	...commonErrors,
 	...hierarchyErrors,
+	...issueRelationErrors,
 	INVALID_MOVE: {},
 	RANK_EXHAUSTED: {},
 };
 
 function isRankExhaustedError(error: unknown): error is Error {
 	return error instanceof Error && error.message.includes("RANK_EXHAUSTED");
+}
+
+async function validateIssueCycleAssignment(
+	executor: DbExecutor,
+	input: {
+		cycleId: string | null | undefined;
+		workspaceId: string;
+		teamId: string;
+	},
+) {
+	if (input.cycleId === null || input.cycleId === undefined) return true;
+
+	const [row] = await executor
+		.select({ id: cycle.id })
+		.from(cycle)
+		.where(
+			and(
+				eq(cycle.id, input.cycleId),
+				eq(cycle.workspaceId, input.workspaceId),
+				eq(cycle.teamId, input.teamId),
+			),
+		)
+		.limit(1);
+
+	return row !== undefined;
 }
 
 function throwHierarchyError(
@@ -182,6 +213,7 @@ const createIssue = authedRouter
 	.errors({
 		...commonErrors,
 		...hierarchyErrors,
+		...issueRelationErrors,
 	})
 	.handler(async ({ context, input, errors }) => {
 		const { workspaceId, teamId, labelIds } = input;
@@ -198,6 +230,13 @@ const createIssue = authedRouter
 			.from(issue)
 			.where(and(eq(issue.teamId, teamId), eq(issue.workspaceId, workspaceId)))
 			.limit(1);
+
+		const validCycle = await validateIssueCycleAssignment(db, {
+			cycleId: input.cycleId,
+			workspaceId,
+			teamId,
+		});
+		if (!validCycle) throw errors.INVALID_CYCLE();
 
 		const nextNumber = (maxRow?.maxNumber ?? 0) + 1;
 		const searchFields = await buildIssueSearchFields({
@@ -322,6 +361,13 @@ const updateIssue = authedRouter
 			permissionKey: "issue:update",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
+
+		const validCycle = await validateIssueCycleAssignment(db, {
+			cycleId: input.cycleId,
+			workspaceId: input.workspaceId,
+			teamId: existingIssue.teamId,
+		});
+		if (!validCycle) throw errors.INVALID_CYCLE();
 
 		const values = omit(input, ["id", "workspaceId"]);
 		const updatedFields = Object.keys(values);
