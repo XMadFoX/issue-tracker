@@ -324,6 +324,7 @@ const updateIssue = authedRouter
 		if (!allowed) throw errors.UNAUTHORIZED();
 
 		const values = omit(input, ["id", "workspaceId"]);
+		const updatedFields = Object.keys(values);
 
 		// move to another status col with changing sortOrder to top
 		if (input.statusId) {
@@ -370,7 +371,7 @@ const updateIssue = authedRouter
 				cycleId: updatedIssue.cycleId,
 				actionType: "issue.updated",
 				metadata: {
-					updatedFields: Object.keys(values),
+					updatedFields,
 				},
 			});
 
@@ -421,20 +422,31 @@ const updateIssue = authedRouter
 				input.cycleId !== undefined &&
 				existingIssue.cycleId !== updatedIssue.cycleId
 			) {
-				await writeIssueActivity(tx, {
-					workspaceId: input.workspaceId,
-					teamId: existingIssue.teamId,
-					issueId: input.id,
-					actorId: context.auth.session.userId,
-					cycleId: updatedIssue.cycleId,
-					actionType:
-						updatedIssue.cycleId === null
-							? "issue.cycle_unassigned"
-							: "issue.cycle_assigned",
-					field: "cycleId",
-					fromValue: existingIssue.cycleId,
-					toValue: updatedIssue.cycleId,
-				});
+				if (updatedIssue.cycleId === null && existingIssue.cycleId !== null) {
+					await writeIssueActivity(tx, {
+						workspaceId: input.workspaceId,
+						teamId: existingIssue.teamId,
+						issueId: input.id,
+						actorId: context.auth.session.userId,
+						cycleId: existingIssue.cycleId,
+						actionType: "issue.cycle_unassigned",
+						field: "cycleId",
+						fromValue: existingIssue.cycleId,
+						toValue: null,
+					});
+				} else if (updatedIssue.cycleId !== null) {
+					await writeIssueActivity(tx, {
+						workspaceId: input.workspaceId,
+						teamId: existingIssue.teamId,
+						issueId: input.id,
+						actorId: context.auth.session.userId,
+						cycleId: updatedIssue.cycleId,
+						actionType: "issue.cycle_assigned",
+						field: "cycleId",
+						fromValue: existingIssue.cycleId,
+						toValue: updatedIssue.cycleId,
+					});
+				}
 			}
 
 			return updatedIssue;
