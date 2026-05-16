@@ -958,7 +958,9 @@ const moveIssue = authedRouter
 			const [issueRecord] = await tx
 				.select()
 				.from(issue)
-				.where(eq(issue.id, input.id))
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
 				.for("update");
 
 			console.debug("Move issue: issue record locked", issueRecord);
@@ -972,19 +974,48 @@ const moveIssue = authedRouter
 				const [targetIssue] = await tx
 					.select()
 					.from(issue)
-					.where(eq(issue.id, input.targetId))
+					.where(
+						and(
+							eq(issue.id, input.targetId),
+							eq(issue.workspaceId, input.workspaceId),
+						),
+					)
 					.for("update");
 
 				console.debug("Move issue: target issue found", targetIssue);
 				if (!targetIssue) throw errors.NOT_FOUND();
 				if (input.targetId === input.id) throw errors.INVALID_MOVE();
+				if (targetIssue.teamId !== issueRecord.teamId)
+					throw errors.INVALID_MOVE();
 
 				targetStatusId = targetIssue.statusId;
+
+				const [targetStatus] = await tx
+					.select({ id: issueStatus.id })
+					.from(issueStatus)
+					.where(
+						and(
+							eq(issueStatus.id, targetStatusId),
+							eq(issueStatus.workspaceId, input.workspaceId),
+							or(
+								isNull(issueStatus.teamId),
+								eq(issueStatus.teamId, issueRecord.teamId),
+							),
+						),
+					)
+					.limit(1);
+				if (!targetStatus) throw errors.INVALID_MOVE();
 
 				const allNeighbors = await tx
 					.select()
 					.from(issue)
-					.where(eq(issue.statusId, targetStatusId))
+					.where(
+						and(
+							eq(issue.workspaceId, input.workspaceId),
+							eq(issue.teamId, issueRecord.teamId),
+							eq(issue.statusId, targetStatusId),
+						),
+					)
 					.orderBy(issue.sortOrder);
 
 				const filteredNeighbors = allNeighbors.filter((i) => i.id !== input.id);
@@ -1031,7 +1062,13 @@ const moveIssue = authedRouter
 				const allStatusIssues = await tx
 					.select()
 					.from(issue)
-					.where(eq(issue.statusId, targetStatusId))
+					.where(
+						and(
+							eq(issue.workspaceId, input.workspaceId),
+							eq(issue.teamId, issueRecord.teamId),
+							eq(issue.statusId, targetStatusId),
+						),
+					)
 					.orderBy(issue.sortOrder);
 
 				const statusIssues = allStatusIssues.filter((i) => i.id !== input.id);
@@ -1056,7 +1093,13 @@ const moveIssue = authedRouter
 					statusId: targetStatusId,
 					sortOrder: newSortOrder,
 				})
-				.where(eq(issue.id, input.id))
+				.where(
+					and(
+						eq(issue.id, input.id),
+						eq(issue.workspaceId, input.workspaceId),
+						eq(issue.teamId, issueRecord.teamId),
+					),
+				)
 				.returning();
 
 			if (!updated) throw errors.NOT_FOUND();
