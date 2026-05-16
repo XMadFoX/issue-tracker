@@ -68,6 +68,94 @@ function isRankExhaustedError(error: unknown): error is Error {
 	return error instanceof Error && error.message.includes("RANK_EXHAUSTED");
 }
 
+function areJsonValuesEqual(left: unknown, right: unknown) {
+	return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function areNullableDatesEqual(left: unknown, right: unknown) {
+	if (left === null || right === null) return left === right;
+
+	return (
+		left instanceof Date &&
+		right instanceof Date &&
+		left.getTime() === right.getTime()
+	);
+}
+
+function hasChangedValue(
+	currentValue: unknown,
+	nextValue: unknown,
+	isEqual: (currentValue: unknown, nextValue: unknown) => boolean = Object.is,
+) {
+	return nextValue !== undefined && !isEqual(currentValue, nextValue);
+}
+
+type IssueRecord = typeof issue.$inferSelect;
+type IssueUpdateInput = z.infer<typeof issueUpdateSchema>;
+type IssueUpdateValues = Partial<typeof issue.$inferInsert>;
+type IssueUpdateField =
+	| "title"
+	| "description"
+	| "statusId"
+	| "priorityId"
+	| "cycleId"
+	| "estimate"
+	| "dueDate"
+	| "sortOrder"
+	| "assigneeId"
+	| "reporterId"
+	| "archivedAt";
+
+type IssueUpdateFieldRule = {
+	field: IssueUpdateField;
+	isEqual?: (currentValue: unknown, nextValue: unknown) => boolean;
+};
+
+function defineIssueUpdateField(
+	field: IssueUpdateField,
+	isEqual?: IssueUpdateFieldRule["isEqual"],
+) {
+	return { field, isEqual };
+}
+
+const issueUpdateFields = [
+	defineIssueUpdateField("title"),
+	defineIssueUpdateField("description", areJsonValuesEqual),
+	defineIssueUpdateField("statusId"),
+	defineIssueUpdateField("priorityId"),
+	defineIssueUpdateField("cycleId"),
+	defineIssueUpdateField("estimate"),
+	defineIssueUpdateField("dueDate", areNullableDatesEqual),
+	defineIssueUpdateField("sortOrder"),
+	defineIssueUpdateField("assigneeId"),
+	defineIssueUpdateField("reporterId"),
+	defineIssueUpdateField("archivedAt", areNullableDatesEqual),
+];
+
+function getChangedIssueUpdateFields(
+	existingIssue: IssueRecord,
+	input: IssueUpdateInput,
+) {
+	const values: IssueUpdateValues = {};
+	const updatedFields: IssueUpdateField[] = [];
+
+	for (const { field, isEqual } of issueUpdateFields) {
+		const currentValue = existingIssue[field];
+		const nextValue = input[field];
+
+		if (!hasChangedValue(currentValue, nextValue, isEqual)) continue;
+
+		Object.assign(values, { [field]: nextValue });
+		updatedFields.push(field);
+	}
+
+	return {
+		values,
+		updatedFields,
+		updatedFieldSet: new Set<IssueUpdateField>(updatedFields),
+	};
+}
+
 async function validateIssueCycleAssignment(
 	executor: DbExecutor,
 	input: {
@@ -339,14 +427,7 @@ const updateIssue = authedRouter
 	.errors(updateDeleteErrors)
 	.handler(async ({ context, input, errors }) => {
 		const [existingIssue] = await db
-			.select({
-				teamId: issue.teamId,
-				statusId: issue.statusId,
-				cycleId: issue.cycleId,
-				title: issue.title,
-				description: issue.description,
-				estimate: issue.estimate,
-			})
+			.select()
 			.from(issue)
 			.where(
 				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
@@ -369,24 +450,29 @@ const updateIssue = authedRouter
 		});
 		if (!validCycle) throw errors.INVALID_CYCLE();
 
-		const values = omit(input, ["id", "workspaceId"]);
-		const updatedFields = Object.keys(values);
+		const { values, updatedFields, updatedFieldSet } =
+			getChangedIssueUpdateFields(existingIssue, input);
+		const titleChanged = updatedFieldSet.has("title");
+		const descriptionChanged = updatedFieldSet.has("description");
+		const statusChanged = updatedFieldSet.has("statusId");
 
-		// move to another status col with changing sortOrder to top
-		if (input.statusId) {
-			if (existingIssue.statusId !== input.statusId) {
-				const firstRank = await db
-					.select({ minSort: sql<string>`min(${issue.sortOrder})` })
-					.from(issue)
-					.where(eq(issue.statusId, input.statusId))
-					.limit(1)
-					.then((rows) => rows[0]?.minSort);
-
-				values.sortOrder = calculateBeforeRank(firstRank || "a00");
-			}
+		if (updatedFields.length === 0) {
+			return existingIssue;
 		}
 
-		if (input.title !== undefined || input.description !== undefined) {
+		// move to another status col with changing sortOrder to top
+		if (statusChanged && input.statusId !== undefined) {
+			const firstRank = await db
+				.select({ minSort: sql<string>`min(${issue.sortOrder})` })
+				.from(issue)
+				.where(eq(issue.statusId, input.statusId))
+				.limit(1)
+				.then((rows) => rows[0]?.minSort);
+
+			values.sortOrder = calculateBeforeRank(firstRank || "a00");
+		}
+
+		if (titleChanged || descriptionChanged) {
 			Object.assign(
 				values,
 				await buildIssueSearchFields({
