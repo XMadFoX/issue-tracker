@@ -60,9 +60,13 @@ export const issueUpdateSchema = issueInsertSchema
 	.omit({
 		parentIssueId: true,
 		teamId: true,
+		number: true,
+		creatorId: true,
 		searchText: true,
 		searchVector: true,
 		embedding: true,
+		createdAt: true,
+		updatedAt: true,
 	})
 	.extend({
 		description: issueDescriptionSchema.optional(),
@@ -73,7 +77,14 @@ export const issueUpdateSchema = issueInsertSchema
 	.required({
 		id: true,
 		workspaceId: true,
-	});
+	})
+	.refine(
+		({ id: _id, workspaceId: _workspaceId, ...values }) =>
+			Object.values(values).some((value) => value !== undefined),
+		{
+			message: "At least one mutable issue field is required",
+		},
+	);
 
 export const issueDeleteSchema = z.object({
 	id: z.string(),
