@@ -951,6 +951,8 @@ const moveIssue = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
+		let statusIdForRebalance = currentIssue.statusId;
+
 		const executeMove = async (
 			tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
 		): ReturnType<typeof db.transaction> => {
@@ -989,6 +991,7 @@ const moveIssue = authedRouter
 					throw errors.INVALID_MOVE();
 
 				targetStatusId = targetIssue.statusId;
+				statusIdForRebalance = targetStatusId;
 
 				const [targetStatus] = await tx
 					.select({ id: issueStatus.id })
@@ -1162,9 +1165,7 @@ const moveIssue = authedRouter
 				}
 
 				if (attempt === 0) {
-					await rebalanceStatusIssues(
-						input.targetId ? currentIssue.statusId : currentIssue.statusId,
-					);
+					await rebalanceStatusIssues(statusIdForRebalance);
 				} else {
 					throw new Error("Failed to move issue after rebalancing");
 				}
