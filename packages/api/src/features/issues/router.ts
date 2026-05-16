@@ -6,7 +6,7 @@ import {
 	issueStatusGroup,
 } from "db/features/tracker/issue-statuses.schema";
 import { issue, issueLabel } from "db/features/tracker/issues.schema";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { omit } from "remeda";
 import { z } from "zod";
 import { authedRouter } from "../../context";
@@ -462,10 +462,32 @@ const updateIssue = authedRouter
 
 		// move to another status col with changing sortOrder to top
 		if (statusChanged && input.statusId !== undefined) {
+			const [targetStatus] = await db
+				.select({ id: issueStatus.id })
+				.from(issueStatus)
+				.where(
+					and(
+						eq(issueStatus.id, input.statusId),
+						eq(issueStatus.workspaceId, input.workspaceId),
+						or(
+							isNull(issueStatus.teamId),
+							eq(issueStatus.teamId, existingIssue.teamId),
+						),
+					),
+				)
+				.limit(1);
+			if (!targetStatus) throw errors.INVALID_MOVE();
+
 			const firstRank = await db
 				.select({ minSort: sql<string>`min(${issue.sortOrder})` })
 				.from(issue)
-				.where(eq(issue.statusId, input.statusId))
+				.where(
+					and(
+						eq(issue.workspaceId, input.workspaceId),
+						eq(issue.teamId, existingIssue.teamId),
+						eq(issue.statusId, input.statusId),
+					),
+				)
 				.limit(1)
 				.then((rows) => rows[0]?.minSort);
 
