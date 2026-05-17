@@ -39,12 +39,8 @@ export const issueActivity = pgTable(
 		workspaceId: text("workspace_id")
 			.notNull()
 			.references(() => workspace.id, { onDelete: "cascade" }),
-		teamId: text("team_id")
-			.notNull()
-			.references(() => team.id, { onDelete: "cascade" }),
-		issueId: text("issue_id")
-			.notNull()
-			.references(() => issue.id, { onDelete: "cascade" }),
+		teamId: text("team_id").notNull(),
+		issueId: text("issue_id").notNull(),
 		actorId: text("actor_id").references(() => user.id, {
 			onDelete: "set null",
 		}),
