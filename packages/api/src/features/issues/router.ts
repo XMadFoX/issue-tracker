@@ -93,44 +93,42 @@ function hasChangedValue(
 type IssueRecord = typeof issue.$inferSelect;
 type IssueUpdateInput = z.infer<typeof issueUpdateSchema>;
 type IssueUpdateValues = Partial<typeof issue.$inferInsert>;
-type IssueUpdateField =
-	| "title"
-	| "description"
-	| "statusId"
-	| "priorityId"
-	| "cycleId"
-	| "estimate"
-	| "dueDate"
-	| "sortOrder"
-	| "assigneeId"
-	| "reporterId"
-	| "archivedAt";
+type IssueUpdateField = Exclude<keyof IssueUpdateInput, "id" | "workspaceId">;
 
-type IssueUpdateFieldRule = {
-	field: IssueUpdateField;
+type IssueUpdateFieldRule<Field extends IssueUpdateField = IssueUpdateField> = {
+	field: Field;
 	isEqual?: (currentValue: unknown, nextValue: unknown) => boolean;
 };
 
-function defineIssueUpdateField(
-	field: IssueUpdateField,
-	isEqual?: IssueUpdateFieldRule["isEqual"],
-) {
-	return { field, isEqual };
+type MissingIssueUpdateFields<Fields extends readonly IssueUpdateFieldRule[]> =
+	Exclude<IssueUpdateField, Fields[number]["field"]>;
+
+function defineIssueUpdateFields<
+	const Fields extends readonly IssueUpdateFieldRule[],
+>(
+	fields: Fields &
+		(MissingIssueUpdateFields<Fields> extends never
+			? unknown
+			: {
+					readonly __missingIssueUpdateFields: MissingIssueUpdateFields<Fields>;
+				}),
+): readonly IssueUpdateFieldRule[] {
+	return fields;
 }
 
-const issueUpdateFields = [
-	defineIssueUpdateField("title"),
-	defineIssueUpdateField("description", areJsonValuesEqual),
-	defineIssueUpdateField("statusId"),
-	defineIssueUpdateField("priorityId"),
-	defineIssueUpdateField("cycleId"),
-	defineIssueUpdateField("estimate"),
-	defineIssueUpdateField("dueDate", areNullableDatesEqual),
-	defineIssueUpdateField("sortOrder"),
-	defineIssueUpdateField("assigneeId"),
-	defineIssueUpdateField("reporterId"),
-	defineIssueUpdateField("archivedAt", areNullableDatesEqual),
-];
+const issueUpdateFields = defineIssueUpdateFields([
+	{ field: "title" },
+	{ field: "description", isEqual: areJsonValuesEqual },
+	{ field: "statusId" },
+	{ field: "priorityId" },
+	{ field: "cycleId" },
+	{ field: "estimate" },
+	{ field: "dueDate", isEqual: areNullableDatesEqual },
+	{ field: "sortOrder" },
+	{ field: "assigneeId" },
+	{ field: "reporterId" },
+	{ field: "archivedAt", isEqual: areNullableDatesEqual },
+]);
 
 function getChangedIssueUpdateFields(
 	existingIssue: IssueRecord,
