@@ -91,5 +91,10 @@ export const issueActivity = pgTable(
 			columns: [table.issueId, table.workspaceId, table.teamId],
 			foreignColumns: [issue.id, issue.workspaceId, issue.teamId],
 		}).onDelete("cascade"),
+		foreignKey({
+			name: "issue_activity_cycle_workspace_team_fkey",
+			columns: [table.cycleId, table.workspaceId, table.teamId],
+			foreignColumns: [cycle.id, cycle.workspaceId, cycle.teamId],
+		}),
 	],
 );
