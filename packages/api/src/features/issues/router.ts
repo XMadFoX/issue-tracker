@@ -652,6 +652,8 @@ const updateParent = authedRouter
 				.select({
 					id: issue.id,
 					teamId: issue.teamId,
+					parentIssueId: issue.parentIssueId,
+					cycleId: issue.cycleId,
 				})
 				.from(issue)
 				.where(
@@ -679,6 +681,20 @@ const updateParent = authedRouter
 				)
 				.returning();
 			if (!updatedIssue) throw errors.NOT_FOUND();
+
+			if (lockedIssue.parentIssueId !== updatedIssue.parentIssueId) {
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: lockedIssue.teamId,
+					issueId: input.id,
+					actorId: context.auth.session.userId,
+					cycleId: updatedIssue.cycleId,
+					actionType: "issue.updated",
+					metadata: {
+						updatedFields: ["parentIssueId"],
+					},
+				});
+			}
 
 			return updatedIssue;
 		});
@@ -787,15 +803,44 @@ const bulkAddLabels = authedRouter
 
 		if (input.labelIds.length === 0) return;
 
-		await db
-			.insert(issueLabel)
-			.values(
-				input.labelIds.map((labelId) => ({
-					issueId: input.issueId,
-					labelId,
-				})),
+		const [issueContext] = await db
+			.select({ cycleId: issue.cycleId })
+			.from(issue)
+			.where(
+				and(
+					eq(issue.id, input.issueId),
+					eq(issue.workspaceId, input.workspaceId),
+				),
 			)
-			.onConflictDoNothing();
+			.limit(1);
+		if (!issueContext) throw errors.NOT_FOUND();
+
+		await db.transaction(async (tx) => {
+			const insertedLabels = await tx
+				.insert(issueLabel)
+				.values(
+					input.labelIds.map((labelId) => ({
+						issueId: input.issueId,
+						labelId,
+					})),
+				)
+				.onConflictDoNothing()
+				.returning({ labelId: issueLabel.labelId });
+
+			if (insertedLabels.length === 0) return;
+
+			await writeIssueActivity(tx, {
+				workspaceId: input.workspaceId,
+				teamId,
+				issueId: input.issueId,
+				actorId: context.auth.session.userId,
+				cycleId: issueContext.cycleId,
+				actionType: "issue.updated",
+				metadata: {
+					updatedFields: ["labels"],
+				},
+			});
+		});
 
 		const freshIssue = await getIssueWithRelations(
 			input.issueId,
@@ -828,14 +873,43 @@ const bulkDeleteLabels = authedRouter
 
 		if (input.labelIds.length === 0) return;
 
-		await db
-			.delete(issueLabel)
+		const [issueContext] = await db
+			.select({ cycleId: issue.cycleId })
+			.from(issue)
 			.where(
 				and(
-					eq(issueLabel.issueId, input.issueId),
-					inArray(issueLabel.labelId, input.labelIds),
+					eq(issue.id, input.issueId),
+					eq(issue.workspaceId, input.workspaceId),
 				),
-			);
+			)
+			.limit(1);
+		if (!issueContext) throw errors.NOT_FOUND();
+
+		await db.transaction(async (tx) => {
+			const deletedLabels = await tx
+				.delete(issueLabel)
+				.where(
+					and(
+						eq(issueLabel.issueId, input.issueId),
+						inArray(issueLabel.labelId, input.labelIds),
+					),
+				)
+				.returning({ labelId: issueLabel.labelId });
+
+			if (deletedLabels.length === 0) return;
+
+			await writeIssueActivity(tx, {
+				workspaceId: input.workspaceId,
+				teamId,
+				issueId: input.issueId,
+				actorId: context.auth.session.userId,
+				cycleId: issueContext.cycleId,
+				actionType: "issue.updated",
+				metadata: {
+					updatedFields: ["labels"],
+				},
+			});
+		});
 
 		const freshIssue = await getIssueWithRelations(
 			input.issueId,
@@ -855,25 +929,49 @@ const updatePriority = authedRouter
 	.input(issuePriorityUpdateSchema)
 	.errors(updateDeleteErrors)
 	.handler(async ({ context, input, errors }) => {
-		const teamId = await getIssueTeamId(input.id, input.workspaceId);
-		if (!teamId) throw errors.NOT_FOUND();
+		const [existingIssue] = await db
+			.select()
+			.from(issue)
+			.where(
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			)
+			.limit(1);
+		if (!existingIssue) throw errors.NOT_FOUND();
 
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
-			teamId,
+			teamId: existingIssue.teamId,
 			permissionKey: "issue:update",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
-		const [updated] = await db
-			.update(issue)
-			.set({ priorityId: input.priorityId })
-			.where(
-				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
-			)
-			.returning();
-		if (!updated) throw errors.NOT_FOUND();
+		if (existingIssue.priorityId === input.priorityId) return existingIssue;
+
+		const updated = await db.transaction(async (tx) => {
+			const [updatedIssue] = await tx
+				.update(issue)
+				.set({ priorityId: input.priorityId })
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
+				.returning();
+			if (!updatedIssue) throw errors.NOT_FOUND();
+
+			await writeIssueActivity(tx, {
+				workspaceId: input.workspaceId,
+				teamId: existingIssue.teamId,
+				issueId: input.id,
+				actorId: context.auth.session.userId,
+				cycleId: updatedIssue.cycleId,
+				actionType: "issue.updated",
+				metadata: {
+					updatedFields: ["priorityId"],
+				},
+			});
+
+			return updatedIssue;
+		});
 
 		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
 		if (freshIssue) {
@@ -892,25 +990,49 @@ const updateAssignee = authedRouter
 	.input(issueUpdateAssigneeSchema)
 	.errors(updateDeleteErrors)
 	.handler(async ({ context, input, errors }) => {
-		const teamId = await getIssueTeamId(input.id, input.workspaceId);
-		if (!teamId) throw errors.NOT_FOUND();
+		const [existingIssue] = await db
+			.select()
+			.from(issue)
+			.where(
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			)
+			.limit(1);
+		if (!existingIssue) throw errors.NOT_FOUND();
 
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
-			teamId,
+			teamId: existingIssue.teamId,
 			permissionKey: "issue:update",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
-		const [updated] = await db
-			.update(issue)
-			.set({ assigneeId: input.assigneeId })
-			.where(
-				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
-			)
-			.returning();
-		if (!updated) throw errors.NOT_FOUND();
+		if (existingIssue.assigneeId === input.assigneeId) return existingIssue;
+
+		const updated = await db.transaction(async (tx) => {
+			const [updatedIssue] = await tx
+				.update(issue)
+				.set({ assigneeId: input.assigneeId })
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
+				.returning();
+			if (!updatedIssue) throw errors.NOT_FOUND();
+
+			await writeIssueActivity(tx, {
+				workspaceId: input.workspaceId,
+				teamId: existingIssue.teamId,
+				issueId: input.id,
+				actorId: context.auth.session.userId,
+				cycleId: updatedIssue.cycleId,
+				actionType: "issue.updated",
+				metadata: {
+					updatedFields: ["assigneeId"],
+				},
+			});
+
+			return updatedIssue;
+		});
 
 		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
 		if (freshIssue) {
