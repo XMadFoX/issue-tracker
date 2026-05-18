@@ -43,6 +43,11 @@ export const cycle = pgTable(
 	},
 	(table) => [
 		uniqueIndex("cycle_team_sequence_key").on(table.teamId, table.sequence),
+		uniqueIndex("cycle_id_workspace_team_key").on(
+			table.id,
+			table.workspaceId,
+			table.teamId,
+		),
 		index("cycle_workspace_team_idx").on(table.workspaceId, table.teamId),
 		index("cycle_team_state_idx").on(table.teamId, table.state),
 	],

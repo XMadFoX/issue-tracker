@@ -50,7 +50,7 @@ export const issue = pgTable(
 		cycleId: text("cycle_id").references(() => cycle.id, {
 			onDelete: "set null",
 		}),
-		// TODO: estimate: integer("estimate"),
+		estimate: integer("estimate"),
 		dueDate: timestamp("due_date", { withTimezone: true }),
 		// Sort Order (LexoRank style - custom [letter][digit][digit] format)
 		sortOrder: text("sort_order").notNull().default("a00"),
@@ -80,6 +80,11 @@ export const issue = pgTable(
 	},
 	(table) => [
 		uniqueIndex("issue_team_number_key").on(table.teamId, table.number),
+		uniqueIndex("issue_id_workspace_team_key").on(
+			table.id,
+			table.workspaceId,
+			table.teamId,
+		),
 		// Speed up Kanban boards (Filtering by Team + Status + Archive state)
 		index("issue_team_status_idx").on(
 			table.teamId,

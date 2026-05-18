@@ -15,5 +15,6 @@ export const cycleRelations = defineRelationsPart(schema, (r) => ({
 			from: r.cycle.id,
 			to: r.issue.cycleId,
 		}),
+		activities: r.many.issueActivity(),
 	},
 }));

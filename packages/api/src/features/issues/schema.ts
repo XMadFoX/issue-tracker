@@ -13,6 +13,7 @@ export const userInsertSchema = createInsertSchema(user);
 
 const assigneeIdSchema = userInsertSchema.shape.id.nullable();
 const issueDescriptionSchema = z.custom<Value>().nullable();
+const estimateSchema = z.number().int().min(0).nullable();
 
 export const issueCreateSchema = issueInsertSchema
 	.omit({
@@ -31,6 +32,7 @@ export const issueCreateSchema = issueInsertSchema
 		description: issueDescriptionSchema.optional(),
 		teamId: teamInsertSchema.shape.id,
 		assigneeId: assigneeIdSchema.optional(),
+		estimate: estimateSchema.optional(),
 		labelIds: labelInsertSchema.shape.id.array().default([]),
 	});
 
@@ -58,17 +60,31 @@ export const issueUpdateSchema = issueInsertSchema
 	.omit({
 		parentIssueId: true,
 		teamId: true,
+		number: true,
+		creatorId: true,
 		searchText: true,
 		searchVector: true,
 		embedding: true,
+		createdAt: true,
+		updatedAt: true,
 	})
 	.extend({
 		description: issueDescriptionSchema.optional(),
 	})
+	.extend({
+		estimate: estimateSchema.optional(),
+	})
 	.required({
 		id: true,
 		workspaceId: true,
-	});
+	})
+	.refine(
+		({ id: _id, workspaceId: _workspaceId, ...values }) =>
+			Object.values(values).some((value) => value !== undefined),
+		{
+			message: "At least one mutable issue field is required",
+		},
+	);
 
 export const issueDeleteSchema = z.object({
 	id: z.string(),

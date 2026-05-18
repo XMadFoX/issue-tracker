@@ -135,6 +135,7 @@ export const team = pgTable(
 	},
 	(table) => [
 		uniqueIndex("team_workspace_key_key").on(table.workspaceId, table.key),
+		uniqueIndex("team_id_workspace_key").on(table.id, table.workspaceId),
 	],
 );
 

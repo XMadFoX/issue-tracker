@@ -1,7 +1,12 @@
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
+import { cycle } from "db/features/tracker/cycles.schema";
+import {
+	issueStatus,
+	issueStatusGroup,
+} from "db/features/tracker/issue-statuses.schema";
 import { issue, issueLabel } from "db/features/tracker/issues.schema";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { omit } from "remeda";
 import { z } from "zod";
 import { authedRouter } from "../../context";
@@ -13,6 +18,7 @@ import {
 	calculateMiddleRank,
 } from "../../utils/lexorank";
 import { rebalanceStatusIssues } from "../../utils/rebalancing";
+import { type DbExecutor, writeIssueActivity } from "./activity";
 import {
 	acquireIssueHierarchyLock,
 	type IssueHierarchyValidationErrorCode,
@@ -46,15 +52,137 @@ const hierarchyErrors = {
 	HIERARCHY_DEPTH_EXCEEDED: {},
 };
 
+const issueRelationErrors = {
+	INVALID_CYCLE: {},
+};
+
 const updateDeleteErrors = {
 	...commonErrors,
 	...hierarchyErrors,
+	...issueRelationErrors,
 	INVALID_MOVE: {},
 	RANK_EXHAUSTED: {},
 };
 
 function isRankExhaustedError(error: unknown): error is Error {
 	return error instanceof Error && error.message.includes("RANK_EXHAUSTED");
+}
+
+function areJsonValuesEqual(left: unknown, right: unknown) {
+	return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function areNullableDatesEqual(left: unknown, right: unknown) {
+	if (left === null || right === null) return left === right;
+
+	return (
+		left instanceof Date &&
+		right instanceof Date &&
+		left.getTime() === right.getTime()
+	);
+}
+
+function hasChangedValue(
+	currentValue: unknown,
+	nextValue: unknown,
+	isEqual: (currentValue: unknown, nextValue: unknown) => boolean = Object.is,
+) {
+	return nextValue !== undefined && !isEqual(currentValue, nextValue);
+}
+
+type IssueRecord = typeof issue.$inferSelect;
+type IssueUpdateInput = z.infer<typeof issueUpdateSchema>;
+type IssueUpdateValues = Partial<typeof issue.$inferInsert>;
+type IssueUpdateField = Exclude<keyof IssueUpdateInput, "id" | "workspaceId">;
+
+type IssueUpdateFieldRule<Field extends IssueUpdateField = IssueUpdateField> = {
+	field: Field;
+	isEqual?: (currentValue: unknown, nextValue: unknown) => boolean;
+};
+
+type MissingIssueUpdateFields<Fields extends readonly IssueUpdateFieldRule[]> =
+	Exclude<IssueUpdateField, Fields[number]["field"]>;
+
+function defineIssueUpdateFields<
+	const Fields extends readonly IssueUpdateFieldRule[],
+>(
+	fields: Fields &
+		(MissingIssueUpdateFields<Fields> extends never
+			? unknown
+			: {
+					readonly __missingIssueUpdateFields: MissingIssueUpdateFields<Fields>;
+				}),
+): readonly IssueUpdateFieldRule[] {
+	return fields;
+}
+
+const issueUpdateFields = defineIssueUpdateFields([
+	{ field: "title" },
+	{ field: "description", isEqual: areJsonValuesEqual },
+	{ field: "statusId" },
+	{ field: "priorityId" },
+	{ field: "cycleId" },
+	{ field: "estimate" },
+	{ field: "dueDate", isEqual: areNullableDatesEqual },
+	{ field: "sortOrder" },
+	{ field: "assigneeId" },
+	{ field: "reporterId" },
+	{ field: "archivedAt", isEqual: areNullableDatesEqual },
+]);
+
+const dedicatedActivityFields = new Set<IssueUpdateField>([
+	"statusId",
+	"cycleId",
+	"estimate",
+]);
+
+function getChangedIssueUpdateFields(
+	existingIssue: IssueRecord,
+	input: IssueUpdateInput,
+) {
+	const values: IssueUpdateValues = {};
+	const updatedFields: IssueUpdateField[] = [];
+
+	for (const { field, isEqual } of issueUpdateFields) {
+		const currentValue = existingIssue[field];
+		const nextValue = input[field];
+
+		if (!hasChangedValue(currentValue, nextValue, isEqual)) continue;
+
+		Object.assign(values, { [field]: nextValue });
+		updatedFields.push(field);
+	}
+
+	return {
+		values,
+		updatedFields,
+		updatedFieldSet: new Set<IssueUpdateField>(updatedFields),
+	};
+}
+
+async function validateIssueCycleAssignment(
+	executor: DbExecutor,
+	input: {
+		cycleId: string | null | undefined;
+		workspaceId: string;
+		teamId: string;
+	},
+) {
+	if (input.cycleId === null || input.cycleId === undefined) return true;
+
+	const [row] = await executor
+		.select({ id: cycle.id })
+		.from(cycle)
+		.where(
+			and(
+				eq(cycle.id, input.cycleId),
+				eq(cycle.workspaceId, input.workspaceId),
+				eq(cycle.teamId, input.teamId),
+			),
+		)
+		.limit(1);
+
+	return row !== undefined;
 }
 
 function throwHierarchyError(
@@ -73,6 +201,29 @@ function throwHierarchyError(
 		case "HIERARCHY_DEPTH_EXCEEDED":
 			throw errors.HIERARCHY_DEPTH_EXCEEDED();
 	}
+}
+
+async function getStatusCanonicalCategory(
+	executor: DbExecutor,
+	statusId: (typeof issueStatus.$inferSelect)["id"],
+	workspaceId: (typeof issueStatus.$inferSelect)["workspaceId"],
+) {
+	const [row] = await executor
+		.select({ canonicalCategory: issueStatusGroup.canonicalCategory })
+		.from(issueStatus)
+		.innerJoin(
+			issueStatusGroup,
+			eq(issueStatus.statusGroupId, issueStatusGroup.id),
+		)
+		.where(
+			and(
+				eq(issueStatus.id, statusId),
+				eq(issueStatus.workspaceId, workspaceId),
+			),
+		)
+		.limit(1);
+
+	return row?.canonicalCategory ?? null;
 }
 
 async function getIssueTeamId(id: string, workspaceId: string) {
@@ -154,6 +305,7 @@ const createIssue = authedRouter
 	.errors({
 		...commonErrors,
 		...hierarchyErrors,
+		...issueRelationErrors,
 	})
 	.handler(async ({ context, input, errors }) => {
 		const { workspaceId, teamId, labelIds } = input;
@@ -170,6 +322,13 @@ const createIssue = authedRouter
 			.from(issue)
 			.where(and(eq(issue.teamId, teamId), eq(issue.workspaceId, workspaceId)))
 			.limit(1);
+
+		const validCycle = await validateIssueCycleAssignment(db, {
+			cycleId: input.cycleId,
+			workspaceId,
+			teamId,
+		});
+		if (!validCycle) throw errors.INVALID_CYCLE();
 
 		const nextNumber = (maxRow?.maxNumber ?? 0) + 1;
 		const searchFields = await buildIssueSearchFields({
@@ -224,6 +383,19 @@ const createIssue = authedRouter
 						);
 					}
 
+					await writeIssueActivity(tx, {
+						workspaceId,
+						teamId,
+						issueId: newIssue.id,
+						actorId: context.auth.session.userId,
+						cycleId: newIssue.cycleId,
+						actionType: "issue.created",
+						metadata: {
+							statusId: newIssue.statusId,
+							estimate: newIssue.estimate,
+							cycleId: newIssue.cycleId,
+						},
+					});
 					return newIssue;
 				});
 
@@ -259,12 +431,7 @@ const updateIssue = authedRouter
 	.errors(updateDeleteErrors)
 	.handler(async ({ context, input, errors }) => {
 		const [existingIssue] = await db
-			.select({
-				teamId: issue.teamId,
-				statusId: issue.statusId,
-				title: issue.title,
-				description: issue.description,
-			})
+			.select()
 			.from(issue)
 			.where(
 				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
@@ -280,23 +447,61 @@ const updateIssue = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
-		const values = omit(input, ["id", "workspaceId"]);
+		const validCycle = await validateIssueCycleAssignment(db, {
+			cycleId: input.cycleId,
+			workspaceId: input.workspaceId,
+			teamId: existingIssue.teamId,
+		});
+		if (!validCycle) throw errors.INVALID_CYCLE();
 
-		// move to another status col with changing sortOrder to top
-		if (input.statusId) {
-			if (existingIssue.statusId !== input.statusId) {
-				const firstRank = await db
-					.select({ minSort: sql<string>`min(${issue.sortOrder})` })
-					.from(issue)
-					.where(eq(issue.statusId, input.statusId))
-					.limit(1)
-					.then((rows) => rows[0]?.minSort);
+		const { values, updatedFields, updatedFieldSet } =
+			getChangedIssueUpdateFields(existingIssue, input);
+		const genericUpdatedFields = updatedFields.filter(
+			(field) => !dedicatedActivityFields.has(field),
+		);
+		const titleChanged = updatedFieldSet.has("title");
+		const descriptionChanged = updatedFieldSet.has("description");
+		const statusChanged = updatedFieldSet.has("statusId");
 
-				values.sortOrder = calculateBeforeRank(firstRank || "a00");
-			}
+		if (updatedFields.length === 0) {
+			return existingIssue;
 		}
 
-		if (input.title !== undefined || input.description !== undefined) {
+		// move to another status col with changing sortOrder to top
+		if (statusChanged && input.statusId !== undefined) {
+			const [targetStatus] = await db
+				.select({ id: issueStatus.id })
+				.from(issueStatus)
+				.where(
+					and(
+						eq(issueStatus.id, input.statusId),
+						eq(issueStatus.workspaceId, input.workspaceId),
+						or(
+							isNull(issueStatus.teamId),
+							eq(issueStatus.teamId, existingIssue.teamId),
+						),
+					),
+				)
+				.limit(1);
+			if (!targetStatus) throw errors.INVALID_MOVE();
+
+			const firstRank = await db
+				.select({ minSort: sql<string>`min(${issue.sortOrder})` })
+				.from(issue)
+				.where(
+					and(
+						eq(issue.workspaceId, input.workspaceId),
+						eq(issue.teamId, existingIssue.teamId),
+						eq(issue.statusId, input.statusId),
+					),
+				)
+				.limit(1)
+				.then((rows) => rows[0]?.minSort);
+
+			values.sortOrder = calculateBeforeRank(firstRank || "a00");
+		}
+
+		if (titleChanged || descriptionChanged) {
 			Object.assign(
 				values,
 				await buildIssueSearchFields({
@@ -309,14 +514,106 @@ const updateIssue = authedRouter
 			);
 		}
 
-		const [updated] = await db
-			.update(issue)
-			.set(values)
-			.where(
-				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
-			)
-			.returning();
-		if (!updated) throw errors.NOT_FOUND();
+		const updated = await db.transaction(async (tx) => {
+			const [updatedIssue] = await tx
+				.update(issue)
+				.set(values)
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
+				.returning();
+			if (!updatedIssue) throw errors.NOT_FOUND();
+
+			if (genericUpdatedFields.length > 0) {
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueId: input.id,
+					actorId: context.auth.session.userId,
+					cycleId: updatedIssue.cycleId,
+					actionType: "issue.updated",
+					metadata: {
+						updatedFields: genericUpdatedFields,
+					},
+				});
+			}
+
+			if (input.statusId && existingIssue.statusId !== input.statusId) {
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueId: input.id,
+					actorId: context.auth.session.userId,
+					cycleId: updatedIssue.cycleId,
+					actionType: "issue.status_changed",
+					field: "statusId",
+					fromValue: existingIssue.statusId,
+					toValue: input.statusId,
+					metadata: {
+						toStatusCategory: await getStatusCanonicalCategory(
+							tx,
+							input.statusId,
+							input.workspaceId,
+						),
+						estimate: updatedIssue.estimate,
+						cycleId: updatedIssue.cycleId,
+					},
+				});
+			}
+
+			if (
+				input.estimate !== undefined &&
+				existingIssue.estimate !== input.estimate
+			) {
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueId: input.id,
+					actorId: context.auth.session.userId,
+					cycleId: updatedIssue.cycleId,
+					actionType: "issue.estimate_changed",
+					field: "estimate",
+					fromValue: existingIssue.estimate,
+					toValue: input.estimate,
+					metadata: {
+						cycleId: updatedIssue.cycleId,
+					},
+				});
+			}
+
+			if (
+				input.cycleId !== undefined &&
+				existingIssue.cycleId !== updatedIssue.cycleId
+			) {
+				if (updatedIssue.cycleId === null && existingIssue.cycleId !== null) {
+					await writeIssueActivity(tx, {
+						workspaceId: input.workspaceId,
+						teamId: existingIssue.teamId,
+						issueId: input.id,
+						actorId: context.auth.session.userId,
+						cycleId: existingIssue.cycleId,
+						actionType: "issue.cycle_unassigned",
+						field: "cycleId",
+						fromValue: existingIssue.cycleId,
+						toValue: null,
+					});
+				} else if (updatedIssue.cycleId !== null) {
+					await writeIssueActivity(tx, {
+						workspaceId: input.workspaceId,
+						teamId: existingIssue.teamId,
+						issueId: input.id,
+						actorId: context.auth.session.userId,
+						cycleId: updatedIssue.cycleId,
+						actionType: "issue.cycle_assigned",
+						field: "cycleId",
+						fromValue: existingIssue.cycleId,
+						toValue: updatedIssue.cycleId,
+					});
+				}
+			}
+
+			return updatedIssue;
+		});
 
 		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
 		if (freshIssue) {
@@ -364,6 +661,8 @@ const updateParent = authedRouter
 				.select({
 					id: issue.id,
 					teamId: issue.teamId,
+					parentIssueId: issue.parentIssueId,
+					cycleId: issue.cycleId,
 				})
 				.from(issue)
 				.where(
@@ -391,6 +690,20 @@ const updateParent = authedRouter
 				)
 				.returning();
 			if (!updatedIssue) throw errors.NOT_FOUND();
+
+			if (lockedIssue.parentIssueId !== updatedIssue.parentIssueId) {
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: lockedIssue.teamId,
+					issueId: input.id,
+					actorId: context.auth.session.userId,
+					cycleId: updatedIssue.cycleId,
+					actionType: "issue.updated",
+					metadata: {
+						updatedFields: ["parentIssueId"],
+					},
+				});
+			}
 
 			return updatedIssue;
 		});
@@ -499,15 +812,44 @@ const bulkAddLabels = authedRouter
 
 		if (input.labelIds.length === 0) return;
 
-		await db
-			.insert(issueLabel)
-			.values(
-				input.labelIds.map((labelId) => ({
-					issueId: input.issueId,
-					labelId,
-				})),
+		const [issueContext] = await db
+			.select({ cycleId: issue.cycleId })
+			.from(issue)
+			.where(
+				and(
+					eq(issue.id, input.issueId),
+					eq(issue.workspaceId, input.workspaceId),
+				),
 			)
-			.onConflictDoNothing();
+			.limit(1);
+		if (!issueContext) throw errors.NOT_FOUND();
+
+		await db.transaction(async (tx) => {
+			const insertedLabels = await tx
+				.insert(issueLabel)
+				.values(
+					input.labelIds.map((labelId) => ({
+						issueId: input.issueId,
+						labelId,
+					})),
+				)
+				.onConflictDoNothing()
+				.returning({ labelId: issueLabel.labelId });
+
+			if (insertedLabels.length === 0) return;
+
+			await writeIssueActivity(tx, {
+				workspaceId: input.workspaceId,
+				teamId,
+				issueId: input.issueId,
+				actorId: context.auth.session.userId,
+				cycleId: issueContext.cycleId,
+				actionType: "issue.updated",
+				metadata: {
+					updatedFields: ["labels"],
+				},
+			});
+		});
 
 		const freshIssue = await getIssueWithRelations(
 			input.issueId,
@@ -540,14 +882,43 @@ const bulkDeleteLabels = authedRouter
 
 		if (input.labelIds.length === 0) return;
 
-		await db
-			.delete(issueLabel)
+		const [issueContext] = await db
+			.select({ cycleId: issue.cycleId })
+			.from(issue)
 			.where(
 				and(
-					eq(issueLabel.issueId, input.issueId),
-					inArray(issueLabel.labelId, input.labelIds),
+					eq(issue.id, input.issueId),
+					eq(issue.workspaceId, input.workspaceId),
 				),
-			);
+			)
+			.limit(1);
+		if (!issueContext) throw errors.NOT_FOUND();
+
+		await db.transaction(async (tx) => {
+			const deletedLabels = await tx
+				.delete(issueLabel)
+				.where(
+					and(
+						eq(issueLabel.issueId, input.issueId),
+						inArray(issueLabel.labelId, input.labelIds),
+					),
+				)
+				.returning({ labelId: issueLabel.labelId });
+
+			if (deletedLabels.length === 0) return;
+
+			await writeIssueActivity(tx, {
+				workspaceId: input.workspaceId,
+				teamId,
+				issueId: input.issueId,
+				actorId: context.auth.session.userId,
+				cycleId: issueContext.cycleId,
+				actionType: "issue.updated",
+				metadata: {
+					updatedFields: ["labels"],
+				},
+			});
+		});
 
 		const freshIssue = await getIssueWithRelations(
 			input.issueId,
@@ -567,25 +938,49 @@ const updatePriority = authedRouter
 	.input(issuePriorityUpdateSchema)
 	.errors(updateDeleteErrors)
 	.handler(async ({ context, input, errors }) => {
-		const teamId = await getIssueTeamId(input.id, input.workspaceId);
-		if (!teamId) throw errors.NOT_FOUND();
+		const [existingIssue] = await db
+			.select()
+			.from(issue)
+			.where(
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			)
+			.limit(1);
+		if (!existingIssue) throw errors.NOT_FOUND();
 
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
-			teamId,
+			teamId: existingIssue.teamId,
 			permissionKey: "issue:update",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
-		const [updated] = await db
-			.update(issue)
-			.set({ priorityId: input.priorityId })
-			.where(
-				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
-			)
-			.returning();
-		if (!updated) throw errors.NOT_FOUND();
+		if (existingIssue.priorityId === input.priorityId) return existingIssue;
+
+		const updated = await db.transaction(async (tx) => {
+			const [updatedIssue] = await tx
+				.update(issue)
+				.set({ priorityId: input.priorityId })
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
+				.returning();
+			if (!updatedIssue) throw errors.NOT_FOUND();
+
+			await writeIssueActivity(tx, {
+				workspaceId: input.workspaceId,
+				teamId: existingIssue.teamId,
+				issueId: input.id,
+				actorId: context.auth.session.userId,
+				cycleId: updatedIssue.cycleId,
+				actionType: "issue.updated",
+				metadata: {
+					updatedFields: ["priorityId"],
+				},
+			});
+
+			return updatedIssue;
+		});
 
 		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
 		if (freshIssue) {
@@ -604,25 +999,49 @@ const updateAssignee = authedRouter
 	.input(issueUpdateAssigneeSchema)
 	.errors(updateDeleteErrors)
 	.handler(async ({ context, input, errors }) => {
-		const teamId = await getIssueTeamId(input.id, input.workspaceId);
-		if (!teamId) throw errors.NOT_FOUND();
+		const [existingIssue] = await db
+			.select()
+			.from(issue)
+			.where(
+				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+			)
+			.limit(1);
+		if (!existingIssue) throw errors.NOT_FOUND();
 
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
-			teamId,
+			teamId: existingIssue.teamId,
 			permissionKey: "issue:update",
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
-		const [updated] = await db
-			.update(issue)
-			.set({ assigneeId: input.assigneeId })
-			.where(
-				and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
-			)
-			.returning();
-		if (!updated) throw errors.NOT_FOUND();
+		if (existingIssue.assigneeId === input.assigneeId) return existingIssue;
+
+		const updated = await db.transaction(async (tx) => {
+			const [updatedIssue] = await tx
+				.update(issue)
+				.set({ assigneeId: input.assigneeId })
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
+				.returning();
+			if (!updatedIssue) throw errors.NOT_FOUND();
+
+			await writeIssueActivity(tx, {
+				workspaceId: input.workspaceId,
+				teamId: existingIssue.teamId,
+				issueId: input.id,
+				actorId: context.auth.session.userId,
+				cycleId: updatedIssue.cycleId,
+				actionType: "issue.updated",
+				metadata: {
+					updatedFields: ["assigneeId"],
+				},
+			});
+
+			return updatedIssue;
+		});
 
 		const freshIssue = await getIssueWithRelations(input.id, input.workspaceId);
 		if (freshIssue) {
@@ -663,6 +1082,8 @@ const moveIssue = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
+		let statusIdForRebalance = currentIssue.statusId;
+
 		const executeMove = async (
 			tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
 		): ReturnType<typeof db.transaction> => {
@@ -670,7 +1091,9 @@ const moveIssue = authedRouter
 			const [issueRecord] = await tx
 				.select()
 				.from(issue)
-				.where(eq(issue.id, input.id))
+				.where(
+					and(eq(issue.id, input.id), eq(issue.workspaceId, input.workspaceId)),
+				)
 				.for("update");
 
 			console.debug("Move issue: issue record locked", issueRecord);
@@ -684,19 +1107,49 @@ const moveIssue = authedRouter
 				const [targetIssue] = await tx
 					.select()
 					.from(issue)
-					.where(eq(issue.id, input.targetId))
+					.where(
+						and(
+							eq(issue.id, input.targetId),
+							eq(issue.workspaceId, input.workspaceId),
+						),
+					)
 					.for("update");
 
 				console.debug("Move issue: target issue found", targetIssue);
 				if (!targetIssue) throw errors.NOT_FOUND();
 				if (input.targetId === input.id) throw errors.INVALID_MOVE();
+				if (targetIssue.teamId !== issueRecord.teamId)
+					throw errors.INVALID_MOVE();
 
 				targetStatusId = targetIssue.statusId;
+				statusIdForRebalance = targetStatusId;
+
+				const [targetStatus] = await tx
+					.select({ id: issueStatus.id })
+					.from(issueStatus)
+					.where(
+						and(
+							eq(issueStatus.id, targetStatusId),
+							eq(issueStatus.workspaceId, input.workspaceId),
+							or(
+								isNull(issueStatus.teamId),
+								eq(issueStatus.teamId, issueRecord.teamId),
+							),
+						),
+					)
+					.limit(1);
+				if (!targetStatus) throw errors.INVALID_MOVE();
 
 				const allNeighbors = await tx
 					.select()
 					.from(issue)
-					.where(eq(issue.statusId, targetStatusId))
+					.where(
+						and(
+							eq(issue.workspaceId, input.workspaceId),
+							eq(issue.teamId, issueRecord.teamId),
+							eq(issue.statusId, targetStatusId),
+						),
+					)
 					.orderBy(issue.sortOrder);
 
 				const filteredNeighbors = allNeighbors.filter((i) => i.id !== input.id);
@@ -743,7 +1196,13 @@ const moveIssue = authedRouter
 				const allStatusIssues = await tx
 					.select()
 					.from(issue)
-					.where(eq(issue.statusId, targetStatusId))
+					.where(
+						and(
+							eq(issue.workspaceId, input.workspaceId),
+							eq(issue.teamId, issueRecord.teamId),
+							eq(issue.statusId, targetStatusId),
+						),
+					)
 					.orderBy(issue.sortOrder);
 
 				const statusIssues = allStatusIssues.filter((i) => i.id !== input.id);
@@ -768,10 +1227,40 @@ const moveIssue = authedRouter
 					statusId: targetStatusId,
 					sortOrder: newSortOrder,
 				})
-				.where(eq(issue.id, input.id))
+				.where(
+					and(
+						eq(issue.id, input.id),
+						eq(issue.workspaceId, input.workspaceId),
+						eq(issue.teamId, issueRecord.teamId),
+					),
+				)
 				.returning();
 
 			if (!updated) throw errors.NOT_FOUND();
+
+			if (issueRecord.statusId !== targetStatusId) {
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: issueRecord.teamId,
+					issueId: input.id,
+					actorId: context.auth.session.userId,
+					cycleId: updated.cycleId,
+					actionType: "issue.status_changed",
+					field: "statusId",
+					fromValue: issueRecord.statusId,
+					toValue: targetStatusId,
+					metadata: {
+						toStatusCategory: await getStatusCanonicalCategory(
+							tx,
+							targetStatusId,
+							input.workspaceId,
+						),
+						estimate: updated.estimate,
+						cycleId: updated.cycleId,
+					},
+				});
+			}
+
 			return updated;
 		};
 
@@ -807,9 +1296,7 @@ const moveIssue = authedRouter
 				}
 
 				if (attempt === 0) {
-					await rebalanceStatusIssues(
-						input.targetId ? currentIssue.statusId : currentIssue.statusId,
-					);
+					await rebalanceStatusIssues(statusIdForRebalance);
 				} else {
 					throw new Error("Failed to move issue after rebalancing");
 				}
