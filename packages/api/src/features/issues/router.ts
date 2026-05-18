@@ -130,6 +130,12 @@ const issueUpdateFields = defineIssueUpdateFields([
 	{ field: "archivedAt", isEqual: areNullableDatesEqual },
 ]);
 
+const dedicatedActivityFields = new Set<IssueUpdateField>([
+	"statusId",
+	"cycleId",
+	"estimate",
+]);
+
 function getChangedIssueUpdateFields(
 	existingIssue: IssueRecord,
 	input: IssueUpdateInput,
@@ -450,6 +456,9 @@ const updateIssue = authedRouter
 
 		const { values, updatedFields, updatedFieldSet } =
 			getChangedIssueUpdateFields(existingIssue, input);
+		const genericUpdatedFields = updatedFields.filter(
+			(field) => !dedicatedActivityFields.has(field),
+		);
 		const titleChanged = updatedFieldSet.has("title");
 		const descriptionChanged = updatedFieldSet.has("description");
 		const statusChanged = updatedFieldSet.has("statusId");
@@ -515,17 +524,19 @@ const updateIssue = authedRouter
 				.returning();
 			if (!updatedIssue) throw errors.NOT_FOUND();
 
-			await writeIssueActivity(tx, {
-				workspaceId: input.workspaceId,
-				teamId: existingIssue.teamId,
-				issueId: input.id,
-				actorId: context.auth.session.userId,
-				cycleId: updatedIssue.cycleId,
-				actionType: "issue.updated",
-				metadata: {
-					updatedFields,
-				},
-			});
+			if (genericUpdatedFields.length > 0) {
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueId: input.id,
+					actorId: context.auth.session.userId,
+					cycleId: updatedIssue.cycleId,
+					actionType: "issue.updated",
+					metadata: {
+						updatedFields: genericUpdatedFields,
+					},
+				});
+			}
 
 			if (input.statusId && existingIssue.statusId !== input.statusId) {
 				await writeIssueActivity(tx, {
