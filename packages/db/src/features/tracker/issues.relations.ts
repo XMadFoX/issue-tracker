@@ -24,7 +24,10 @@ export const issueRelations = defineRelationsPart(schema, (r) => ({
 		}),
 		subIssues: r.many.issue({ alias: "ParentIssue" }),
 		labelLinks: r.many.issueLabel(),
-		activities: r.many.issueActivity(),
+		activities: r.many.issueActivity({
+			from: r.issue.id,
+			to: r.issueActivity.issueId,
+		}),
 	},
 	issueLabel: {
 		issue: r.one.issue({ from: r.issueLabel.issueId, to: r.issue.id }),
