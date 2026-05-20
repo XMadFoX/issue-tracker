@@ -53,6 +53,9 @@ export const issueListSchema = z.object({
 	teamId: teamInsertSchema.shape.id.optional(),
 	limit: z.number().min(1).max(200).default(100),
 	offset: z.number().min(0).default(0),
+	archivedFilter: z
+		.enum(["all", "archived", "unarchived"])
+		.default("unarchived"),
 });
 
 export const issueUpdateSchema = issueInsertSchema

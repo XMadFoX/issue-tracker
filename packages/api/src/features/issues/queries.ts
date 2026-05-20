@@ -57,6 +57,8 @@ type IssueSearchScope = {
 	accessibleTeamIds?: Array<string>;
 };
 
+type IssueConditionBuilder = (fields: typeof issue) => SQL | undefined;
+
 function buildIssueSearchWhere(input: {
 	workspaceId: string;
 	teamId?: string | null;
@@ -65,11 +67,15 @@ function buildIssueSearchWhere(input: {
 	priorityId?: string | null;
 	reporterId?: string | null;
 	creatorId?: string | null;
-	rawConditions: Array<SQL>;
+	rawConditions: Array<IssueConditionBuilder>;
 }) {
 	const rawWhere =
 		input.rawConditions.length > 0
-			? { RAW: () => and(...input.rawConditions) ?? sql`true` }
+			? {
+					RAW: (fields: typeof issue) =>
+						and(...input.rawConditions.map((condition) => condition(fields))) ??
+						sql`true`,
+				}
 			: {};
 
 	return {
@@ -127,38 +133,43 @@ export async function searchIssues(
 		!EMBEDDINGS_ENABLED && mode === "semantic" ? "trigram" : mode;
 	const shouldCalculateSemantic =
 		EMBEDDINGS_ENABLED && (mode === "semantic" || mode === "hybrid");
-	const rawConditions: Array<SQL> = [];
+	const rawConditions: Array<IssueConditionBuilder> = [];
 
 	if (!teamId && scope.accessibleTeamIds) {
-		if (scope.accessibleTeamIds.length === 0) return [];
-		rawConditions.push(inArray(issue.teamId, scope.accessibleTeamIds));
+		const accessibleTeamIds = scope.accessibleTeamIds;
+		if (accessibleTeamIds.length === 0) return [];
+		rawConditions.push((fields) => inArray(fields.teamId, accessibleTeamIds));
 	}
 	if (createdAtFrom) {
-		rawConditions.push(gte(issue.createdAt, new Date(createdAtFrom)));
+		rawConditions.push((fields) =>
+			gte(fields.createdAt, new Date(createdAtFrom)),
+		);
 	}
 	if (createdAtTo) {
-		rawConditions.push(lte(issue.createdAt, new Date(createdAtTo)));
+		rawConditions.push((fields) =>
+			lte(fields.createdAt, new Date(createdAtTo)),
+		);
 	}
 	if (dueDateFrom) {
-		rawConditions.push(gte(issue.dueDate, new Date(dueDateFrom)));
+		rawConditions.push((fields) => gte(fields.dueDate, new Date(dueDateFrom)));
 	}
 	if (dueDateTo) {
-		rawConditions.push(lte(issue.dueDate, new Date(dueDateTo)));
+		rawConditions.push((fields) => lte(fields.dueDate, new Date(dueDateTo)));
 	}
 
 	if (!includeArchived) {
-		rawConditions.push(isNull(issue.archivedAt));
+		rawConditions.push((fields) => isNull(fields.archivedAt));
 	}
 
 	if (labelIds?.length) {
-		rawConditions.push(
+		rawConditions.push((fields) =>
 			exists(
 				db
 					.select({ one: sql`1` })
 					.from(issueLabel)
 					.where(
 						and(
-							eq(issueLabel.issueId, issue.id),
+							eq(issueLabel.issueId, fields.id),
 							inArray(issueLabel.labelId, labelIds),
 						),
 					),
@@ -198,7 +209,7 @@ export async function searchIssues(
 	);
 
 	if (referenceSearch?.kind === "number") {
-		rawConditions.push(eq(issue.number, referenceSearch.number));
+		rawConditions.push((fields) => eq(fields.number, referenceSearch.number));
 
 		return await db.query.issue.findMany({
 			where: buildIssueSearchWhere({
@@ -223,11 +234,13 @@ export async function searchIssues(
 		referenceSearch?.kind === "teamNumber" &&
 		referenceSearch.candidates.length > 0
 	) {
-		let referenceCondition = sql`false`;
-		for (const candidate of referenceSearch.candidates) {
-			referenceCondition = sql`${referenceCondition} OR (${issue.teamId} = ${candidate.teamId} AND ${issue.number} = ${candidate.number})`;
-		}
-		rawConditions.push(sql`(${referenceCondition})`);
+		rawConditions.push((fields) => {
+			let referenceCondition = sql`false`;
+			for (const candidate of referenceSearch.candidates) {
+				referenceCondition = sql`${referenceCondition} OR (${fields.teamId} = ${candidate.teamId} AND ${fields.number} = ${candidate.number})`;
+			}
+			return sql`(${referenceCondition})`;
+		});
 
 		return await db.query.issue.findMany({
 			where: buildIssueSearchWhere({
@@ -252,55 +265,59 @@ export async function searchIssues(
 		? await embedText(searchQuery)
 		: null;
 
-	const ftsScore = sql<number>`
-		CASE WHEN ${searchMode} IN ('fts', 'hybrid')
-		THEN COALESCE(ts_rank_cd(${issue.searchVector}, websearch_to_tsquery('english', ${searchQuery})), 0)
-		ELSE 0 END
-	`;
+	const buildSearchScores = (fields: typeof issue) => {
+		const ftsScore = sql<number>`
+			CASE WHEN ${searchMode} IN ('fts', 'hybrid')
+			THEN COALESCE(ts_rank_cd(${fields.searchVector}, websearch_to_tsquery('english', ${searchQuery})), 0)
+			ELSE 0 END
+		`;
 
-	const trigramScore = sql<number>`
-		CASE WHEN ${searchMode} IN ('trigram', 'hybrid')
-		THEN COALESCE(similarity(${issue.searchText}, ${searchQuery}), 0)
-		ELSE 0 END
-	`;
+		const trigramScore = sql<number>`
+			CASE WHEN ${searchMode} IN ('trigram', 'hybrid')
+			THEN COALESCE(similarity(${fields.searchText}, ${searchQuery}), 0)
+			ELSE 0 END
+		`;
 
-	const semanticScore =
-		shouldCalculateSemantic && queryEmbedding
+		const semanticScore =
+			shouldCalculateSemantic && queryEmbedding
+				? sql<number>`
+					CASE WHEN ${searchMode} IN ('semantic', 'hybrid')
+					THEN COALESCE(
+						CASE WHEN 1 - (${fields.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector) >= ${embeddingThreshold}
+						THEN 1 - (${fields.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector)
+						ELSE 0 END,
+						0
+					)
+					ELSE 0 END
+				`
+				: sql<number>`0`;
+
+		const hybridScore = EMBEDDINGS_ENABLED
 			? sql<number>`
-				CASE WHEN ${searchMode} IN ('semantic', 'hybrid')
-				THEN COALESCE(
-					CASE WHEN 1 - (${issue.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector) >= ${embeddingThreshold}
-					THEN 1 - (${issue.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector)
-					ELSE 0 END,
-					0
-				)
-				ELSE 0 END
+				CASE ${searchMode}
+					WHEN 'fts' THEN ${ftsScore}
+					WHEN 'trigram' THEN ${trigramScore}
+					WHEN 'semantic' THEN ${semanticScore}
+					WHEN 'hybrid' THEN (${ftsScore} + ${trigramScore} + ${semanticScore}) / 3.0
+				END
 			`
-			: sql<number>`0`;
+			: sql<number>`
+				CASE ${searchMode}
+					WHEN 'fts' THEN ${ftsScore}
+					WHEN 'trigram' THEN ${trigramScore}
+					WHEN 'semantic' THEN ${semanticScore}
+					WHEN 'hybrid' THEN (${ftsScore} + ${trigramScore}) / 2.0
+				END
+		`;
 
-	const hybridScore = EMBEDDINGS_ENABLED
-		? sql<number>`
-			CASE ${searchMode}
-				WHEN 'fts' THEN ${ftsScore}
-				WHEN 'trigram' THEN ${trigramScore}
-				WHEN 'semantic' THEN ${semanticScore}
-				WHEN 'hybrid' THEN (${ftsScore} + ${trigramScore} + ${semanticScore}) / 3.0
-			END
-		`
-		: sql<number>`
-			CASE ${searchMode}
-				WHEN 'fts' THEN ${ftsScore}
-				WHEN 'trigram' THEN ${trigramScore}
-				WHEN 'semantic' THEN ${semanticScore}
-				WHEN 'hybrid' THEN (${ftsScore} + ${trigramScore}) / 2.0
-			END
-	`;
+		return { ftsScore, trigramScore, semanticScore, hybridScore };
+	};
 
-	const scoreCondition =
-		minScore > 0 ? sql`(${hybridScore}) >= ${minScore}` : undefined;
-
-	if (scoreCondition) {
-		rawConditions.push(scoreCondition);
+	if (minScore > 0) {
+		rawConditions.push(
+			(fields) =>
+				sql`(${buildSearchScores(fields).hybridScore}) >= ${minScore}`,
+		);
 	}
 
 	const results = await db.query.issue.findMany({
@@ -326,13 +343,14 @@ export async function searchIssues(
 	}
 
 	const resultIds = results.map((result) => result.id);
+	const debugScores = buildSearchScores(issue);
 	const debugRows = await db
 		.select({
 			id: issue.id,
-			score: hybridScore,
-			ftsScore,
-			trigramScore,
-			semanticScore,
+			score: debugScores.hybridScore,
+			ftsScore: debugScores.ftsScore,
+			trigramScore: debugScores.trigramScore,
+			semanticScore: debugScores.semanticScore,
 		})
 		.from(issue)
 		.where(

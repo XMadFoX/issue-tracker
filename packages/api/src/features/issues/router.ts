@@ -94,6 +94,9 @@ type IssueRecord = typeof issue.$inferSelect;
 type IssueUpdateInput = z.infer<typeof issueUpdateSchema>;
 type IssueUpdateValues = Partial<typeof issue.$inferInsert>;
 type IssueUpdateField = Exclude<keyof IssueUpdateInput, "id" | "workspaceId">;
+type IssueWhere = NonNullable<
+	NonNullable<Parameters<typeof db.query.issue.findMany>[0]>["where"]
+>;
 
 type IssueUpdateFieldRule<Field extends IssueUpdateField = IssueUpdateField> = {
 	field: Field;
@@ -158,6 +161,19 @@ function getChangedIssueUpdateFields(
 		updatedFields,
 		updatedFieldSet: new Set<IssueUpdateField>(updatedFields),
 	};
+}
+
+function getArchivedIssueFilter(
+	archivedFilter: z.infer<typeof issueListSchema>["archivedFilter"],
+): IssueWhere {
+	switch (archivedFilter) {
+		case "archived":
+			return { NOT: { archivedAt: { isNull: true } } };
+		case "unarchived":
+			return { archivedAt: { isNull: true } };
+		case "all":
+			return {};
+	}
 }
 
 async function validateIssueCycleAssignment(
@@ -252,6 +268,7 @@ const listIssues = authedRouter
 			where: {
 				workspaceId: input.workspaceId,
 				...(input.teamId ? { teamId: input.teamId } : {}),
+				...getArchivedIssueFilter(input.archivedFilter),
 			},
 			with: {
 				status: {
