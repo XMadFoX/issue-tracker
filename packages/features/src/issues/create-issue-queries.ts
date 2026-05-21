@@ -5,6 +5,7 @@ import type {
 	TeamBySlugInput,
 	TeamIssuesInput,
 } from "./types";
+import { normalizeTeamIssuesInput } from "./types";
 
 export function createIssueQueries(orpc: PrismOrpc) {
 	const issueQueries = {
@@ -26,9 +27,9 @@ export function createIssueQueries(orpc: PrismOrpc) {
 			orpc.teamMembership.list.queryOptions({
 				input: { workspaceId, teamId },
 			}),
-		issueList: ({ workspaceId, teamId }: TeamIssuesInput) =>
+		issueList: (input: TeamIssuesInput) =>
 			orpc.issue.list.queryOptions({
-				input: { workspaceId, teamId },
+				input: normalizeTeamIssuesInput(input),
 			}),
 		issueDetail: ({ workspaceId, issueId }: IssueDetailInput) =>
 			orpc.issue.get.queryOptions({
@@ -53,7 +54,10 @@ export function createIssueQueries(orpc: PrismOrpc) {
 	};
 
 	const issueQueryKeys = {
-		issueList: (input: TeamIssuesInput) => orpc.issue.list.queryKey({ input }),
+		issueList: (input: TeamIssuesInput) =>
+			orpc.issue.list.queryKey({
+				input: normalizeTeamIssuesInput(input),
+			}),
 		issueDetail: ({ workspaceId, issueId }: IssueDetailInput) =>
 			orpc.issue.get.queryKey({ input: { id: issueId, workspaceId } }),
 	};

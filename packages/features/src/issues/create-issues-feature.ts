@@ -15,6 +15,7 @@ import type {
 	SubmitResult,
 	TeamIssuesInput,
 } from "./types";
+import { ISSUE_ARCHIVED_FILTERS, normalizeTeamIssuesInput } from "./types";
 
 const TEXT_SUB_ISSUE_QUERY_MIN_LENGTH = 2;
 const ISSUE_NUMBER_QUERY_MIN_LENGTH = 1;
@@ -42,6 +43,21 @@ function getMinSubIssueQueryLength(query: string) {
 		: TEXT_SUB_ISSUE_QUERY_MIN_LENGTH;
 }
 
+function isIssueVisibleForArchivedFilter(
+	issue: Outputs["issue"]["list"][number],
+	archivedFilter: TeamIssuesInput["archivedFilter"],
+) {
+	switch (archivedFilter) {
+		case "archived":
+			return issue.archivedAt !== null;
+		case "unarchived":
+		case undefined:
+			return issue.archivedAt === null;
+		case "all":
+			return true;
+	}
+}
+
 export function createIssuesFeature({
 	orpc,
 	client,
@@ -55,13 +71,21 @@ export function createIssuesFeature({
 		selectedIssueId,
 	}: IssueMutationParams) {
 		const queryClient = useQueryClient();
-		const listInput = { workspaceId, teamId };
+		const listInputs = ISSUE_ARCHIVED_FILTERS.map((filter) =>
+			normalizeTeamIssuesInput({
+				workspaceId,
+				teamId,
+				archivedFilter: filter,
+			}),
+		);
 
 		const invalidateIssueList = () => {
-			queryClient.invalidateQueries({
-				queryKey: issueQueryKeys.issueList(listInput),
-				exact: true,
-			});
+			for (const input of listInputs) {
+				queryClient.invalidateQueries({
+					queryKey: issueQueryKeys.issueList(input),
+					exact: true,
+				});
+			}
 		};
 
 		const invalidateIssue = (issueId: string) => {
@@ -285,25 +309,52 @@ export function createIssuesFeature({
 					);
 
 					for await (const event of iterator) {
-						queryClient.setQueryData<Outputs["issue"]["list"]>(
-							issueQueryKeys.issueList({ workspaceId, teamId }),
-							(oldData) => {
-								if (!oldData) return oldData;
+						for (const filter of ISSUE_ARCHIVED_FILTERS) {
+							const filteredListInput = normalizeTeamIssuesInput({
+								workspaceId,
+								teamId,
+								archivedFilter: filter,
+							});
 
-								if (event.type === "create") {
-									return [...oldData, event.issue];
-								}
-								if (event.type === "update") {
-									return oldData.map((issue) =>
-										issue.id === event.issue.id ? event.issue : issue,
-									);
-								}
-								if (event.type === "delete") {
-									return oldData.filter((issue) => issue.id !== event.issueId);
-								}
-								return oldData;
-							},
-						);
+							queryClient.setQueryData<Outputs["issue"]["list"]>(
+								issueQueryKeys.issueList(filteredListInput),
+								(oldData) => {
+									if (!oldData) return oldData;
+
+									if (event.type === "create") {
+										return isIssueVisibleForArchivedFilter(event.issue, filter)
+											? [...oldData, event.issue]
+											: oldData;
+									}
+									if (event.type === "update") {
+										const visible = isIssueVisibleForArchivedFilter(
+											event.issue,
+											filter,
+										);
+										const hasIssue = oldData.some(
+											(issue) => issue.id === event.issue.id,
+										);
+
+										if (!visible) {
+											return oldData.filter(
+												(issue) => issue.id !== event.issue.id,
+											);
+										}
+										if (!hasIssue) return [...oldData, event.issue];
+
+										return oldData.map((issue) =>
+											issue.id === event.issue.id ? event.issue : issue,
+										);
+									}
+									if (event.type === "delete") {
+										return oldData.filter(
+											(issue) => issue.id !== event.issueId,
+										);
+									}
+									return oldData;
+								},
+							);
+						}
 					}
 				} catch (error) {
 					if (error instanceof Error && error.name !== "AbortError") {

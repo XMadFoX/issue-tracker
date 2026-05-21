@@ -18,7 +18,38 @@ export type IssueSearchResult = Outputs["issue"]["search"]["issues"][number];
 export type TeamIssuesInput = {
 	workspaceId: string;
 	teamId: string;
+	archivedFilter?: Inputs["issue"]["list"]["archivedFilter"];
 };
+
+export type IssueArchivedFilter = NonNullable<
+	TeamIssuesInput["archivedFilter"]
+>;
+export type NormalizedTeamIssuesInput = Omit<
+	TeamIssuesInput,
+	"archivedFilter"
+> & {
+	archivedFilter: IssueArchivedFilter;
+};
+
+export const DEFAULT_ARCHIVED_FILTER =
+	"unarchived" satisfies IssueArchivedFilter;
+export const ISSUE_ARCHIVED_FILTERS = [
+	DEFAULT_ARCHIVED_FILTER,
+	"archived",
+	"all",
+] satisfies ReadonlyArray<IssueArchivedFilter>;
+
+export function normalizeTeamIssuesInput({
+	workspaceId,
+	teamId,
+	archivedFilter,
+}: TeamIssuesInput): NormalizedTeamIssuesInput {
+	return {
+		workspaceId,
+		teamId,
+		archivedFilter: archivedFilter ?? DEFAULT_ARCHIVED_FILTER,
+	};
+}
 
 export type TeamBySlugInput = {
 	workspaceId: string;
