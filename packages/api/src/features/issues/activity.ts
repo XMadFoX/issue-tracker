@@ -53,10 +53,6 @@ type NoFieldChange = {
 	toValue?: null;
 };
 
-type NoMetadata = {
-	metadata?: never;
-};
-
 type FieldChange<
 	Field extends keyof IssueRecord & string,
 	From = IssueRecord[Field],
@@ -103,18 +99,24 @@ type IssueEstimateChangedActivity = ActivityInput<
 		}
 >;
 
+type IssueCycleActivityMetadata = Pick<IssueRecord, "estimate"> & {
+	cycleId: ActiveCycleId;
+};
+
 type IssueCycleAssignedActivity = ActivityInput<
 	"issue.cycle_assigned",
 	CurrentCycle<ActiveCycleId> &
-		FieldChange<"cycleId", CycleId, ActiveCycleId> &
-		NoMetadata
+		FieldChange<"cycleId", CycleId, ActiveCycleId> & {
+			metadata: IssueCycleActivityMetadata;
+		}
 >;
 
 type IssueCycleUnassignedActivity = ActivityInput<
 	"issue.cycle_unassigned",
 	CurrentCycle<ActiveCycleId> &
-		FieldChange<"cycleId", ActiveCycleId, null> &
-		NoMetadata
+		FieldChange<"cycleId", ActiveCycleId, null> & {
+			metadata: IssueCycleActivityMetadata;
+		}
 >;
 
 type CompleteActivityUnion<

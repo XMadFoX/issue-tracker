@@ -54,6 +54,7 @@ const hierarchyErrors = {
 
 const issueRelationErrors = {
 	INVALID_CYCLE: {},
+	CYCLE_CLOSED: {},
 };
 
 const updateDeleteErrors = {
@@ -184,10 +185,12 @@ async function validateIssueCycleAssignment(
 		teamId: string;
 	},
 ) {
-	if (input.cycleId === null || input.cycleId === undefined) return true;
+	if (input.cycleId === null || input.cycleId === undefined) {
+		return { ok: true } as const;
+	}
 
 	const [row] = await executor
-		.select({ id: cycle.id })
+		.select({ id: cycle.id, state: cycle.state })
 		.from(cycle)
 		.where(
 			and(
@@ -198,7 +201,54 @@ async function validateIssueCycleAssignment(
 		)
 		.limit(1);
 
-	return row !== undefined;
+	if (!row) return { ok: false, code: "INVALID_CYCLE" } as const;
+	if (row.state === "completed" || row.state === "canceled") {
+		return { ok: false, code: "CYCLE_CLOSED" } as const;
+	}
+
+	return { ok: true } as const;
+}
+
+async function canUseCycle({
+	userId,
+	workspaceId,
+	teamId,
+}: {
+	userId: string;
+	workspaceId: string;
+	teamId: string;
+}) {
+	const [canRead, canUpdate] = await Promise.all([
+		isAllowed({
+			userId,
+			workspaceId,
+			teamId,
+			permissionKey: "cycle:read",
+		}),
+		isAllowed({
+			userId,
+			workspaceId,
+			teamId,
+			permissionKey: "cycle:update",
+		}),
+	]);
+
+	return canRead || canUpdate;
+}
+
+function throwCycleAssignmentError(
+	errors: {
+		INVALID_CYCLE: () => unknown;
+		CYCLE_CLOSED: () => unknown;
+	},
+	code: "INVALID_CYCLE" | "CYCLE_CLOSED",
+): never {
+	switch (code) {
+		case "INVALID_CYCLE":
+			throw errors.INVALID_CYCLE();
+		case "CYCLE_CLOSED":
+			throw errors.CYCLE_CLOSED();
+	}
 }
 
 function throwHierarchyError(
@@ -345,7 +395,15 @@ const createIssue = authedRouter
 			workspaceId,
 			teamId,
 		});
-		if (!validCycle) throw errors.INVALID_CYCLE();
+		if (!validCycle.ok) throwCycleAssignmentError(errors, validCycle.code);
+		if (input.cycleId !== null && input.cycleId !== undefined) {
+			const allowedToUseCycle = await canUseCycle({
+				userId: context.auth.session.userId,
+				workspaceId,
+				teamId,
+			});
+			if (!allowedToUseCycle) throw errors.UNAUTHORIZED();
+		}
 
 		const nextNumber = (maxRow?.maxNumber ?? 0) + 1;
 		const searchFields = await buildIssueSearchFields({
@@ -413,6 +471,25 @@ const createIssue = authedRouter
 							cycleId: newIssue.cycleId,
 						},
 					});
+
+					if (newIssue.cycleId !== null) {
+						await writeIssueActivity(tx, {
+							workspaceId,
+							teamId,
+							issueId: newIssue.id,
+							actorId: context.auth.session.userId,
+							cycleId: newIssue.cycleId,
+							actionType: "issue.cycle_assigned",
+							field: "cycleId",
+							fromValue: null,
+							toValue: newIssue.cycleId,
+							metadata: {
+								estimate: newIssue.estimate,
+								cycleId: newIssue.cycleId,
+							},
+						});
+					}
+
 					return newIssue;
 				});
 
@@ -464,12 +541,28 @@ const updateIssue = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
-		const validCycle = await validateIssueCycleAssignment(db, {
-			cycleId: input.cycleId,
-			workspaceId: input.workspaceId,
-			teamId: existingIssue.teamId,
-		});
-		if (!validCycle) throw errors.INVALID_CYCLE();
+		const assigningCycle =
+			input.cycleId !== null &&
+			input.cycleId !== undefined &&
+			existingIssue.cycleId !== input.cycleId;
+		const unassigningCycle =
+			input.cycleId === null && existingIssue.cycleId !== null;
+		if (assigningCycle) {
+			const validCycle = await validateIssueCycleAssignment(db, {
+				cycleId: input.cycleId,
+				workspaceId: input.workspaceId,
+				teamId: existingIssue.teamId,
+			});
+			if (!validCycle.ok) throwCycleAssignmentError(errors, validCycle.code);
+		}
+		if (assigningCycle || unassigningCycle) {
+			const allowedToUseCycle = await canUseCycle({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+				teamId: existingIssue.teamId,
+			});
+			if (!allowedToUseCycle) throw errors.UNAUTHORIZED();
+		}
 
 		const { values, updatedFields, updatedFieldSet } =
 			getChangedIssueUpdateFields(existingIssue, input);
@@ -613,6 +706,10 @@ const updateIssue = authedRouter
 						field: "cycleId",
 						fromValue: existingIssue.cycleId,
 						toValue: null,
+						metadata: {
+							estimate: existingIssue.estimate,
+							cycleId: existingIssue.cycleId,
+						},
 					});
 				} else if (updatedIssue.cycleId !== null) {
 					await writeIssueActivity(tx, {
@@ -625,6 +722,10 @@ const updateIssue = authedRouter
 						field: "cycleId",
 						fromValue: existingIssue.cycleId,
 						toValue: updatedIssue.cycleId,
+						metadata: {
+							estimate: updatedIssue.estimate,
+							cycleId: updatedIssue.cycleId,
+						},
 					});
 				}
 			}
