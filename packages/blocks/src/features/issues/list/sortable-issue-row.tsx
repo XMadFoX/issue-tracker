@@ -1,6 +1,8 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Badge } from "@prism/ui/components/badge";
 import { TableCell, TableRow } from "@prism/ui/components/table";
+import { cn } from "@prism/ui/lib/utils";
 import { GripVertical } from "lucide-react";
 import { IssueAssigneeSelect } from "../components/issue-assignee-select";
 import { IssueLabelSelect } from "../components/issue-label-select";
@@ -58,9 +60,10 @@ export function SortableIssueRow({
 		<TableRow
 			ref={setNodeRef}
 			style={style}
-			className={
-				navigation?.onIssueClick ? "cursor-pointer hover:bg-muted/50" : ""
-			}
+			className={cn(
+				navigation?.onIssueClick ? "cursor-pointer hover:bg-muted/50" : "",
+				issue.archivedAt ? "bg-muted/20 opacity-70" : "",
+			)}
 			onClick={(event) => {
 				const target = event.target;
 				if (
@@ -86,7 +89,14 @@ export function SortableIssueRow({
 			<TableCell className="font-medium text-muted-foreground">
 				{issue.team?.key}-{issue.number}
 			</TableCell>
-			<TableCell className="font-medium">{issue.title}</TableCell>
+			<TableCell className="font-medium">
+				<div className="flex items-center gap-2">
+					<span>{issue.title}</span>
+					{issue.archivedAt ? (
+						<Badge variant="secondary">Archived</Badge>
+					) : null}
+				</div>
+			</TableCell>
 			<TableCell>
 				{subIssues.length > 0 ? (
 					<SubIssuesPopover

@@ -5,16 +5,23 @@ import { loadTeamIssuesRoute } from "@/features/issues/loaders";
 
 const searchParamsSchema = z.object({
 	selectedIssue: z.string().optional(),
+	archivedFilter: z
+		.enum(["unarchived", "archived", "all"])
+		.default("unarchived"),
 });
 
 export const Route = createFileRoute("/workspace/$slug/teams/$teamSlug/issues")(
 	{
 		validateSearch: searchParamsSchema,
-		loader: ({ context, params }) =>
+		loaderDeps: ({ search }) => ({
+			archivedFilter: search.archivedFilter,
+		}),
+		loader: ({ context, params, deps }) =>
 			loadTeamIssuesRoute({
 				queryClient: context.queryClient,
 				slug: params.slug,
 				teamSlug: params.teamSlug,
+				archivedFilter: deps.archivedFilter,
 			}),
 		component: RouteComponent,
 	},
@@ -29,6 +36,7 @@ function RouteComponent() {
 			slug={slug}
 			teamSlug={teamSlug}
 			selectedIssueId={search.selectedIssue}
+			archivedFilter={search.archivedFilter}
 		/>
 	);
 }

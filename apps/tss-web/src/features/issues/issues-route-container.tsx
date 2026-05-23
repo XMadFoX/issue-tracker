@@ -3,7 +3,21 @@ import {
 	type IssueLinkTarget,
 	IssueList,
 } from "@prism/blocks/src/features/issues";
-import { useIssueDetailModel } from "@prism/features/issues";
+import {
+	type IssueArchivedFilter,
+	useIssueDetailModel,
+} from "@prism/features/issues";
+import { Badge } from "@prism/ui/components/badge";
+import { Button } from "@prism/ui/components/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuLabel,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@prism/ui/components/dropdown-menu";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Outlet, useNavigate } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
@@ -19,12 +33,33 @@ type Props = {
 	slug: string;
 	teamSlug: string;
 	selectedIssueId?: string;
+	archivedFilter: IssueArchivedFilter;
 };
+
+const issueArchiveFilterOptions = [
+	{ value: "unarchived", label: "Exclude archived" },
+	{ value: "all", label: "Include archived" },
+	{ value: "archived", label: "Only archived" },
+] satisfies Array<{ value: IssueArchivedFilter; label: string }>;
+
+const issueArchiveFilterSummary: Record<IssueArchivedFilter, string> = {
+	unarchived: "Active only",
+	all: "Including archived",
+	archived: "Archived only",
+};
+
+function getIssueArchiveFilter(value: string): IssueArchivedFilter | null {
+	return (
+		issueArchiveFilterOptions.find((option) => option.value === value)?.value ??
+		null
+	);
+}
 
 export function IssuesRouteContainer({
 	slug,
 	teamSlug,
 	selectedIssueId,
+	archivedFilter,
 }: Props) {
 	const navigate = useNavigate();
 	const workspace = useSuspenseQuery(issueQueries.workspaceBySlug(slug));
@@ -33,7 +68,7 @@ export function IssuesRouteContainer({
 		issueQueries.teamBySlug({ workspaceId, teamSlug }),
 	);
 	const teamId = team.data.id;
-	const listInput = { workspaceId, teamId };
+	const listInput = { workspaceId, teamId, archivedFilter };
 	const priorities = useSuspenseQuery(issueQueries.priorities(workspaceId));
 	const statuses = useSuspenseQuery(issueQueries.statuses(workspaceId));
 	const labels = useSuspenseQuery(issueQueries.labels(listInput));
@@ -45,15 +80,54 @@ export function IssuesRouteContainer({
 		selectedIssueId,
 	});
 
-	useIssueLiveUpdates({ workspaceId, teamId });
+	useIssueLiveUpdates(listInput);
 
 	const getIssueUrl = (issue: IssueLinkTarget) =>
 		buildIssueUrl({ slug, teamSlug, issue });
 
 	return (
 		<div className="relative w-full space-y-8 p-6">
-			<div className="flex items-center justify-between">
-				<h1 className="font-bold text-2xl">Issues</h1>
+			<div className="flex items-center justify-between gap-4">
+				<div className="flex items-center gap-3">
+					<h1 className="font-bold text-2xl">Issues</h1>
+					{archivedFilter !== "unarchived" ? (
+						<Badge variant="secondary" className="font-normal">
+							{issueArchiveFilterSummary[archivedFilter]}
+						</Badge>
+					) : null}
+				</div>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button type="button" variant="ghost" size="sm">
+							View options
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end" className="w-56">
+						<DropdownMenuLabel>Archived issues</DropdownMenuLabel>
+						<DropdownMenuSeparator />
+						<DropdownMenuRadioGroup
+							value={archivedFilter}
+							onValueChange={(value) => {
+								const nextFilter = getIssueArchiveFilter(value);
+								if (!nextFilter) return;
+
+								navigate({
+									to: ".",
+									search: {
+										archivedFilter: nextFilter,
+										selectedIssue: undefined,
+									},
+								});
+							}}
+						>
+							{issueArchiveFilterOptions.map((option) => (
+								<DropdownMenuRadioItem key={option.value} value={option.value}>
+									{option.label}
+								</DropdownMenuRadioItem>
+							))}
+						</DropdownMenuRadioGroup>
+					</DropdownMenuContent>
+				</DropdownMenu>
 			</div>
 
 			<IssueList
@@ -70,7 +144,7 @@ export function IssuesRouteContainer({
 					onIssueClick: (issueId) => {
 						navigate({
 							to: ".",
-							search: { selectedIssue: issueId },
+							search: { archivedFilter, selectedIssue: issueId },
 						});
 					},
 					getIssueUrl,
@@ -93,7 +167,7 @@ export function IssuesRouteContainer({
 					onClose={() => {
 						navigate({
 							to: ".",
-							search: { selectedIssue: undefined },
+							search: { archivedFilter, selectedIssue: undefined },
 						});
 					}}
 				/>

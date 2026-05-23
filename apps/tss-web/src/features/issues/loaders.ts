@@ -1,3 +1,4 @@
+import type { IssueArchivedFilter } from "@prism/features/issues";
 import type { QueryClient } from "@tanstack/react-query";
 import { issueQueries } from "./issues-feature";
 
@@ -5,6 +6,7 @@ export type TeamIssuesLoaderParams = {
 	queryClient: QueryClient;
 	slug: string;
 	teamSlug: string;
+	archivedFilter?: IssueArchivedFilter;
 };
 
 export type IssuePageLoaderParams = TeamIssuesLoaderParams & {
@@ -15,6 +17,7 @@ export async function loadTeamIssuesRoute({
 	queryClient,
 	slug,
 	teamSlug,
+	archivedFilter,
 }: TeamIssuesLoaderParams) {
 	const workspace = await queryClient.ensureQueryData(
 		issueQueries.workspaceBySlug(slug),
@@ -22,7 +25,7 @@ export async function loadTeamIssuesRoute({
 	const team = await queryClient.ensureQueryData(
 		issueQueries.teamBySlug({ workspaceId: workspace.id, teamSlug }),
 	);
-	const input = { workspaceId: workspace.id, teamId: team.id };
+	const input = { workspaceId: workspace.id, teamId: team.id, archivedFilter };
 
 	await Promise.all([
 		queryClient.ensureQueryData(issueQueries.priorities(workspace.id)),
