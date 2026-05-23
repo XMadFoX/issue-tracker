@@ -4,6 +4,7 @@ import type {
 	InferRouterInputs,
 	InferRouterOutputs,
 } from "@orpc/server";
+import { cycleRouter } from "./features/cycles/router";
 import { issuePriorityRouter } from "./features/issue-priorities/router";
 import { issueStatusRouter } from "./features/issue-statuses/router";
 import { issueRouter } from "./features/issues/router";
@@ -19,6 +20,7 @@ import { workspaceRouter } from "./features/workspaces/router";
 export const router = {
 	workspace: workspaceRouter,
 	team: teamRouter,
+	cycle: cycleRouter,
 	issue: {
 		status: issueStatusRouter,
 		...issueRouter,
