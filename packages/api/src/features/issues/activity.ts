@@ -6,6 +6,7 @@ import {
 } from "db/features/tracker/issue-activities.schema";
 import type { canonicalCategoryEnum } from "db/features/tracker/issue-statuses.schema";
 import type { issue } from "db/features/tracker/issues.schema";
+import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 
 export const ISSUE_ACTIVITY_ACTION_TYPES = Object.freeze([
 	...issueActivityActionTypeEnum.enumValues,
@@ -71,13 +72,16 @@ type IssueCreatedActivity = ActivityInput<
 		}
 >;
 
+type IssueUpdatedActivityMetadata = {
+	updatedFields: string[];
+	descriptionCoalesceFirstCreatedAt?: string;
+};
+
 type IssueUpdatedActivity = ActivityInput<
 	"issue.updated",
 	CurrentCycle &
 		NoFieldChange & {
-			metadata: {
-				updatedFields: string[];
-			};
+			metadata: IssueUpdatedActivityMetadata;
 		}
 >;
 
@@ -135,10 +139,148 @@ type WriteIssueActivityInput = CompleteActivityUnion<
 	| IssueCycleUnassignedActivity
 >;
 
+const DESCRIPTION_ACTIVITY_ROLLING_COALESCE_WINDOW_MS = 10 * 60 * 1000;
+const DESCRIPTION_ACTIVITY_FIXED_COALESCE_WINDOW_MS = 30 * 60 * 1000;
+const DESCRIPTION_ONLY_UPDATED_FIELDS = ["description"];
+const DESCRIPTION_ONLY_UPDATED_FIELDS_JSON = JSON.stringify(
+	DESCRIPTION_ONLY_UPDATED_FIELDS,
+);
+
+function getDescriptionOnlyMetadata(
+	firstCreatedAt: Date,
+): IssueUpdatedActivityMetadata {
+	return {
+		updatedFields: DESCRIPTION_ONLY_UPDATED_FIELDS,
+		descriptionCoalesceFirstCreatedAt: firstCreatedAt.toISOString(),
+	};
+}
+
+async function acquireDescriptionOnlyActivityLock(
+	executor: DbExecutor,
+	input: IssueUpdatedActivity,
+) {
+	await executor.execute(
+		sql`select pg_advisory_xact_lock(hashtext(${`issue-description-activity:${input.workspaceId}:${input.issueId}:${input.actorId}`}))`,
+	);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getDescriptionCoalesceFirstCreatedAt({
+	createdAt,
+	metadata,
+}: {
+	createdAt: Date;
+	metadata: unknown;
+}) {
+	if (!isRecord(metadata)) {
+		return createdAt;
+	}
+
+	const firstCreatedAt = metadata.descriptionCoalesceFirstCreatedAt;
+	if (typeof firstCreatedAt !== "string") {
+		return createdAt;
+	}
+
+	const parsedFirstCreatedAt = new Date(firstCreatedAt);
+	if (Number.isNaN(parsedFirstCreatedAt.getTime())) {
+		return createdAt;
+	}
+
+	return parsedFirstCreatedAt;
+}
+
+function isDescriptionOnlyIssueUpdatedActivity(
+	input: WriteIssueActivityInput,
+): input is IssueUpdatedActivity {
+	return (
+		input.actionType === "issue.updated" &&
+		input.metadata.updatedFields.length === 1 &&
+		input.metadata.updatedFields[0] === "description"
+	);
+}
+
+async function coalesceDescriptionOnlyIssueActivity(
+	executor: DbExecutor,
+	input: IssueUpdatedActivity,
+): Promise<boolean> {
+	if (input.actorId === undefined || input.actorId === null) {
+		return false;
+	}
+
+	const now = new Date();
+	const rollingCutoff = new Date(
+		now.getTime() - DESCRIPTION_ACTIVITY_ROLLING_COALESCE_WINDOW_MS,
+	);
+	const fixedCutoff = new Date(
+		now.getTime() - DESCRIPTION_ACTIVITY_FIXED_COALESCE_WINDOW_MS,
+	);
+	const [existingActivity] = await executor
+		.select({
+			id: issueActivity.id,
+			createdAt: issueActivity.createdAt,
+			metadata: issueActivity.metadata,
+		})
+		.from(issueActivity)
+		.where(
+			and(
+				eq(issueActivity.workspaceId, input.workspaceId),
+				eq(issueActivity.issueId, input.issueId),
+				eq(issueActivity.actorId, input.actorId),
+				eq(issueActivity.actionType, "issue.updated"),
+				isNull(issueActivity.field),
+				isNull(issueActivity.fromValue),
+				isNull(issueActivity.toValue),
+				gte(issueActivity.createdAt, rollingCutoff),
+				sql`coalesce((${issueActivity.metadata}->>'descriptionCoalesceFirstCreatedAt')::timestamptz, ${issueActivity.createdAt}) >= ${fixedCutoff}`,
+				sql`${issueActivity.metadata}->'updatedFields' = ${DESCRIPTION_ONLY_UPDATED_FIELDS_JSON}::jsonb`,
+			),
+		)
+		.orderBy(desc(issueActivity.createdAt))
+		.limit(1);
+
+	if (!existingActivity) {
+		return false;
+	}
+
+	await executor
+		.update(issueActivity)
+		.set({
+			cycleId: input.cycleId ?? null,
+			metadata: getDescriptionOnlyMetadata(
+				getDescriptionCoalesceFirstCreatedAt(existingActivity),
+			),
+			createdAt: now,
+		})
+		.where(eq(issueActivity.id, existingActivity.id));
+
+	return true;
+}
+
 export async function writeIssueActivity(
 	executor: DbExecutor,
 	input: WriteIssueActivityInput,
 ): Promise<void> {
+	const isDescriptionOnlyActivity =
+		isDescriptionOnlyIssueUpdatedActivity(input);
+
+	if (
+		isDescriptionOnlyActivity &&
+		input.actorId !== undefined &&
+		input.actorId !== null
+	) {
+		await acquireDescriptionOnlyActivityLock(executor, input);
+		if (await coalesceDescriptionOnlyIssueActivity(executor, input)) {
+			return;
+		}
+	}
+
+	const metadata = isDescriptionOnlyActivity
+		? getDescriptionOnlyMetadata(new Date())
+		: (input.metadata ?? null);
+
 	await executor.insert(issueActivity).values({
 		id: createId(),
 		workspaceId: input.workspaceId,
@@ -150,6 +292,6 @@ export async function writeIssueActivity(
 		field: input.field ?? null,
 		fromValue: input.fromValue ?? null,
 		toValue: input.toValue ?? null,
-		metadata: input.metadata ?? null,
+		metadata,
 	});
 }
