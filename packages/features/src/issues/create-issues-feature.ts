@@ -58,6 +58,20 @@ function isIssueVisibleForArchivedFilter(
 	}
 }
 
+function isDescriptionOnlyIssueUpdate(
+	input: Parameters<IssueActions["update"]>[0],
+) {
+	if (input.description === undefined) return false;
+
+	return Object.entries(input).every(([key, value]) => {
+		if (key === "id" || key === "workspaceId" || key === "description") {
+			return true;
+		}
+
+		return value === undefined;
+	});
+}
+
 export function createIssuesFeature({
 	orpc,
 	client,
@@ -93,6 +107,10 @@ export function createIssuesFeature({
 				queryKey: issueQueryKeys.issueDetail({ workspaceId, issueId }),
 				exact: true,
 			});
+			queryClient.invalidateQueries({
+				queryKey: issueQueryKeys.issueActivity({ workspaceId, issueId }),
+				exact: true,
+			});
 		};
 
 		const invalidateIssues = (issueIds: Array<string>) => {
@@ -109,7 +127,25 @@ export function createIssuesFeature({
 
 		const updateIssue = useMutation(
 			orpc.issue.update.mutationOptions({
-				onSuccess: (_result, variables) => {
+				onSuccess: (result, variables) => {
+					if (isDescriptionOnlyIssueUpdate(variables)) {
+						queryClient.setQueryData<Outputs["issue"]["get"]>(
+							issueQueryKeys.issueDetail({
+								workspaceId: variables.workspaceId,
+								issueId: variables.id,
+							}),
+							(oldData) => {
+								if (!oldData) return oldData;
+
+								return {
+									...oldData,
+									...result,
+								};
+							},
+						);
+						return;
+					}
+
 					invalidateChangedIssue(variables.id);
 				},
 			}),
