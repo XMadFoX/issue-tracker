@@ -13,6 +13,7 @@ export type SubmitResult = { success: true } | { error: unknown };
 export type IssueListItem = Outputs["issue"]["list"][number];
 export type IssueListData = Outputs["issue"]["list"];
 export type IssueDetailData = Outputs["issue"]["get"];
+export type IssueActivityList = Outputs["issue"]["activity"]["list"];
 export type IssueSearchResult = Outputs["issue"]["search"]["issues"][number];
 
 export type TeamIssuesInput = {

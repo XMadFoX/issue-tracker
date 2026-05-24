@@ -13,6 +13,7 @@ export { IssueCreateModal } from "./modal/issue-create-modal";
 export { IssueDetailSheet } from "./modal/issue-detail-sheet";
 export type {
 	IssueActions,
+	IssueActivityList,
 	IssueCreateInput,
 	IssueDetailData,
 	IssueLinkTarget,
@@ -29,4 +30,5 @@ export type {
 	SubmitResult,
 	TeamMemberList,
 } from "./types";
+export { IssueActivitySection } from "./view/issue-activity-section";
 export { IssueDetail } from "./view/issue-detail";

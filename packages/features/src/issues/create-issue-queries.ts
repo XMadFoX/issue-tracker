@@ -35,6 +35,10 @@ export function createIssueQueries(orpc: PrismOrpc) {
 			orpc.issue.get.queryOptions({
 				input: { id: issueId, workspaceId },
 			}),
+		issueActivity: ({ workspaceId, issueId }: IssueDetailInput) =>
+			orpc.issue.activity.list.queryOptions({
+				input: { workspaceId, issueId },
+			}),
 		subIssueSearch: ({ workspaceId, teamId, query }: IssueSearchInput) =>
 			orpc.issue.search.queryOptions({
 				input: {
@@ -60,6 +64,8 @@ export function createIssueQueries(orpc: PrismOrpc) {
 			}),
 		issueDetail: ({ workspaceId, issueId }: IssueDetailInput) =>
 			orpc.issue.get.queryKey({ input: { id: issueId, workspaceId } }),
+		issueActivity: ({ workspaceId, issueId }: IssueDetailInput) =>
+			orpc.issue.activity.list.queryKey({ input: { workspaceId, issueId } }),
 	};
 
 	return { issueQueries, issueQueryKeys };

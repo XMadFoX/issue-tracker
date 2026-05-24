@@ -8,6 +8,7 @@ import { ExternalLink } from "lucide-react";
 import { useRouterAdapter } from "../../../router/adapter";
 import type {
 	IssueActions,
+	IssueActivityList,
 	IssueDetailData,
 	IssueListItem,
 	IssueNavigation,
@@ -23,6 +24,7 @@ import { IssueDetail } from "../view/issue-detail";
 
 type Props = {
 	issue: IssueDetailData;
+	activity?: IssueActivityList;
 	onClose: () => void;
 	statuses: IssueStatusList;
 	priorities: PriorityList;
@@ -45,6 +47,7 @@ type Props = {
 
 export function IssueDetailSheet({
 	issue,
+	activity,
 	onClose,
 	statuses,
 	priorities,
@@ -83,6 +86,7 @@ export function IssueDetailSheet({
 				</SheetHeader>
 				<IssueDetail
 					issue={issue}
+					activity={activity}
 					statuses={statuses}
 					priorities={priorities}
 					labels={labels}

@@ -28,6 +28,9 @@ export function IssuePageContainer({ slug, teamSlug, issueId }: Props) {
 	const issue = useSuspenseQuery(
 		issueQueries.issueDetail({ workspaceId, issueId }),
 	);
+	const activity = useSuspenseQuery(
+		issueQueries.issueActivity({ workspaceId, issueId }),
+	);
 	const priorities = useSuspenseQuery(issueQueries.priorities(workspaceId));
 	const statuses = useSuspenseQuery(issueQueries.statuses(workspaceId));
 	const labels = useSuspenseQuery(issueQueries.labels(listInput));
@@ -55,6 +58,7 @@ export function IssuePageContainer({ slug, teamSlug, issueId }: Props) {
 		<div className="container mx-auto max-w-3xl py-8">
 			<IssueDetail
 				issue={issue.data}
+				activity={activity.data}
 				statuses={statuses.data}
 				priorities={priorities.data}
 				labels={labels.data}

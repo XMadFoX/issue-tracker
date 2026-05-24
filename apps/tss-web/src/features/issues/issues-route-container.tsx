@@ -208,6 +208,10 @@ function SelectedIssueSheet({
 	const selectedIssue = useQuery(
 		issueQueries.issueDetail({ workspaceId, issueId }),
 	);
+	const activity = useQuery({
+		...issueQueries.issueActivity({ workspaceId, issueId }),
+		enabled: selectedIssue.data !== undefined,
+	});
 	const { issueActions, labelActions, subIssueActions } = useIssueMutations({
 		workspaceId,
 		teamId,
@@ -229,6 +233,7 @@ function SelectedIssueSheet({
 	return (
 		<IssueDetailSheet
 			issue={selectedIssue.data}
+			activity={activity.data ?? []}
 			onClose={onClose}
 			statuses={statuses}
 			priorities={priorities}
