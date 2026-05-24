@@ -143,6 +143,13 @@ export function createIssuesFeature({
 								};
 							},
 						);
+						queryClient.invalidateQueries({
+							queryKey: issueQueryKeys.issueActivity({
+								workspaceId: variables.workspaceId,
+								issueId: variables.id,
+							}),
+							exact: true,
+						});
 						return;
 					}
 

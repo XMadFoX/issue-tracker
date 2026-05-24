@@ -2,6 +2,7 @@ import { cn } from "@prism/ui/lib/utils";
 import type { ComponentProps } from "react";
 import type {
 	IssueActions,
+	IssueActivityList,
 	IssueDetailData,
 	IssueListItem,
 	IssueNavigation,
@@ -13,6 +14,7 @@ import type {
 	SubIssueSearchState,
 	TeamMemberList,
 } from "../types";
+import { IssueActivitySection } from "./issue-activity-section";
 import { IssueDescriptionSection } from "./issue-description-section";
 import { IssueDetailHeader } from "./issue-detail-header";
 import { IssuePropertyBar } from "./issue-property-bar";
@@ -20,6 +22,7 @@ import { IssueSubIssuesSection } from "./issue-sub-issues-section";
 
 type Props = {
 	issue: IssueDetailData;
+	activity?: IssueActivityList;
 	statuses: IssueStatusList;
 	priorities: PriorityList;
 	labels: LabelList;
@@ -41,6 +44,7 @@ type Props = {
 
 export function IssueDetail({
 	issue,
+	activity = [],
 	statuses,
 	priorities,
 	labels,
@@ -95,6 +99,8 @@ export function IssueDetail({
 				subIssueActions={subIssueActions}
 				getIssueUrl={navigation?.getIssueUrl}
 			/>
+
+			<IssueActivitySection activity={activity} statuses={statuses} />
 		</div>
 	);
 }
