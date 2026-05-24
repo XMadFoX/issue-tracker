@@ -27,6 +27,7 @@ import {
 import { issuePublisher } from "./publisher";
 import { getIssueWithRelations, searchIssues } from "./queries";
 import {
+	issueActivityListSchema,
 	issueCreateSchema,
 	issueDeleteSchema,
 	issueGetSchema,
@@ -365,6 +366,38 @@ const getIssue = authedRouter
 
 		if (!row) throw errors.NOT_FOUND();
 		return row;
+	});
+
+const listIssueActivity = authedRouter
+	.input(issueActivityListSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const teamId = await getIssueTeamId(input.issueId, input.workspaceId);
+		if (!teamId) throw errors.NOT_FOUND();
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId,
+			permissionKey: "issue:read",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED();
+
+		return await db.query.issueActivity.findMany({
+			where: {
+				workspaceId: input.workspaceId,
+				issueId: input.issueId,
+			},
+			with: {
+				actor: true,
+				cycle: true,
+			},
+			orderBy: {
+				createdAt: "desc",
+			},
+			limit: input.limit,
+			offset: input.offset,
+		});
 	});
 
 const createIssue = authedRouter
@@ -1504,6 +1537,9 @@ export const issueRouter = {
 	updateAssignee,
 	search: searchIssuesHandler,
 	live: liveIssues,
+	activity: {
+		list: listIssueActivity,
+	},
 	labels: {
 		bulkAdd: bulkAddLabels,
 		bulkDelete: bulkDeleteLabels,
