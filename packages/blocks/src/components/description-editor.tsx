@@ -2,7 +2,7 @@ import type { Inputs, Outputs } from "@prism/api/src/router";
 import { Editor, EditorContainer } from "@prism/ui/components/editor/editor";
 import { EditorKit } from "@prism/ui/components/editor/editor-kit";
 import { cn } from "@prism/ui/lib/utils";
-import { useDebouncedCallback } from "@tanstack/react-pacer";
+import { useDebouncer } from "@tanstack/react-pacer";
 import { KEYS, type Value } from "platejs";
 import { Plate, usePlateEditor } from "platejs/react";
 import { type ComponentProps, useEffect, useRef, useState } from "react";
@@ -29,6 +29,7 @@ type DescriptionEditorProps = {
 	initialValue?: unknown;
 	value?: unknown;
 	onChange?: (value: Value) => void;
+	onBlur?: ComponentProps<typeof Editor>["onBlur"];
 	placeholder?: string;
 	className?: string;
 	editorClassName?: string;
@@ -40,6 +41,7 @@ export function DescriptionEditor({
 	initialValue,
 	value,
 	onChange,
+	onBlur,
 	placeholder = "Describe the issue...",
 	className,
 	editorClassName,
@@ -77,6 +79,7 @@ export function DescriptionEditor({
 		<Plate editor={editor} onChange={handleChange}>
 			<EditorContainer className={className} variant={containerVariant}>
 				<Editor
+					onBlur={onBlur}
 					placeholder={placeholder}
 					variant={editorVariant}
 					className={cn("px-2!", editorClassName)}
@@ -96,29 +99,48 @@ export default function IssueDescriptionEditor({
 	);
 	const previousIssueId = useRef(issue.id);
 
+	// The issue detail view saves in the background, so we wrap the reusable
+	// editor with a local draft and a debounced persistence layer.
+	const updateDebouncer = useDebouncer(
+		async (input: Inputs["issue"]["update"]) => {
+			await onUpdate(input);
+		},
+		{
+			wait: 1000,
+			onUnmount: (debouncer) => {
+				debouncer.flush();
+			},
+		},
+	);
+
 	useEffect(() => {
 		// Keep the local draft stable while saving; only reset it when the user
 		// navigates to a different issue.
 		if (previousIssueId.current !== issue.id) {
+			updateDebouncer.flush();
 			previousIssueId.current = issue.id;
 			setDraftValue(getEditorValue(issue.description));
 		}
-	}, [issue.description, issue.id]);
+	}, [issue.description, issue.id, updateDebouncer]);
 
-	// The issue detail view saves in the background, so we wrap the reusable
-	// editor with a local draft and a debounced persistence layer.
-	const debouncedUpdate = useDebouncedCallback(
-		async (input: Inputs["issue"]["update"]) => {
-			await onUpdate(input);
-		},
-		{ wait: 300 },
-	);
+	useEffect(() => {
+		const flushPendingUpdate = () => {
+			updateDebouncer.flush();
+		};
+
+		window.addEventListener("pagehide", flushPendingUpdate);
+
+		return () => {
+			window.removeEventListener("pagehide", flushPendingUpdate);
+			flushPendingUpdate();
+		};
+	}, [updateDebouncer]);
 
 	const handleChange = (value: Value) => {
 		setDraftValue(value);
 
 		if (serializeValue(value) !== serializeValue(issue.description)) {
-			debouncedUpdate({
+			updateDebouncer.maybeExecute({
 				id: issue.id,
 				workspaceId,
 				description: value,
@@ -126,5 +148,11 @@ export default function IssueDescriptionEditor({
 		}
 	};
 
-	return <DescriptionEditor value={draftValue} onChange={handleChange} />;
+	return (
+		<DescriptionEditor
+			value={draftValue}
+			onChange={handleChange}
+			onBlur={() => updateDebouncer.flush()}
+		/>
+	);
 }
