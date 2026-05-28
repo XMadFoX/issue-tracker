@@ -2,11 +2,17 @@ import { teamCreateSchema } from "@prism/api/src/features/teams/schema";
 import type { Inputs } from "@prism/api/src/router";
 import { Button } from "@prism/ui/components/button";
 import { ColorPickerField } from "@prism/ui/components/color-picker-field";
-import { FieldError } from "@prism/ui/components/field";
+import {
+	Field,
+	FieldContent,
+	FieldError,
+	FieldLabel,
+} from "@prism/ui/components/field";
 import { useAppForm } from "@prism/ui/components/form/form-hooks";
 import { generateRandomColor } from "@prism/ui/lib/colors";
 import { cn } from "@prism/ui/lib/utils";
 import type z from "zod";
+import { CycleDurationControl } from "../components/cycle-duration-control";
 
 type Props = {
 	workspaceId: Inputs["team"]["create"]["workspaceId"];
@@ -23,6 +29,7 @@ export function TeamCreateForm({ workspaceId, onSubmit, className }: Props) {
 			key: "",
 			color: generateRandomColor(),
 			privacy: "private",
+			cycleDuration: 14,
 			workspaceId: workspaceId,
 		} as z.input<typeof teamCreateSchema>,
 		validators: { onSubmit: teamCreateSchema },
@@ -61,6 +68,19 @@ export function TeamCreateForm({ workspaceId, onSubmit, className }: Props) {
 						value={field.state.value ?? "#000000"}
 						onChange={(color) => field.handleChange(color)}
 					/>
+				)}
+			</form.AppField>
+			<form.AppField name="cycleDuration">
+				{(field) => (
+					<Field>
+						<FieldContent>
+							<FieldLabel htmlFor={field.name}>Cycle duration</FieldLabel>
+						</FieldContent>
+						<CycleDurationControl
+							value={field.state.value}
+							onChange={(cycleDuration) => field.handleChange(cycleDuration)}
+						/>
+					</Field>
 				)}
 			</form.AppField>
 			<form.Subscribe selector={(state) => [state.errorMap]}>

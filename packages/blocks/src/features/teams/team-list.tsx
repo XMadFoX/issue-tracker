@@ -15,6 +15,10 @@ import { getRelativeTime } from "@prism/ui/lib/utils";
 import { Plus } from "lucide-react";
 import { useCallback } from "react";
 import type z from "zod";
+import {
+	CycleDurationControl,
+	formatCycleDuration,
+} from "./components/cycle-duration-control";
 import { TeamCreateModal } from "./modal/create-modal";
 
 type Team = Outputs["team"]["listByWorkspace"][0];
@@ -77,6 +81,7 @@ export function TeamList({
 							<TableHead className="w-[100px]">Key</TableHead>
 							<TableHead>Name</TableHead>
 							<TableHead>Privacy</TableHead>
+							<TableHead>Cycle duration</TableHead>
 							<TableHead>Created</TableHead>
 							<TableHead className="text-right">Updated</TableHead>
 						</TableRow>
@@ -128,6 +133,24 @@ export function TeamList({
 										</div>
 									</TableCell>
 									<TableCell>{team.privacy}</TableCell>
+									<TableCell>
+										{updateTeam ? (
+											<CycleDurationControl
+												value={team.cycleDuration}
+												onChange={(cycleDuration) =>
+													updateTeam({
+														id: team.id,
+														cycleDuration,
+														workspaceId,
+													})
+												}
+												selectClassName="h-8 w-32 border-transparent shadow-none hover:border-input"
+												customInputClassName="h-8 w-20"
+											/>
+										) : (
+											formatCycleDuration(team.cycleDuration)
+										)}
+									</TableCell>
 									<TableCell className="text-muted-foreground">
 										{new Date(team.createdAt).toLocaleDateString()}
 									</TableCell>
@@ -138,7 +161,7 @@ export function TeamList({
 							))
 						) : (
 							<TableRow>
-								<TableCell colSpan={5} className="h-24 text-center">
+								<TableCell colSpan={6} className="h-24 text-center">
 									No teams found.
 								</TableCell>
 							</TableRow>
