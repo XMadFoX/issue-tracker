@@ -328,6 +328,7 @@ const listIssues = authedRouter
 					},
 				},
 				priority: true,
+				cycle: true,
 				assignee: true,
 				team: true,
 				labelLinks: {

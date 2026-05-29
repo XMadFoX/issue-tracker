@@ -22,6 +22,7 @@ export async function getIssueWithRelations(id: string, workspaceId: string) {
 				},
 			},
 			priority: true,
+			cycle: true,
 			assignee: true,
 			team: true,
 			labelLinks: {
