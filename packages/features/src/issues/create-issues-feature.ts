@@ -174,6 +174,21 @@ export function createIssuesFeature({
 			}),
 		);
 
+		const assignIssueToCycle = useMutation(
+			orpc.cycle.assignIssue.mutationOptions({
+				onSuccess: (_result, variables) => {
+					invalidateChangedIssue(variables.issueId);
+				},
+			}),
+		);
+		const unassignIssueFromCycle = useMutation(
+			orpc.cycle.unassignIssue.mutationOptions({
+				onSuccess: (_result, variables) => {
+					invalidateChangedIssue(variables.issueId);
+				},
+			}),
+		);
+
 		const addLabels = useMutation(
 			orpc.issue.labels.bulkAdd.mutationOptions({
 				onSuccess: (_result, variables) => {
@@ -260,10 +275,30 @@ export function createIssuesFeature({
 			}
 		};
 
+		const updateIssueCycle: IssueActions["updateCycle"] = async ({
+			id,
+			workspaceId,
+			cycleId,
+		}) => {
+			if (cycleId === null) {
+				return unassignIssueFromCycle.mutateAsync({
+					workspaceId,
+					issueId: id,
+				});
+			}
+
+			return assignIssueToCycle.mutateAsync({
+				workspaceId,
+				issueId: id,
+				cycleId,
+			});
+		};
+
 		const issueActions: IssueActions = {
 			update: updateIssue.mutateAsync,
 			updatePriority: updateIssuePriority.mutateAsync,
 			updateAssignee: updateIssueAssignee.mutateAsync,
+			updateCycle: updateIssueCycle,
 			move: moveIssue.mutateAsync,
 			create: createIssueWithToast,
 		};

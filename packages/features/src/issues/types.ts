@@ -15,6 +15,7 @@ export type IssueListData = Outputs["issue"]["list"];
 export type IssueDetailData = Outputs["issue"]["get"];
 export type IssueActivityList = Outputs["issue"]["activity"]["list"];
 export type IssueSearchResult = Outputs["issue"]["search"]["issues"][number];
+export type CycleList = Outputs["cycle"]["list"];
 
 export type TeamIssuesInput = {
 	workspaceId: string;
@@ -68,6 +69,12 @@ export type IssueSearchInput = {
 	query: string;
 };
 
+export type IssueCycleUpdateInput = {
+	id: string;
+	workspaceId: string;
+	cycleId: string | null;
+};
+
 export type IssueActions = {
 	update: (
 		input: Inputs["issue"]["update"],
@@ -78,6 +85,7 @@ export type IssueActions = {
 	updateAssignee: (
 		input: Inputs["issue"]["updateAssignee"],
 	) => Promise<Outputs["issue"]["updateAssignee"]>;
+	updateCycle: (input: IssueCycleUpdateInput) => Promise<unknown>;
 	move?: (input: Inputs["issue"]["move"]) => Promise<unknown>;
 	create: (issue: IssueCreateInput) => Promise<SubmitResult>;
 };

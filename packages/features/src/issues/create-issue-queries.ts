@@ -27,6 +27,10 @@ export function createIssueQueries(orpc: PrismOrpc) {
 			orpc.teamMembership.list.queryOptions({
 				input: { workspaceId, teamId },
 			}),
+		cycles: ({ workspaceId, teamId }: TeamIssuesInput) =>
+			orpc.cycle.list.queryOptions({
+				input: { workspaceId, teamId },
+			}),
 		issueList: (input: TeamIssuesInput) =>
 			orpc.issue.list.queryOptions({
 				input: normalizeTeamIssuesInput(input),
