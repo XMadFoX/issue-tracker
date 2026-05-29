@@ -3,6 +3,7 @@ import { Button } from "@prism/ui/components/button";
 import { Plus } from "lucide-react";
 import { IssueCreateModal } from "../modal/issue-create-modal";
 import type {
+	CycleList,
 	IssueActions,
 	IssueListData,
 	IssueListItem,
@@ -32,9 +33,10 @@ type Props = {
 	priorities: PriorityList;
 	labels: LabelList;
 	teamMembers: TeamMemberList;
+	cycles: CycleList;
 	issueActions: Pick<
 		IssueActions,
-		"create" | "updatePriority" | "updateAssignee"
+		"create" | "updatePriority" | "updateAssignee" | "updateCycle"
 	>;
 	labelActions: LabelActions;
 	navigation?: IssueNavigation;
@@ -50,6 +52,7 @@ export function IssueStatusSection({
 	priorities,
 	labels,
 	teamMembers,
+	cycles,
 	issueActions,
 	labelActions,
 	navigation,
@@ -87,6 +90,7 @@ export function IssueStatusSection({
 					labels={labels}
 					priorities={priorities}
 					teamMembers={teamMembers}
+					cycles={cycles}
 					workspaceId={workspaceId}
 					issueActions={issueActions}
 					labelActions={labelActions}

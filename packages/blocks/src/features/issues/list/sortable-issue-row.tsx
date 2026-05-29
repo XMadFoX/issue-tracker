@@ -5,10 +5,12 @@ import { TableCell, TableRow } from "@prism/ui/components/table";
 import { cn } from "@prism/ui/lib/utils";
 import { GripVertical } from "lucide-react";
 import { IssueAssigneeSelect } from "../components/issue-assignee-select";
+import { IssueCycleSelect } from "../components/issue-cycle-select";
 import { IssueLabelSelect } from "../components/issue-label-select";
 import { IssuePrioritySelect } from "../components/issue-priority-select";
 import { SubIssuesPopover } from "../components/sub-issues-popover";
 import type {
+	CycleList,
 	IssueActions,
 	IssueListItem,
 	IssueNavigation,
@@ -23,8 +25,12 @@ type Props = {
 	labels: LabelList;
 	priorities: PriorityList;
 	teamMembers: TeamMemberList;
+	cycles: CycleList;
 	workspaceId: string;
-	issueActions: Pick<IssueActions, "updatePriority" | "updateAssignee">;
+	issueActions: Pick<
+		IssueActions,
+		"updatePriority" | "updateAssignee" | "updateCycle"
+	>;
 	labelActions: LabelActions;
 	navigation?: IssueNavigation;
 	subIssues: Array<IssueListItem>;
@@ -35,6 +41,7 @@ export function SortableIssueRow({
 	labels,
 	priorities,
 	teamMembers,
+	cycles,
 	workspaceId,
 	issueActions,
 	labelActions,
@@ -106,6 +113,21 @@ export function SortableIssueRow({
 				) : (
 					<span className="text-muted-foreground">-</span>
 				)}
+			</TableCell>
+			<TableCell>
+				<IssueCycleSelect
+					cycleId={issue.cycleId}
+					cycles={cycles}
+					currentCycle={issue.cycle}
+					triggerClassName="h-fit w-full cursor-pointer border bg-transparent px-2 py-1 text-sm shadow-none"
+					onChange={(cycleId) =>
+						issueActions.updateCycle({
+							id: issue.id,
+							workspaceId,
+							cycleId,
+						})
+					}
+				/>
 			</TableCell>
 			<TableCell>
 				<IssuePrioritySelect

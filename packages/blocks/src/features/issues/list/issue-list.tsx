@@ -18,6 +18,7 @@ import {
 } from "@prism/ui/components/table";
 import { useCallback, useMemo, useState } from "react";
 import type {
+	CycleList,
 	IssueActions,
 	IssueListData,
 	IssueListItem,
@@ -36,11 +37,12 @@ type IssueListProps = {
 	priorities: PriorityList;
 	labels: LabelList;
 	teamMembers: TeamMemberList;
+	cycles: CycleList;
 	teamId: string;
 	workspaceId: string;
 	issueActions: Pick<
 		IssueActions,
-		"create" | "updatePriority" | "updateAssignee" | "move"
+		"create" | "updatePriority" | "updateAssignee" | "updateCycle" | "move"
 	>;
 	labelActions: LabelActions;
 	navigation?: IssueNavigation;
@@ -54,6 +56,7 @@ export function IssueList({
 	priorities,
 	labels,
 	teamMembers,
+	cycles,
 	issueActions,
 	labelActions,
 	navigation,
@@ -147,6 +150,7 @@ export function IssueList({
 						priorities={priorities}
 						labels={labels}
 						teamMembers={teamMembers}
+						cycles={cycles}
 						issueActions={issueActions}
 						labelActions={labelActions}
 						navigation={navigation}

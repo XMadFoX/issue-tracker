@@ -11,6 +11,7 @@ import {
 } from "@prism/ui/components/table";
 import { useMemo } from "react";
 import type {
+	CycleList,
 	IssueActions,
 	IssueListData,
 	IssueListItem,
@@ -27,8 +28,12 @@ type Props = {
 	labels: LabelList;
 	priorities: PriorityList;
 	teamMembers: TeamMemberList;
+	cycles: CycleList;
 	workspaceId: string;
-	issueActions: Pick<IssueActions, "updatePriority" | "updateAssignee">;
+	issueActions: Pick<
+		IssueActions,
+		"updatePriority" | "updateAssignee" | "updateCycle"
+	>;
 	labelActions: LabelActions;
 	navigation?: IssueNavigation;
 	subIssuesByParentId: Map<string, Array<IssueListItem>>;
@@ -39,6 +44,7 @@ export function IssuesTable({
 	labels,
 	priorities,
 	teamMembers,
+	cycles,
 	workspaceId,
 	issueActions,
 	labelActions,
@@ -59,6 +65,7 @@ export function IssuesTable({
 						<TableHead className="w-[100px]">ID</TableHead>
 						<TableHead>Title</TableHead>
 						<TableHead className="w-[130px]">Sub-tasks</TableHead>
+						<TableHead>Cycle</TableHead>
 						<TableHead>Priority</TableHead>
 						<TableHead>Label</TableHead>
 						<TableHead>Assignee</TableHead>
@@ -77,6 +84,7 @@ export function IssuesTable({
 								labels={labels}
 								priorities={priorities}
 								teamMembers={teamMembers}
+								cycles={cycles}
 								workspaceId={workspaceId}
 								issueActions={issueActions}
 								labelActions={labelActions}

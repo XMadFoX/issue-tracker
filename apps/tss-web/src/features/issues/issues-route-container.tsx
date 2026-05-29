@@ -73,6 +73,7 @@ export function IssuesRouteContainer({
 	const statuses = useSuspenseQuery(issueQueries.statuses(workspaceId));
 	const labels = useSuspenseQuery(issueQueries.labels(listInput));
 	const teamMembers = useSuspenseQuery(issueQueries.teamMembers(listInput));
+	const cycles = useSuspenseQuery(issueQueries.cycles(listInput));
 	const issues = useSuspenseQuery(issueQueries.issueList(listInput));
 	const { issueActions, labelActions } = useIssueMutations({
 		workspaceId,
@@ -137,6 +138,7 @@ export function IssuesRouteContainer({
 				priorities={priorities.data}
 				labels={labels.data}
 				teamMembers={teamMembers.data}
+				cycles={cycles.data}
 				workspaceId={workspaceId}
 				issueActions={issueActions}
 				labelActions={labelActions}

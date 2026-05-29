@@ -14,6 +14,7 @@ export type IssueStatusList = Outputs["issue"]["status"]["list"];
 export type PriorityList = Outputs["priority"]["list"];
 export type LabelList = Outputs["label"]["list"];
 export type TeamMemberList = Outputs["teamMembership"]["list"];
+export type CycleList = Outputs["cycle"]["list"];
 
 export type IssueLinkTarget = {
 	id: string;
@@ -30,6 +31,12 @@ export type LabelActions = {
 	) => Promise<void>;
 };
 
+export type IssueCycleUpdateInput = {
+	id: string;
+	workspaceId: string;
+	cycleId: string | null;
+};
+
 export type IssueActions = {
 	update: (
 		input: Inputs["issue"]["update"],
@@ -40,6 +47,7 @@ export type IssueActions = {
 	updateAssignee: (
 		input: Inputs["issue"]["updateAssignee"],
 	) => Promise<Outputs["issue"]["updateAssignee"]>;
+	updateCycle: (input: IssueCycleUpdateInput) => Promise<unknown>;
 	move?: (input: Inputs["issue"]["move"]) => Promise<unknown>;
 	create: (issue: IssueCreateInput) => Promise<SubmitResult>;
 };
