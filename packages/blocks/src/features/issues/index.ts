@@ -1,4 +1,5 @@
 export { IssueAssigneeSelect } from "./components/issue-assignee-select";
+export { IssueEstimateSelect } from "./components/issue-estimate-select";
 export { IssueLabelSelect } from "./components/issue-label-select";
 export { IssuePrioritySelect } from "./components/issue-priority-select";
 export {
