@@ -5,7 +5,7 @@ import { Label } from "@prism/ui/components/label";
 import { useState } from "react";
 import type { Cycle } from "./cycle-card";
 
-type CycleFormValue = Pick<
+export type CycleFormValue = Pick<
 	Inputs["cycle"]["create"],
 	"name" | "startDate" | "endDate" | "capacity"
 > & {
@@ -16,6 +16,7 @@ type CycleFormProps = {
 	cycle?: Cycle;
 	defaultStartDate?: string;
 	defaultEndDate?: string;
+	disableStartDate?: boolean;
 	onSubmit: (value: CycleFormValue) => Promise<void>;
 	onCancel?: () => void;
 };
@@ -33,6 +34,7 @@ export function CycleForm({
 	cycle,
 	defaultStartDate = "",
 	defaultEndDate = "",
+	disableStartDate = false,
 	onSubmit,
 	onCancel,
 }: CycleFormProps) {
@@ -83,6 +85,7 @@ export function CycleForm({
 						type="date"
 						value={startDate}
 						onChange={(event) => setStartDate(event.target.value)}
+						disabled={disableStartDate}
 						required
 					/>
 				</div>

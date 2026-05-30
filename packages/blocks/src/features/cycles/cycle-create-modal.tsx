@@ -1,15 +1,8 @@
 import type { Inputs } from "@prism/api/src/router";
 import { Button } from "@prism/ui/components/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from "@prism/ui/components/dialog";
 import { Plus } from "lucide-react";
 import { type ReactElement, useState } from "react";
-import { CycleForm } from "./cycle-form";
+import { CycleFormDialog } from "./cycle-form-dialog";
 
 type CycleCreateModalProps = {
 	trigger?: ReactElement;
@@ -45,32 +38,21 @@ export function CycleCreateModal({
 	const [open, setOpen] = useState(false);
 
 	return (
-		<Dialog open={open} onOpenChange={setOpen}>
-			<DialogTrigger
-				render={
-					trigger ?? (
-						<Button size="sm">
-							<Plus className="size-4" />
-							Create cycle
-						</Button>
-					)
-				}
-			/>
-			<DialogContent>
-				<DialogHeader>
-					<DialogTitle>Create planned cycle</DialogTitle>
-				</DialogHeader>
-				<CycleForm
-					key={open ? "open" : "closed"}
-					defaultStartDate={toDateInputValue(new Date())}
-					defaultEndDate={getDefaultEndDate(cycleDuration)}
-					onCancel={() => setOpen(false)}
-					onSubmit={async (value) => {
-						await onSubmit(value);
-						setOpen(false);
-					}}
-				/>
-			</DialogContent>
-		</Dialog>
+		<CycleFormDialog
+			open={open}
+			onOpenChange={setOpen}
+			title="Create planned cycle"
+			trigger={
+				trigger ?? (
+					<Button size="sm">
+						<Plus className="size-4" />
+						Create cycle
+					</Button>
+				)
+			}
+			defaultStartDate={toDateInputValue(new Date())}
+			defaultEndDate={getDefaultEndDate(cycleDuration)}
+			onSubmit={onSubmit}
+		/>
 	);
 }
