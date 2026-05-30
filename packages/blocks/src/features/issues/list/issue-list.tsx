@@ -42,7 +42,12 @@ type IssueListProps = {
 	workspaceId: string;
 	issueActions: Pick<
 		IssueActions,
-		"create" | "updatePriority" | "updateAssignee" | "updateCycle" | "move"
+		| "create"
+		| "update"
+		| "updatePriority"
+		| "updateAssignee"
+		| "updateCycle"
+		| "move"
 	>;
 	labelActions: LabelActions;
 	navigation?: IssueNavigation;

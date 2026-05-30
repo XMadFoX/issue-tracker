@@ -32,7 +32,7 @@ type Props = {
 	workspaceId: string;
 	issueActions: Pick<
 		IssueActions,
-		"updatePriority" | "updateAssignee" | "updateCycle"
+		"update" | "updatePriority" | "updateAssignee" | "updateCycle"
 	>;
 	labelActions: LabelActions;
 	navigation?: IssueNavigation;
@@ -67,6 +67,7 @@ export function IssuesTable({
 						<TableHead className="w-[130px]">Sub-tasks</TableHead>
 						<TableHead>Cycle</TableHead>
 						<TableHead>Priority</TableHead>
+						<TableHead className="w-[110px]">Estimate</TableHead>
 						<TableHead>Label</TableHead>
 						<TableHead>Assignee</TableHead>
 						<TableHead className="text-right">Created</TableHead>

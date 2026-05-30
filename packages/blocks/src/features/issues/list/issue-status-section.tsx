@@ -36,7 +36,7 @@ type Props = {
 	cycles: CycleList;
 	issueActions: Pick<
 		IssueActions,
-		"create" | "updatePriority" | "updateAssignee" | "updateCycle"
+		"create" | "update" | "updatePriority" | "updateAssignee" | "updateCycle"
 	>;
 	labelActions: LabelActions;
 	navigation?: IssueNavigation;

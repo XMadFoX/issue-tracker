@@ -6,6 +6,7 @@ import { cn } from "@prism/ui/lib/utils";
 import { GripVertical } from "lucide-react";
 import { IssueAssigneeSelect } from "../components/issue-assignee-select";
 import { IssueCycleSelect } from "../components/issue-cycle-select";
+import { IssueEstimateSelect } from "../components/issue-estimate-select";
 import { IssueLabelSelect } from "../components/issue-label-select";
 import { IssuePrioritySelect } from "../components/issue-priority-select";
 import { SubIssuesPopover } from "../components/sub-issues-popover";
@@ -29,7 +30,7 @@ type Props = {
 	workspaceId: string;
 	issueActions: Pick<
 		IssueActions,
-		"updatePriority" | "updateAssignee" | "updateCycle"
+		"update" | "updatePriority" | "updateAssignee" | "updateCycle"
 	>;
 	labelActions: LabelActions;
 	navigation?: IssueNavigation;
@@ -139,6 +140,19 @@ export function SortableIssueRow({
 							id: issue.id,
 							workspaceId,
 							priorityId,
+						})
+					}
+				/>
+			</TableCell>
+			<TableCell>
+				<IssueEstimateSelect
+					estimate={issue.estimate}
+					triggerClassName="h-fit w-full cursor-pointer border bg-transparent px-2 py-1 text-sm shadow-none"
+					onChange={(estimate) =>
+						issueActions.update({
+							id: issue.id,
+							workspaceId,
+							estimate,
 						})
 					}
 				/>
