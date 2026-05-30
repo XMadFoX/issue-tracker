@@ -1,6 +1,7 @@
 import {
 	Select,
 	SelectContent,
+	SelectGroup,
 	SelectItem,
 	SelectLabel,
 	SelectSeparator,
@@ -66,32 +67,38 @@ export function IssueCycleSelect({
 			<SelectContent>
 				{activeCycles.length > 0 ? (
 					<>
-						<SelectLabel>Active</SelectLabel>
-						{activeCycles.map((cycle) => (
-							<SelectItem key={cycle.id} value={cycle.id}>
-								{getCycleLabel(cycle)}
-							</SelectItem>
-						))}
+						<SelectGroup>
+							<SelectLabel>Active</SelectLabel>
+							{activeCycles.map((cycle) => (
+								<SelectItem key={cycle.id} value={cycle.id}>
+									{getCycleLabel(cycle)}
+								</SelectItem>
+							))}
+						</SelectGroup>
 						<SelectSeparator />
 					</>
 				) : null}
 				{plannedCycles.length > 0 ? (
 					<>
-						<SelectLabel>Planned</SelectLabel>
-						{plannedCycles.map((cycle) => (
-							<SelectItem key={cycle.id} value={cycle.id}>
-								{getCycleLabel(cycle)}
-							</SelectItem>
-						))}
+						<SelectGroup>
+							<SelectLabel>Planned</SelectLabel>
+							{plannedCycles.map((cycle) => (
+								<SelectItem key={cycle.id} value={cycle.id}>
+									{getCycleLabel(cycle)}
+								</SelectItem>
+							))}
+						</SelectGroup>
 						<SelectSeparator />
 					</>
 				) : null}
 				{selectedCycle && !selectedCycleIsSelectable ? (
 					<>
-						<SelectLabel>Current</SelectLabel>
-						<SelectItem value={selectedCycle.id} disabled>
-							{getCycleLabel(selectedCycle)}
-						</SelectItem>
+						<SelectGroup>
+							<SelectLabel>Current</SelectLabel>
+							<SelectItem value={selectedCycle.id} disabled>
+								{getCycleLabel(selectedCycle)}
+							</SelectItem>
+						</SelectGroup>
 						<SelectSeparator />
 					</>
 				) : null}
