@@ -7,6 +7,7 @@ import {
 	SelectValue,
 } from "@prism/ui/components/select";
 import { IssueAssigneeSelect } from "../components/issue-assignee-select";
+import { IssueEstimateSelect } from "../components/issue-estimate-select";
 import { IssueLabelSelect } from "../components/issue-label-select";
 import { IssuePrioritySelect } from "../components/issue-priority-select";
 import type {
@@ -96,6 +97,19 @@ export function IssuePropertyBar({
 						id: issue.id,
 						workspaceId,
 						assigneeId,
+					})
+				}
+			/>
+
+			<IssueEstimateSelect
+				estimate={issue.estimate}
+				triggerClassName="h-fit w-fit cursor-pointer border bg-transparent px-2 py-1 text-sm shadow-none"
+				showBadge={true}
+				onChange={(estimate) =>
+					issueActions.update({
+						id: issue.id,
+						workspaceId,
+						estimate,
 					})
 				}
 			/>
