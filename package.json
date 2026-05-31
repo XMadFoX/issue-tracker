@@ -2,6 +2,8 @@
 	"name": "prism-tracker",
 	"version": "1.0.0",
 	"scripts": {
+		"db:migrate": "bun --env-file=.env -F db migrate",
+		"dev": "bun -F tss-web dev",
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"typecheck": "bun --workspaces --if-present run typecheck"
 	},
