@@ -72,6 +72,14 @@ function isDescriptionOnlyIssueUpdate(
 	});
 }
 
+function affectsCycleMetrics(input: Parameters<IssueActions["update"]>[0]) {
+	return (
+		input.cycleId !== undefined ||
+		input.statusId !== undefined ||
+		input.estimate !== undefined
+	);
+}
+
 export function createIssuesFeature({
 	orpc,
 	client,
@@ -102,6 +110,19 @@ export function createIssuesFeature({
 			}
 		};
 
+		const invalidateCycleMetrics = (cycleId?: string | null) => {
+			if (cycleId) {
+				queryClient.invalidateQueries({
+					queryKey: orpc.cycle.metrics.queryKey({
+						input: { workspaceId, cycleId },
+					}),
+				});
+				return;
+			}
+
+			queryClient.invalidateQueries({ queryKey: orpc.cycle.metrics.key() });
+		};
+
 		const invalidateIssue = (issueId: string) => {
 			queryClient.invalidateQueries({
 				queryKey: issueQueryKeys.issueDetail({ workspaceId, issueId }),
@@ -117,6 +138,16 @@ export function createIssuesFeature({
 			invalidateIssueList();
 			for (const issueId of issueIds) {
 				invalidateIssue(issueId);
+			}
+		};
+
+		const getCachedIssue = (issueId: string) => {
+			for (const input of listInputs) {
+				const issues = queryClient.getQueryData<Outputs["issue"]["list"]>(
+					issueQueryKeys.issueList(input),
+				);
+				const issue = issues?.find((candidate) => candidate.id === issueId);
+				if (issue) return issue;
 			}
 		};
 
@@ -154,6 +185,7 @@ export function createIssuesFeature({
 					}
 
 					invalidateChangedIssue(variables.id);
+					if (affectsCycleMetrics(variables)) invalidateCycleMetrics();
 				},
 			}),
 		);
@@ -177,7 +209,20 @@ export function createIssuesFeature({
 		const assignIssueToCycle = useMutation(
 			orpc.cycle.assignIssue.mutationOptions({
 				onSuccess: (_result, variables) => {
+					const previousIssue = getCachedIssue(variables.issueId);
+
 					invalidateChangedIssue(variables.issueId);
+					if (!previousIssue) {
+						invalidateCycleMetrics();
+						return;
+					}
+					if (
+						previousIssue.cycleId &&
+						previousIssue.cycleId !== variables.cycleId
+					) {
+						invalidateCycleMetrics(previousIssue.cycleId);
+					}
+					invalidateCycleMetrics(variables.cycleId);
 				},
 			}),
 		);
@@ -185,6 +230,7 @@ export function createIssuesFeature({
 			orpc.cycle.unassignIssue.mutationOptions({
 				onSuccess: (_result, variables) => {
 					invalidateChangedIssue(variables.issueId);
+					invalidateCycleMetrics(variables.cycleId);
 				},
 			}),
 		);
@@ -207,7 +253,10 @@ export function createIssuesFeature({
 
 		const moveIssue = useMutation(
 			orpc.issue.move.mutationOptions({
-				onSuccess: invalidateIssueList,
+				onSuccess: () => {
+					invalidateIssueList();
+					invalidateCycleMetrics();
+				},
 				onError: () => {
 					notify?.error("Failed to move issue");
 				},
@@ -229,6 +278,9 @@ export function createIssuesFeature({
 						? [createdIssue.id, createdIssue.parentIssueId]
 						: [createdIssue.id],
 				);
+				if (createdIssue.cycleId !== null) {
+					invalidateCycleMetrics(createdIssue.cycleId);
+				}
 				notify?.success("Issue created successfully");
 				return { success: true };
 			} catch (error) {
@@ -379,6 +431,21 @@ export function createIssuesFeature({
 		useEffect(() => {
 			const abortController = new AbortController();
 
+			function getCachedLiveIssue(issueId: string) {
+				for (const filter of ISSUE_ARCHIVED_FILTERS) {
+					const input = normalizeTeamIssuesInput({
+						workspaceId,
+						teamId,
+						archivedFilter: filter,
+					});
+					const issues = queryClient.getQueryData<Outputs["issue"]["list"]>(
+						issueQueryKeys.issueList(input),
+					);
+					const issue = issues?.find((candidate) => candidate.id === issueId);
+					if (issue) return issue;
+				}
+			}
+
 			async function subscribe() {
 				try {
 					const iterator = await client.issue.live(
@@ -387,6 +454,46 @@ export function createIssuesFeature({
 					);
 
 					for await (const event of iterator) {
+						const cycleMetricIds = new Set<string>();
+						let shouldInvalidateAllCycleMetrics = false;
+
+						if (event.type === "delete") {
+							shouldInvalidateAllCycleMetrics = true;
+						}
+						if (event.type === "create" && event.issue.cycleId !== null) {
+							cycleMetricIds.add(event.issue.cycleId);
+						}
+						if (event.type === "update") {
+							const previousIssue = getCachedLiveIssue(event.issue.id);
+
+							if (!previousIssue) {
+								shouldInvalidateAllCycleMetrics = true;
+							} else if (
+								previousIssue.cycleId !== event.issue.cycleId ||
+								previousIssue.statusId !== event.issue.statusId ||
+								previousIssue.estimate !== event.issue.estimate
+							) {
+								if (previousIssue.cycleId)
+									cycleMetricIds.add(previousIssue.cycleId);
+								if (event.issue.cycleId)
+									cycleMetricIds.add(event.issue.cycleId);
+							}
+						}
+
+						if (shouldInvalidateAllCycleMetrics) {
+							queryClient.invalidateQueries({
+								queryKey: orpc.cycle.metrics.key(),
+							});
+						} else {
+							for (const cycleId of cycleMetricIds) {
+								queryClient.invalidateQueries({
+									queryKey: orpc.cycle.metrics.queryKey({
+										input: { workspaceId, cycleId },
+									}),
+								});
+							}
+						}
+
 						for (const filter of ISSUE_ARCHIVED_FILTERS) {
 							const filteredListInput = normalizeTeamIssuesInput({
 								workspaceId,
