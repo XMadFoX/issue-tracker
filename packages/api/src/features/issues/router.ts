@@ -729,7 +729,7 @@ const updateIssue = authedRouter
 				input.cycleId !== undefined &&
 				existingIssue.cycleId !== updatedIssue.cycleId
 			) {
-				if (updatedIssue.cycleId === null && existingIssue.cycleId !== null) {
+				if (existingIssue.cycleId !== null) {
 					await writeIssueActivity(tx, {
 						workspaceId: input.workspaceId,
 						teamId: existingIssue.teamId,
@@ -745,7 +745,9 @@ const updateIssue = authedRouter
 							cycleId: existingIssue.cycleId,
 						},
 					});
-				} else if (updatedIssue.cycleId !== null) {
+				}
+
+				if (updatedIssue.cycleId !== null) {
 					await writeIssueActivity(tx, {
 						workspaceId: input.workspaceId,
 						teamId: existingIssue.teamId,

@@ -1,7 +1,6 @@
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import { cycle } from "db/features/tracker/cycles.schema";
-import { issueActivity } from "db/features/tracker/issue-activities.schema";
 import {
 	issueStatus,
 	issueStatusGroup,
@@ -83,6 +82,83 @@ async function publishIssueUpdate(issueId: string, workspaceId: string) {
 		teamId: freshIssue.teamId,
 		issue: freshIssue,
 	});
+}
+
+type PlannedCycleMetricsSqlInput = {
+	workspaceId: string;
+	teamId: string;
+	cycleId: string;
+	startDate: Date;
+};
+
+function buildPlannedCycleMetricsSql({
+	workspaceId,
+	teamId,
+	cycleId,
+	startDate,
+}: PlannedCycleMetricsSqlInput) {
+	// Planned metrics reconstruct a start-date baseline from activity events.
+	// The latest assign/unassign event before the cycle start determines whether an
+	// issue is planned; later status metrics only consider events after that same
+	// baseline event to avoid counting a previous stint in the cycle. Timestamp ties
+	// use activity id only as a deterministic best-effort fallback; true insertion
+	// ordering would require a monotonic activity sequence.
+	const plannedBaselineSql = sql`
+		select distinct on (baseline.issue_id)
+			baseline.issue_id,
+			baseline.action_type,
+			baseline.created_at as baseline_created_at,
+			case
+				when estimate_at_start.has_estimate_change
+					and estimate_at_start.estimate_value ~ '^-?[0-9]+$'
+					then estimate_at_start.estimate_value::integer
+				when estimate_at_start.has_estimate_change
+					then 0
+				when baseline.metadata->>'estimate' ~ '^-?[0-9]+$'
+					then (baseline.metadata->>'estimate')::integer
+				else 0
+			end as estimate
+		from issue_activity baseline
+		left join lateral (
+			select
+				estimate_change.to_value #>> '{}' as estimate_value,
+				true as has_estimate_change
+			from issue_activity estimate_change
+			where estimate_change.workspace_id = baseline.workspace_id
+				and estimate_change.team_id = baseline.team_id
+				and estimate_change.issue_id = baseline.issue_id
+				and estimate_change.cycle_id = baseline.cycle_id
+				and estimate_change.action_type = 'issue.estimate_changed'
+				and estimate_change.created_at >= baseline.created_at
+				and estimate_change.created_at <= ${startDate}
+			order by estimate_change.created_at desc, estimate_change.id desc
+			limit 1
+		) estimate_at_start on true
+		where baseline.workspace_id = ${workspaceId}
+			and baseline.team_id = ${teamId}
+			and baseline.cycle_id = ${cycleId}
+			and baseline.action_type in ('issue.cycle_assigned', 'issue.cycle_unassigned')
+			and baseline.created_at <= ${startDate}
+		order by baseline.issue_id, baseline.created_at desc, baseline.id desc
+	`;
+	const plannedLatestStatusSql = sql`
+		select distinct on (status_change.issue_id)
+			status_change.issue_id,
+			status_change.metadata->>'toStatusCategory' as status_category,
+			planned_baseline.estimate
+		from issue_activity status_change
+		inner join (${plannedBaselineSql}) planned_baseline
+			on planned_baseline.issue_id = status_change.issue_id
+			and planned_baseline.action_type = 'issue.cycle_assigned'
+		where status_change.workspace_id = ${workspaceId}
+			and status_change.team_id = ${teamId}
+			and status_change.cycle_id = ${cycleId}
+			and status_change.action_type = 'issue.status_changed'
+			and status_change.created_at >= planned_baseline.baseline_created_at
+		order by status_change.issue_id, status_change.created_at desc, status_change.id desc
+	`;
+
+	return { plannedBaselineSql, plannedLatestStatusSql };
 }
 
 async function canUseCycle({
@@ -412,21 +488,41 @@ const assignIssue = authedRouter
 				.returning();
 			if (!row) throw errors.NOT_FOUND();
 
-			await writeIssueActivity(tx, {
-				workspaceId: input.workspaceId,
-				teamId: issueRow.teamId,
-				issueId: input.issueId,
-				actorId: context.auth.session.userId,
-				cycleId: input.cycleId,
-				actionType: "issue.cycle_assigned",
-				field: "cycleId",
-				fromValue: issueRow.cycleId,
-				toValue: input.cycleId,
-				metadata: {
-					estimate: row.estimate,
+			if (issueRow.cycleId !== input.cycleId) {
+				if (issueRow.cycleId !== null) {
+					await writeIssueActivity(tx, {
+						workspaceId: input.workspaceId,
+						teamId: issueRow.teamId,
+						issueId: input.issueId,
+						actorId: context.auth.session.userId,
+						cycleId: issueRow.cycleId,
+						actionType: "issue.cycle_unassigned",
+						field: "cycleId",
+						fromValue: issueRow.cycleId,
+						toValue: null,
+						metadata: {
+							estimate: issueRow.estimate,
+							cycleId: issueRow.cycleId,
+						},
+					});
+				}
+
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: issueRow.teamId,
+					issueId: input.issueId,
+					actorId: context.auth.session.userId,
 					cycleId: input.cycleId,
-				},
-			});
+					actionType: "issue.cycle_assigned",
+					field: "cycleId",
+					fromValue: issueRow.cycleId,
+					toValue: input.cycleId,
+					metadata: {
+						estimate: row.estimate,
+						cycleId: input.cycleId,
+					},
+				});
+			}
 
 			return row;
 		});
@@ -541,9 +637,9 @@ const cycleMetrics = authedRouter
 		const [currentRow] = await db
 			.select({
 				issueCount: count(issue.id),
-				completedIssueCount: sql<number>`count(${issue.id}) filter (where ${issueStatusGroup.canonicalCategory} = 'completed')`,
-				plannedPoints: sql<number>`coalesce(sum(${issue.estimate}), 0)`,
-				completedPoints: sql<number>`coalesce(sum(${issue.estimate}) filter (where ${issueStatusGroup.canonicalCategory} = 'completed'), 0)`,
+				completedIssueCount: sql<number>`count(${issue.id}) filter (where ${issueStatusGroup.canonicalCategory} = 'completed')::integer`,
+				totalPoints: sql<number>`coalesce(sum(${issue.estimate}), 0)::integer`,
+				completedPoints: sql<number>`coalesce(sum(${issue.estimate}) filter (where ${issueStatusGroup.canonicalCategory} = 'completed'), 0)::integer`,
 			})
 			.from(issue)
 			.leftJoin(issueStatus, eq(issue.statusId, issueStatus.id))
@@ -559,51 +655,68 @@ const cycleMetrics = authedRouter
 				),
 			);
 
+		const { plannedBaselineSql, plannedLatestStatusSql } =
+			buildPlannedCycleMetricsSql({
+				workspaceId: input.workspaceId,
+				teamId: cycleRow.teamId,
+				cycleId: input.cycleId,
+				startDate: cycleRow.startDate,
+			});
+
 		const [activityRow] = await db
 			.select({
-				plannedEventCount: sql<number>`count(*) filter (where ${issueActivity.actionType} = 'issue.cycle_assigned')`,
-				issueCount: sql<number>`count(distinct ${issueActivity.issueId}) filter (where ${issueActivity.actionType} = 'issue.cycle_assigned')`,
-				plannedPoints: sql<number>`coalesce(sum(coalesce((${issueActivity.metadata}->>'estimate')::integer, 0)) filter (where ${issueActivity.actionType} = 'issue.cycle_assigned'), 0)`,
-				completedPoints: sql<number>`coalesce(sum(coalesce((${issueActivity.metadata}->>'estimate')::integer, 0)) filter (where ${issueActivity.actionType} = 'issue.status_changed' and ${issueActivity.metadata}->>'toStatusCategory' = 'completed'), 0)`,
-				completedIssueCount: sql<number>`count(distinct ${issueActivity.issueId}) filter (where ${issueActivity.actionType} = 'issue.status_changed' and ${issueActivity.metadata}->>'toStatusCategory' = 'completed')`,
+				issueCount: sql<number>`coalesce((select count(*)::integer from (${plannedBaselineSql}) planned_baseline where planned_baseline.action_type = 'issue.cycle_assigned'), 0)`,
+				totalPoints: sql<number>`coalesce((select sum(planned_baseline.estimate)::integer from (${plannedBaselineSql}) planned_baseline where planned_baseline.action_type = 'issue.cycle_assigned'), 0)`,
+				completedPoints: sql<number>`coalesce((select sum(planned_latest_status.estimate)::integer from (${plannedLatestStatusSql}) planned_latest_status where planned_latest_status.status_category = 'completed'), 0)`,
+				completedIssueCount: sql<number>`coalesce((select count(*)::integer from (${plannedLatestStatusSql}) planned_latest_status where planned_latest_status.status_category = 'completed'), 0)`,
 			})
-			.from(issueActivity)
+			.from(cycle)
 			.where(
 				and(
-					eq(issueActivity.workspaceId, input.workspaceId),
-					eq(issueActivity.teamId, cycleRow.teamId),
-					eq(issueActivity.cycleId, input.cycleId),
+					eq(cycle.id, input.cycleId),
+					eq(cycle.workspaceId, input.workspaceId),
 				),
 			);
 
-		const hasActivityScope = (activityRow?.plannedEventCount ?? 0) > 0;
-		const issueCount = hasActivityScope
-			? (activityRow?.issueCount ?? 0)
-			: (currentRow?.issueCount ?? 0);
+		const currentIssueCount = currentRow?.issueCount ?? 0;
 		const currentCompletedIssueCount = currentRow?.completedIssueCount ?? 0;
-		const activityCompletedIssueCount = activityRow?.completedIssueCount ?? 0;
-		const completedIssueCount = hasActivityScope
-			? Math.max(activityCompletedIssueCount, currentCompletedIssueCount)
-			: currentCompletedIssueCount;
-		const plannedPoints = hasActivityScope
-			? (activityRow?.plannedPoints ?? 0)
-			: (currentRow?.plannedPoints ?? 0);
+		const currentTotalPoints = currentRow?.totalPoints ?? 0;
 		const currentCompletedPoints = currentRow?.completedPoints ?? 0;
-		const activityCompletedPoints = activityRow?.completedPoints ?? 0;
-		const completedPoints = hasActivityScope
-			? Math.max(activityCompletedPoints, currentCompletedPoints)
-			: currentCompletedPoints;
-		const completionRate =
-			issueCount === 0 ? 0 : completedIssueCount / issueCount;
+		const currentCompletionRate =
+			currentIssueCount === 0
+				? 0
+				: currentCompletedIssueCount / currentIssueCount;
+
+		const plannedIssueCount = activityRow?.issueCount ?? 0;
+		const plannedCompletedIssueCount = activityRow?.completedIssueCount ?? 0;
+		const plannedTotalPoints = activityRow?.totalPoints ?? 0;
+		const plannedCompletedPoints = activityRow?.completedPoints ?? 0;
+		const plannedCompletionRate =
+			plannedIssueCount === 0
+				? 0
+				: plannedCompletedIssueCount / plannedIssueCount;
 
 		return {
 			cycleId: input.cycleId,
 			capacity: cycleRow.capacity,
-			plannedPoints,
-			completedPoints,
-			completionRate,
-			issueCount,
-			completedIssueCount,
+			current: {
+				issueCount: currentIssueCount,
+				completedIssueCount: currentCompletedIssueCount,
+				totalPoints: currentTotalPoints,
+				completedPoints: currentCompletedPoints,
+				completionRate: currentCompletionRate,
+			},
+			planned: {
+				issueCount: plannedIssueCount,
+				completedIssueCount: plannedCompletedIssueCount,
+				totalPoints: plannedTotalPoints,
+				completedPoints: plannedCompletedPoints,
+				completionRate: plannedCompletionRate,
+			},
+			scopeChange: {
+				issueCountDelta: currentIssueCount - plannedIssueCount,
+				pointsDelta: currentTotalPoints - plannedTotalPoints,
+			},
 		};
 	});
 

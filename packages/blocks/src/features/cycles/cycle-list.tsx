@@ -105,6 +105,13 @@ export function CycleList({
 			<CycleSection title="Completed">
 				{completedCycles.map((cycle) => {
 					const metrics = metricsByCycleId.get(cycle.id);
+					const completedPoints = metrics?.current?.completedPoints ?? 0;
+					const totalPoints =
+						metrics?.current?.totalPoints ?? cycle.capacity ?? 0;
+					const completionRate = metrics?.current?.completionRate ?? 0;
+					const plannedPoints = metrics?.planned?.totalPoints ?? 0;
+					const pointsDelta = metrics?.scopeChange?.pointsDelta ?? 0;
+
 					return (
 						<div
 							key={cycle.id}
@@ -115,11 +122,18 @@ export function CycleList({
 								{formatCycleDateRange(cycle)}
 							</div>
 							<div>
-								{metrics?.completedPoints ?? 0} /{" "}
-								{metrics?.plannedPoints ?? cycle.capacity ?? 0} pts
+								<p>
+									{completedPoints} / {totalPoints} current assigned pts
+								</p>
+								<p className="text-muted-foreground">
+									Planned {plannedPoints} pts
+									{pointsDelta !== 0
+										? ` (${pointsDelta > 0 ? "+" : ""}${pointsDelta})`
+										: ""}
+								</p>
 							</div>
 							<div className="font-medium">
-								{Math.round((metrics?.completionRate ?? 0) * 100)}%
+								{Math.round(completionRate * 100)}%
 							</div>
 						</div>
 					);

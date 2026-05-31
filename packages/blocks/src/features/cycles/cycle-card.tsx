@@ -30,6 +30,11 @@ export function formatCycleDateRange(
 	return `${formatter.format(new Date(cycle.startDate))} – ${formatter.format(new Date(cycle.endDate))}`;
 }
 
+function formatSignedPoints(points: number) {
+	if (points > 0) return `+${points}`;
+	return points.toString();
+}
+
 export function CycleCard({
 	cycle,
 	metrics,
@@ -37,10 +42,11 @@ export function CycleCard({
 	onCancel,
 	onEdit,
 }: CycleCardProps) {
-	const plannedPoints = metrics?.plannedPoints ?? 0;
-	const completedPoints = metrics?.completedPoints ?? 0;
-	const progress =
-		plannedPoints > 0 ? (completedPoints / plannedPoints) * 100 : 0;
+	const totalPoints = metrics?.current?.totalPoints ?? 0;
+	const completedPoints = metrics?.current?.completedPoints ?? 0;
+	const plannedPoints = metrics?.planned?.totalPoints ?? 0;
+	const pointsDelta = metrics?.scopeChange?.pointsDelta ?? 0;
+	const progress = totalPoints > 0 ? (completedPoints / totalPoints) * 100 : 0;
 
 	return (
 		<Card>
@@ -58,18 +64,24 @@ export function CycleCard({
 			<CardContent className="space-y-4">
 				<div className="grid gap-2 text-sm sm:grid-cols-2">
 					<div>
-						{metrics?.completedIssueCount ?? 0} / {metrics?.issueCount ?? 0}{" "}
-						issues done
+						{metrics?.current?.completedIssueCount ?? 0} /{" "}
+						{metrics?.current?.issueCount ?? 0} issues done
 					</div>
 					<div>
-						{completedPoints} / {plannedPoints} pts done
+						{completedPoints} / {totalPoints} pts done
 					</div>
 				</div>
 				<Progress value={progress} />
 				<div className="flex flex-wrap items-center justify-between gap-3">
-					<p className="text-sm text-muted-foreground">
-						Capacity: {cycle.capacity ?? "—"} pts
-					</p>
+					<div className="space-y-1 text-sm text-muted-foreground">
+						<p>Capacity: {cycle.capacity ?? "—"} pts</p>
+						{pointsDelta !== 0 ? (
+							<p>
+								Scope change: {formatSignedPoints(pointsDelta)} pts vs planned{" "}
+								{plannedPoints} pts
+							</p>
+						) : null}
+					</div>
 					<div className="flex gap-2">
 						<Button
 							variant="outline"
