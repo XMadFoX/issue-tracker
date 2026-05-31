@@ -22,6 +22,7 @@ import { Route as WorkspaceSlugSettingsPrioritiesIndexRouteImport } from './rout
 import { Route as WorkspaceSlugSettingsMembersIndexRouteImport } from './routes/workspace/$slug/settings/members/index'
 import { Route as WorkspaceSlugSettingsLabelsIndexRouteImport } from './routes/workspace/$slug/settings/labels/index'
 import { Route as WorkspaceSlugTeamsTeamSlugIssuesRouteRouteImport } from './routes/workspace/$slug/teams/$teamSlug/issues/route'
+import { Route as WorkspaceSlugTeamsTeamSlugCyclesIndexRouteImport } from './routes/workspace/$slug/teams/$teamSlug/cycles/index'
 import { Route as WorkspaceSlugTeamsTeamSlugIssuesSearchTestRouteImport } from './routes/workspace/$slug/teams/$teamSlug/issues/search-test'
 import { Route as WorkspaceSlugTeamsTeamSlugIssuesCreateRouteImport } from './routes/workspace/$slug/teams/$teamSlug/issues/create'
 import { Route as WorkspaceSlugTeamsTeamSlugIssueIssueIdRouteImport } from './routes/workspace/$slug/teams/$teamSlug/issue/$issueId'
@@ -96,6 +97,12 @@ const WorkspaceSlugTeamsTeamSlugIssuesRouteRoute =
     path: '/teams/$teamSlug/issues',
     getParentRoute: () => WorkspaceSlugRouteRoute,
   } as any)
+const WorkspaceSlugTeamsTeamSlugCyclesIndexRoute =
+  WorkspaceSlugTeamsTeamSlugCyclesIndexRouteImport.update({
+    id: '/teams/$teamSlug/cycles/',
+    path: '/teams/$teamSlug/cycles/',
+    getParentRoute: () => WorkspaceSlugRouteRoute,
+  } as any)
 const WorkspaceSlugTeamsTeamSlugIssuesSearchTestRoute =
   WorkspaceSlugTeamsTeamSlugIssuesSearchTestRouteImport.update({
     id: '/search-test',
@@ -132,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/workspace/$slug/teams/$teamSlug/issue/$issueId': typeof WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute
   '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
   '/workspace/$slug/teams/$teamSlug/issues/search-test': typeof WorkspaceSlugTeamsTeamSlugIssuesSearchTestRoute
+  '/workspace/$slug/teams/$teamSlug/cycles/': typeof WorkspaceSlugTeamsTeamSlugCyclesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -149,6 +157,7 @@ export interface FileRoutesByTo {
   '/workspace/$slug/teams/$teamSlug/issue/$issueId': typeof WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute
   '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
   '/workspace/$slug/teams/$teamSlug/issues/search-test': typeof WorkspaceSlugTeamsTeamSlugIssuesSearchTestRoute
+  '/workspace/$slug/teams/$teamSlug/cycles': typeof WorkspaceSlugTeamsTeamSlugCyclesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -168,6 +177,7 @@ export interface FileRoutesById {
   '/workspace/$slug/teams/$teamSlug/issue/$issueId': typeof WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute
   '/workspace/$slug/teams/$teamSlug/issues/create': typeof WorkspaceSlugTeamsTeamSlugIssuesCreateRoute
   '/workspace/$slug/teams/$teamSlug/issues/search-test': typeof WorkspaceSlugTeamsTeamSlugIssuesSearchTestRoute
+  '/workspace/$slug/teams/$teamSlug/cycles/': typeof WorkspaceSlugTeamsTeamSlugCyclesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/workspace/$slug/teams/$teamSlug/issue/$issueId'
     | '/workspace/$slug/teams/$teamSlug/issues/create'
     | '/workspace/$slug/teams/$teamSlug/issues/search-test'
+    | '/workspace/$slug/teams/$teamSlug/cycles/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/workspace/$slug/teams/$teamSlug/issue/$issueId'
     | '/workspace/$slug/teams/$teamSlug/issues/create'
     | '/workspace/$slug/teams/$teamSlug/issues/search-test'
+    | '/workspace/$slug/teams/$teamSlug/cycles'
   id:
     | '__root__'
     | '/'
@@ -223,6 +235,7 @@ export interface FileRouteTypes {
     | '/workspace/$slug/teams/$teamSlug/issue/$issueId'
     | '/workspace/$slug/teams/$teamSlug/issues/create'
     | '/workspace/$slug/teams/$teamSlug/issues/search-test'
+    | '/workspace/$slug/teams/$teamSlug/cycles/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -327,6 +340,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteImport
       parentRoute: typeof WorkspaceSlugRouteRoute
     }
+    '/workspace/$slug/teams/$teamSlug/cycles/': {
+      id: '/workspace/$slug/teams/$teamSlug/cycles/'
+      path: '/teams/$teamSlug/cycles'
+      fullPath: '/workspace/$slug/teams/$teamSlug/cycles/'
+      preLoaderRoute: typeof WorkspaceSlugTeamsTeamSlugCyclesIndexRouteImport
+      parentRoute: typeof WorkspaceSlugRouteRoute
+    }
     '/workspace/$slug/teams/$teamSlug/issues/search-test': {
       id: '/workspace/$slug/teams/$teamSlug/issues/search-test'
       path: '/search-test'
@@ -378,6 +398,7 @@ interface WorkspaceSlugRouteRouteChildren {
   WorkspaceSlugSettingsPrioritiesIndexRoute: typeof WorkspaceSlugSettingsPrioritiesIndexRoute
   WorkspaceSlugSettingsRolesIndexRoute: typeof WorkspaceSlugSettingsRolesIndexRoute
   WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute: typeof WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute
+  WorkspaceSlugTeamsTeamSlugCyclesIndexRoute: typeof WorkspaceSlugTeamsTeamSlugCyclesIndexRoute
 }
 
 const WorkspaceSlugRouteRouteChildren: WorkspaceSlugRouteRouteChildren = {
@@ -393,6 +414,8 @@ const WorkspaceSlugRouteRouteChildren: WorkspaceSlugRouteRouteChildren = {
   WorkspaceSlugSettingsRolesIndexRoute: WorkspaceSlugSettingsRolesIndexRoute,
   WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute:
     WorkspaceSlugTeamsTeamSlugIssueIssueIdRoute,
+  WorkspaceSlugTeamsTeamSlugCyclesIndexRoute:
+    WorkspaceSlugTeamsTeamSlugCyclesIndexRoute,
 }
 
 const WorkspaceSlugRouteRouteWithChildren =
