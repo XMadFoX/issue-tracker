@@ -1,5 +1,10 @@
 import type { Outputs } from "@prism/api/src/router";
 import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+} from "@prism/ui/components/collapsible";
+import {
 	Select,
 	SelectContent,
 	SelectItem,
@@ -16,6 +21,9 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
+	SidebarMenuSub,
+	SidebarMenuSubButton,
+	SidebarMenuSubItem,
 	SidebarProvider,
 } from "@prism/ui/components/sidebar";
 import { useQuery } from "@tanstack/react-query";
@@ -23,9 +31,17 @@ import {
 	createFileRoute,
 	Link,
 	Outlet,
+	useMatchRoute,
 	useNavigate,
 } from "@tanstack/react-router";
-import { Contact, Settings } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+	ChevronRight,
+	Contact,
+	ListTodo,
+	RefreshCw,
+	Settings,
+} from "lucide-react";
 import { orpc } from "src/orpc/client";
 
 export const Route = createFileRoute("/workspace/$slug")({
@@ -101,38 +117,10 @@ export function WorkspaceSidebar({
 				</Select>
 			</SidebarHeader>
 			<SidebarContent>
-				<SidebarGroup>
-					<SidebarGroupLabel>
-						Teams
-						<Link
-							className="ml-auto"
-							to="/workspace/$slug/teams"
-							params={{ slug: workspace?.slug ?? "" }}
-						>
-							<Settings className="size-4" />
-						</Link>
-					</SidebarGroupLabel>
-					<SidebarGroupContent>
-						<SidebarMenu>
-							{teams?.data?.map((team) => (
-								<SidebarMenuItem key={team.name}>
-									<SidebarMenuButton asChild>
-										<Link
-											to={`/workspace/$slug/teams/$teamSlug/issues`}
-											params={{
-												slug: workspace?.slug ?? "",
-												teamSlug: team.key ?? "",
-											}}
-										>
-											<Contact />
-											<span>{team.name}</span>
-										</Link>
-									</SidebarMenuButton>
-								</SidebarMenuItem>
-							))}
-						</SidebarMenu>
-					</SidebarGroupContent>
-				</SidebarGroup>
+				<TeamSidebarGroup
+					workspaceSlug={workspace?.slug ?? ""}
+					teams={teams.data}
+				/>
 				<SidebarGroup>
 					<SidebarGroupLabel>Settings</SidebarGroupLabel>
 					<SidebarGroupContent>
@@ -182,5 +170,138 @@ export function WorkspaceSidebar({
 				</SidebarGroup>
 			</SidebarContent>
 		</Sidebar>
+	);
+}
+
+type Team = Outputs["team"]["listByWorkspace"][number];
+type TeamRoute =
+	| "/workspace/$slug/teams/$teamSlug/issues"
+	| "/workspace/$slug/teams/$teamSlug/cycles/";
+
+type TeamMenuOption = {
+	icon: LucideIcon;
+	isActive: boolean;
+	label: string;
+	to: TeamRoute;
+};
+
+function TeamSidebarGroup({
+	teams,
+	workspaceSlug,
+}: {
+	teams: undefined | Outputs["team"]["listByWorkspace"];
+	workspaceSlug: string;
+}) {
+	return (
+		<SidebarGroup>
+			<SidebarGroupLabel>
+				Your teams
+				<Link
+					className="ml-auto rounded-sm text-sidebar-foreground/70 transition-colors hover:text-sidebar-foreground"
+					to="/workspace/$slug/teams"
+					params={{ slug: workspaceSlug }}
+				>
+					<Settings className="size-4" />
+					<span className="sr-only">Manage teams</span>
+				</Link>
+			</SidebarGroupLabel>
+			<SidebarGroupContent>
+				<SidebarMenu>
+					{teams?.map((team) => (
+						<TeamSidebarMenuItem
+							key={team.id}
+							team={team}
+							workspaceSlug={workspaceSlug}
+						/>
+					))}
+				</SidebarMenu>
+			</SidebarGroupContent>
+		</SidebarGroup>
+	);
+}
+
+function TeamSidebarMenuItem({
+	team,
+	workspaceSlug,
+}: {
+	team: Team;
+	workspaceSlug: string;
+}) {
+	const matchRoute = useMatchRoute();
+	const params = {
+		slug: workspaceSlug,
+		teamSlug: team.key ?? "",
+	};
+	const options: TeamMenuOption[] = [
+		{
+			icon: ListTodo,
+			isActive: !!matchRoute({
+				to: "/workspace/$slug/teams/$teamSlug/issues",
+				params,
+				fuzzy: true,
+			}),
+			label: "Issues",
+			to: "/workspace/$slug/teams/$teamSlug/issues",
+		},
+		{
+			icon: RefreshCw,
+			isActive: !!matchRoute({
+				to: "/workspace/$slug/teams/$teamSlug/cycles/",
+				params,
+				fuzzy: true,
+			}),
+			label: "Cycles",
+			to: "/workspace/$slug/teams/$teamSlug/cycles/",
+		},
+	];
+
+	return (
+		<Collapsible asChild defaultOpen={true} className="group/team">
+			<SidebarMenuItem>
+				<CollapsibleTrigger asChild>
+					<SidebarMenuButton className="text-sidebar-foreground/80 hover:text-sidebar-foreground">
+						<Contact className="text-sidebar-foreground/70" />
+						<span>{team.name}</span>
+						<ChevronRight className="ml-auto size-3.5 text-sidebar-foreground/50 transition-transform duration-200 group-data-[state=open]/team:rotate-90" />
+					</SidebarMenuButton>
+				</CollapsibleTrigger>
+				<CollapsibleContent>
+					<SidebarMenuSub className="mx-0 border-l-0 px-0 py-1">
+						{options.map((option) => (
+							<TeamSidebarMenuOption
+								key={option.label}
+								option={option}
+								params={params}
+							/>
+						))}
+					</SidebarMenuSub>
+				</CollapsibleContent>
+			</SidebarMenuItem>
+		</Collapsible>
+	);
+}
+
+function TeamSidebarMenuOption({
+	option,
+	params,
+}: {
+	option: TeamMenuOption;
+	params: { slug: string; teamSlug: string };
+}) {
+	const Icon = option.icon;
+
+	return (
+		<SidebarMenuSubItem>
+			<SidebarMenuSubButton
+				asChild
+				isActive={option.isActive}
+				className="h-8 pl-7 [&>svg]:!text-sidebar-foreground/70 hover:[&>svg]:!text-sidebar-foreground data-[active=true]:[&>svg]:!text-sidebar-foreground"
+			>
+				<Link to={option.to} params={params}>
+					<Icon />
+					<span>{option.label}</span>
+				</Link>
+			</SidebarMenuSubButton>
+		</SidebarMenuSubItem>
 	);
 }
