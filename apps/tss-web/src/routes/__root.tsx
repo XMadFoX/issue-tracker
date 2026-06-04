@@ -1,3 +1,4 @@
+import { NotFoundPage } from "@prism/blocks/features/not-found";
 import { PaletteDialogProvider } from "@prism/blocks/features/search/palette-dialog";
 import { Toaster } from "@prism/ui/components/sonner";
 import { TanStackDevtools } from "@tanstack/react-devtools";
@@ -5,6 +6,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
 	HeadContent,
+	Link,
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
@@ -38,8 +40,13 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 		],
 	}),
 
+	notFoundComponent: AppNotFoundPage,
 	shellComponent: RootDocument,
 });
+
+function AppNotFoundPage() {
+	return <NotFoundPage homeLink={<Link to="/">Go home</Link>} />;
+}
 
 function RootDocument({ children }: { children: React.ReactNode }) {
 	return (
