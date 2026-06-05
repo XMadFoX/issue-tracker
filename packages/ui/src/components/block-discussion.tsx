@@ -203,8 +203,8 @@ const BlockCommentContent = ({
 
         <PopoverContent
           className="max-h-[min(50dvh,calc(-24px+var(--radix-popper-available-height)))] w-[380px] min-w-[130px] max-w-[calc(100vw-24px)] overflow-y-auto p-0 data-[state=closed]:opacity-0"
-          onCloseAutoFocus={(e) => e.preventDefault()}
-          onOpenAutoFocus={(e) => e.preventDefault()}
+          initialFocus={false}
+          finalFocus={false}
           align="center"
           side="bottom"
         >

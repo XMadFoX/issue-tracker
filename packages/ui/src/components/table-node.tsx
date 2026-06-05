@@ -170,7 +170,7 @@ function TableFloatingToolbar({
       modal={false}
     >
       <PopoverAnchor>{children}</PopoverAnchor>
-      <PopoverContent onOpenAutoFocus={(e) => e.preventDefault()} contentEditable={false} {...props} render={<Toolbar className="scrollbar-hide flex w-auto max-w-[80vw] flex-row overflow-x-auto rounded-md border bg-popover p-1 shadow-md print:hidden" contentEditable={false} />}><ToolbarGroup>
+      <PopoverContent initialFocus={false} contentEditable={false} {...props} render={<Toolbar className="scrollbar-hide flex w-auto max-w-[80vw] flex-row overflow-x-auto rounded-md border bg-popover p-1 shadow-md print:hidden" contentEditable={false} />}><ToolbarGroup>
                       <ColorDropdownMenu tooltip="Background color">
                         <PaintBucketIcon />
                       </ColorDropdownMenu>
@@ -194,11 +194,11 @@ function TableFloatingToolbar({
                       )}
 
                       <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
+                        <DropdownMenuTrigger render={
                           <ToolbarButton tooltip="Cell borders">
                             <Grid2X2Icon />
                           </ToolbarButton>
-                        </DropdownMenuTrigger>
+                        }/>
 
                         <DropdownMenuPortal>
                           <TableBordersDropdownMenuContent />
@@ -294,8 +294,8 @@ function TableBordersDropdownMenuContent(
   return (
     <DropdownMenuContent
       className="min-w-[220px]"
-      onCloseAutoFocus={(e) => {
-        e.preventDefault();
+      finalFocus={false}
+      onTransitionEnd={() => {
         editor.tf.focus();
       }}
       align="start"

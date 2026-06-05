@@ -53,14 +53,16 @@ export function RoleDetailsCard({
 						<Badge variant="secondary">{role.scopeLevel}</Badge>
 						{hasWildcardPermission ? (
 							<Tooltip>
-								<TooltipTrigger asChild>
-									<Badge
-										variant="destructive"
-										className="gap-1.5 px-3 py-1 text-xs"
-									>
-										<Asterisk className="size-3.5" />
-										Wildcard permission
-									</Badge>
+								<TooltipTrigger
+									render={
+										<Badge
+											variant="destructive"
+											className="gap-1.5 px-3 py-1 text-xs"
+										/>
+									}
+								>
+									<Asterisk className="size-3.5" />
+									Wildcard permission
 								</TooltipTrigger>
 								<TooltipContent side="top" sideOffset={6}>
 									This role has the wildcard permission, so it effectively

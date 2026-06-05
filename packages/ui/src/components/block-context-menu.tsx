@@ -92,8 +92,8 @@ export function BlockContextMenu({ children }: { children: React.ReactNode }) {
       {isOpen && (
         <ContextMenuContent
           className="w-64"
-          onCloseAutoFocus={(e) => {
-            e.preventDefault();
+          finalFocus={false}
+          onTransitionEnd={() => {
             editor.getApi(BlockSelectionPlugin).blockSelection.focus();
 
             if (value === 'askAI') {
