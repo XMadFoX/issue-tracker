@@ -1,6 +1,5 @@
 'use client';
 
-import * as React from 'react';
 
 import type { TExcalidrawElement } from '@platejs/excalidraw';
 import type { PlateElementProps } from 'platejs/react';
