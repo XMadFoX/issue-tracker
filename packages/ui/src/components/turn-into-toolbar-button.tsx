@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import type { DropdownMenuProps } from '@radix-ui/react-dropdown-menu';
 import type { TElement } from 'platejs';
 
 import { DropdownMenuItemIndicator } from '@radix-ui/react-dropdown-menu';
@@ -125,7 +124,7 @@ export const turnIntoItems = [
   },
 ];
 
-export function TurnIntoToolbarButton(props: DropdownMenuProps) {
+export function TurnIntoToolbarButton(props: React.ComponentProps<typeof DropdownMenu>) {
   const editor = useEditorRef();
   const [open, setOpen] = React.useState(false);
 
@@ -146,9 +145,10 @@ export function TurnIntoToolbarButton(props: DropdownMenuProps) {
 
       <DropdownMenuContent
         className="ignore-click-outside/toolbar min-w-0"
-        onCloseAutoFocus={(e) => {
-          e.preventDefault();
+        finalFocus={() => {
           editor.tf.focus();
+
+          return false;
         }}
         align="start"
       >

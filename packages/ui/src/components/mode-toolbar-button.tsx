@@ -3,10 +3,7 @@
 import * as React from 'react';
 
 import { SuggestionPlugin } from '@platejs/suggestion/react';
-import {
-  type DropdownMenuProps,
-  DropdownMenuItemIndicator,
-} from '@radix-ui/react-dropdown-menu';
+import { DropdownMenuItemIndicator } from '@radix-ui/react-dropdown-menu';
 import { CheckIcon, EyeIcon, PencilLineIcon, PenIcon } from 'lucide-react';
 import { useEditorRef, usePlateState, usePluginOption } from 'platejs/react';
 
@@ -20,7 +17,7 @@ import {
 
 import { ToolbarButton } from './toolbar';
 
-export function ModeToolbarButton(props: DropdownMenuProps) {
+export function ModeToolbarButton(props: React.ComponentProps<typeof DropdownMenu>) {
   const editor = useEditorRef();
   const [readOnly, setReadOnly] = usePlateState('readOnly');
   const [open, setOpen] = React.useState(false);

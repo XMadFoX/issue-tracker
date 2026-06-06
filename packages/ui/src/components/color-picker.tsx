@@ -40,7 +40,7 @@ interface ColorPickerProps {
   error?: string;
   className?: string;
   alpha?: boolean;
-  trigger?: React.ReactNode;
+  trigger?: React.ReactElement;
   showControls?: boolean;
 }
 
@@ -315,9 +315,10 @@ export default function InputColor({
       {label && <Label className="mb-3">{label}</Label>}
       <div className="flex items-center gap-4">
         <Popover onOpenChange={handlePopoverChange}>
-          <PopoverTrigger asChild>
-            {trigger ?? (
-              <Button
+          <PopoverTrigger
+            render={
+              trigger ?? (
+                <Button
                 className="border-border h-12 w-12 border shadow-none relative overflow-hidden"
                 size={"icon"}
                 style={{ backgroundColor: hexInputValue }}
@@ -335,9 +336,10 @@ export default function InputColor({
                     }}
                   />
                 )}
-              </Button>
-            )}
-          </PopoverTrigger>
+                </Button>
+              )
+            }
+          />
           <PopoverContent className="w-auto p-3" align="start">
             <div className="color-picker space-y-3">
               <div className="relative">

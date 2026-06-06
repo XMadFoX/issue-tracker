@@ -71,7 +71,6 @@ export function BlockContextMenu({ children }: { children: React.ReactNode }) {
           api.blockMenu.hide();
         }
       }}
-      modal={false}
     >
       <ContextMenuTrigger onContextMenu={(event) => {
                     const dataset = (event.target as HTMLElement).dataset;
@@ -88,12 +87,11 @@ export function BlockContextMenu({ children }: { children: React.ReactNode }) {
                         y: event.clientY,
                       });
                     }, 0);
-                  }} render={<div className="w-full" />} nativeButton={false}>{children}</ContextMenuTrigger>
+                  }} render={<div className="w-full" />}>{children}</ContextMenuTrigger>
       {isOpen && (
         <ContextMenuContent
           className="w-64"
-          onCloseAutoFocus={(e) => {
-            e.preventDefault();
+          finalFocus={() => {
             editor.getApi(BlockSelectionPlugin).blockSelection.focus();
 
             if (value === 'askAI') {
@@ -101,6 +99,8 @@ export function BlockContextMenu({ children }: { children: React.ReactNode }) {
             }
 
             setValue(null);
+
+            return false;
           }}
         >
           <ContextMenuGroup>

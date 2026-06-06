@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import type { DropdownMenuProps } from '@radix-ui/react-dropdown-menu';
-
 import {
   KeyboardIcon,
   MoreHorizontalIcon,
@@ -23,7 +21,7 @@ import {
 
 import { ToolbarButton } from './toolbar';
 
-export function MoreToolbarButton(props: DropdownMenuProps) {
+export function MoreToolbarButton(props: React.ComponentProps<typeof DropdownMenu>) {
   const editor = useEditorRef();
   const [open, setOpen] = React.useState(false);
 

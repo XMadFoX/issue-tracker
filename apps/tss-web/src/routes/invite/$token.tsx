@@ -96,22 +96,22 @@ function RouteComponent() {
 				</CardContent>
 				<CardFooter className="flex flex-wrap gap-2">
 					{!session.data?.user ? (
-						<Button asChild>
-							<Link
-								to="/auth"
-								search={{
-									email: invitation.data.email,
-									initialMode: "signin",
-									inviteToken: token,
-								}}
-							>
-								Sign in to continue
-							</Link>
+						<Button
+							render={
+								<Link
+									to="/auth"
+									search={{
+										email: invitation.data.email,
+										initialMode: "signin",
+										inviteToken: token,
+									}}
+								/>
+							}
+						>
+							Sign in to continue
 						</Button>
 					) : invitation.data.status !== "pending" ? (
-						<Button asChild>
-							<Link to="/">Go to workspaces</Link>
-						</Button>
+						<Button render={<Link to="/" />}>Go to workspaces</Button>
 					) : !emailMatches ? (
 						<div className="text-sm text-destructive">
 							You are signed in as {session.data.user.email}. Use the invited

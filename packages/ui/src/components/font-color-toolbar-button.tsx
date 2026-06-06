@@ -3,11 +3,6 @@
 
 import React from 'react';
 
-import type {
-  DropdownMenuItemProps,
-  DropdownMenuProps,
-} from '@radix-ui/react-dropdown-menu';
-
 import { useComposedRef } from '@udecode/cn';
 import debounce from 'lodash/debounce.js';
 import { EraserIcon, PlusIcon } from 'lucide-react';
@@ -37,7 +32,9 @@ export function FontColorToolbarButton({
 }: {
   nodeType: string;
   tooltip?: string;
-} & DropdownMenuProps) {
+} & Omit<React.ComponentProps<typeof DropdownMenu>, 'children'> & {
+  children: React.ReactNode;
+}) {
   const editor = useEditorRef();
 
   const selectionDefined = useEditorSelector(
@@ -321,7 +318,7 @@ function ColorDropdownMenuItem({
   value: string;
   updateColor: (color: string) => void;
   name?: string;
-} & DropdownMenuItemProps) {
+} & React.ComponentProps<typeof DropdownMenuItem>) {
   const content = (
     <DropdownMenuItem
       className={cn(

@@ -98,11 +98,13 @@ export function IssuesRouteContainer({
 					) : null}
 				</div>
 				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button type="button" variant="ghost" size="sm">
-							View options
-						</Button>
-					</DropdownMenuTrigger>
+					<DropdownMenuTrigger
+						render={
+							<Button type="button" variant="ghost" size="sm">
+								View options
+							</Button>
+						}
+					/>
 					<DropdownMenuContent align="end" className="w-56">
 						<DropdownMenuLabel>Archived issues</DropdownMenuLabel>
 						<DropdownMenuSeparator />

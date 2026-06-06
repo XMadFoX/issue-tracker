@@ -114,7 +114,7 @@ export function FontSizeToolbarButton() {
                           }} data-plate-focus="true" type="text" />}></PopoverTrigger>
         <PopoverContent
           className="w-10 px-px py-1"
-          onOpenAutoFocus={(e) => e.preventDefault()}
+          initialFocus={false}
         >
           {FONT_SIZES.map((size) => (
             <button

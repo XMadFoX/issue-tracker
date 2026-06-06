@@ -126,43 +126,51 @@ export function WorkspaceSidebar({
 					<SidebarGroupContent>
 						<SidebarMenu>
 							<SidebarMenuItem>
-								<SidebarMenuButton asChild>
-									<Link
-										to="/workspace/$slug/settings/members"
-										params={{ slug: workspace?.slug ?? "" }}
-									>
-										<span>Members</span>
-									</Link>
+								<SidebarMenuButton
+									render={
+										<Link
+											to="/workspace/$slug/settings/members"
+											params={{ slug: workspace?.slug ?? "" }}
+										/>
+									}
+								>
+									<span>Members</span>
 								</SidebarMenuButton>
 							</SidebarMenuItem>
 							<SidebarMenuItem>
-								<SidebarMenuButton asChild>
-									<Link
-										to="/workspace/$slug/settings/roles"
-										params={{ slug: workspace?.slug ?? "" }}
-									>
-										<span>Roles & permissions</span>
-									</Link>
+								<SidebarMenuButton
+									render={
+										<Link
+											to="/workspace/$slug/settings/roles"
+											params={{ slug: workspace?.slug ?? "" }}
+										/>
+									}
+								>
+									<span>Roles & permissions</span>
 								</SidebarMenuButton>
 							</SidebarMenuItem>
 							<SidebarMenuItem>
-								<SidebarMenuButton asChild>
-									<Link
-										to="/workspace/$slug/settings/labels"
-										params={{ slug: workspace?.slug ?? "" }}
-									>
-										<span>Labels</span>
-									</Link>
+								<SidebarMenuButton
+									render={
+										<Link
+											to="/workspace/$slug/settings/labels"
+											params={{ slug: workspace?.slug ?? "" }}
+										/>
+									}
+								>
+									<span>Labels</span>
 								</SidebarMenuButton>
 							</SidebarMenuItem>
 							<SidebarMenuItem>
-								<SidebarMenuButton asChild>
-									<Link
-										to="/workspace/$slug/settings/priorities"
-										params={{ slug: workspace?.slug ?? "" }}
-									>
-										<span>Priorities</span>
-									</Link>
+								<SidebarMenuButton
+									render={
+										<Link
+											to="/workspace/$slug/settings/priorities"
+											params={{ slug: workspace?.slug ?? "" }}
+										/>
+									}
+								>
+									<span>Priorities</span>
 								</SidebarMenuButton>
 							</SidebarMenuItem>
 						</SidebarMenu>
@@ -256,27 +264,30 @@ function TeamSidebarMenuItem({
 	];
 
 	return (
-		<Collapsible asChild defaultOpen={true} className="group/team">
-			<SidebarMenuItem>
-				<CollapsibleTrigger asChild>
+		<Collapsible
+			defaultOpen={true}
+			render={<SidebarMenuItem className="group/team" />}
+		>
+			<CollapsibleTrigger
+				render={
 					<SidebarMenuButton className="text-sidebar-foreground/80 hover:text-sidebar-foreground">
 						<Contact className="text-sidebar-foreground/70" />
 						<span>{team.name}</span>
-						<ChevronRight className="ml-auto size-3.5 text-sidebar-foreground/50 transition-transform duration-200 group-data-[state=open]/team:rotate-90" />
+						<ChevronRight className="ml-auto size-3.5 text-sidebar-foreground/50 transition-transform duration-200 group-data-open/team:rotate-90" />
 					</SidebarMenuButton>
-				</CollapsibleTrigger>
-				<CollapsibleContent>
-					<SidebarMenuSub className="mx-0 border-l-0 px-0 py-1">
-						{options.map((option) => (
-							<TeamSidebarMenuOption
-								key={option.label}
-								option={option}
-								params={params}
-							/>
-						))}
-					</SidebarMenuSub>
-				</CollapsibleContent>
-			</SidebarMenuItem>
+				}
+			/>
+			<CollapsibleContent>
+				<SidebarMenuSub className="mx-0 border-l-0 px-0 py-1">
+					{options.map((option) => (
+						<TeamSidebarMenuOption
+							key={option.label}
+							option={option}
+							params={params}
+						/>
+					))}
+				</SidebarMenuSub>
+			</CollapsibleContent>
 		</Collapsible>
 	);
 }
@@ -293,14 +304,12 @@ function TeamSidebarMenuOption({
 	return (
 		<SidebarMenuSubItem>
 			<SidebarMenuSubButton
-				asChild
 				isActive={option.isActive}
 				className="h-8 pl-7 [&>svg]:!text-sidebar-foreground/70 hover:[&>svg]:!text-sidebar-foreground data-[active=true]:[&>svg]:!text-sidebar-foreground"
+				render={<Link to={option.to} params={params} />}
 			>
-				<Link to={option.to} params={params}>
-					<Icon />
-					<span>{option.label}</span>
-				</Link>
+				<Icon />
+				<span>{option.label}</span>
 			</SidebarMenuSubButton>
 		</SidebarMenuSubItem>
 	);

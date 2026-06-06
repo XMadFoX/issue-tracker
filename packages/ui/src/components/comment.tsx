@@ -360,13 +360,13 @@ function CommentMoreDropdown(props: {
       <DropdownMenuTrigger onClick={(e) => e.stopPropagation()} render={<Button variant="ghost" className={cn('h-6 p-1 text-muted-foreground')} />}><MoreHorizontalIcon className="size-4" /></DropdownMenuTrigger>
       <DropdownMenuContent
         className="w-48"
-        onCloseAutoFocus={(e) => {
+        finalFocus={() => {
           if (selectedEditCommentRef.current) {
             onCloseAutoFocus?.();
             selectedEditCommentRef.current = false;
           }
 
-          return e.preventDefault();
+          return false;
         }}
       >
         <DropdownMenuGroup>

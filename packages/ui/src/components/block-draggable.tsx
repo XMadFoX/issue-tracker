@@ -315,7 +315,7 @@ const DragHandle = React.memo(function DragHandle({
                       }
                     }} onMouseUp={() => {
                       resetPreview();
-                    }} data-plate-prevent-deselect role="button" />} nativeButton={false}><GripVertical className="text-muted-foreground" /></TooltipTrigger>
+                    }} data-plate-prevent-deselect role="button" />}><GripVertical className="text-muted-foreground" /></TooltipTrigger>
       <TooltipContent>Drag to move</TooltipContent>
     </Tooltip>
   );

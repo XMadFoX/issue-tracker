@@ -70,7 +70,7 @@ export function IssueDetailSheet({
 		<Sheet open={true} onOpenChange={(open) => !open && onClose()}>
 			<SheetContent
 				side="right"
-				className="w-full overflow-y-auto sm:max-w-4xl!"
+				className="w-full overflow-y-auto sm:max-w-4xl! bg-background"
 			>
 				<SheetHeader className="mb-4">
 					<div className="flex items-center justify-between pr-8">

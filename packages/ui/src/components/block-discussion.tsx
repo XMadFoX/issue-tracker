@@ -28,7 +28,6 @@ import { useEditorPlugin, useEditorRef, usePluginOption } from 'platejs/react';
 import { Button } from '@/components/button';
 import {
   Popover,
-  PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/popover';
@@ -193,18 +192,11 @@ const BlockCommentContent = ({
         }}
       >
         <div className="w-full">{children}</div>
-        {anchorElement && (
-          <PopoverAnchor
-            asChild
-            className="w-full"
-            virtualRef={{ current: anchorElement }}
-          />
-        )}
-
         <PopoverContent
-          className="max-h-[min(50dvh,calc(-24px+var(--radix-popper-available-height)))] w-[380px] min-w-[130px] max-w-[calc(100vw-24px)] overflow-y-auto p-0 data-[state=closed]:opacity-0"
-          onCloseAutoFocus={(e) => e.preventDefault()}
-          onOpenAutoFocus={(e) => e.preventDefault()}
+          anchor={anchorElement}
+          className="max-h-[min(50dvh,calc(-24px+var(--available-height)))] w-[380px] min-w-[130px] max-w-[calc(100vw-24px)] overflow-y-auto p-0 data-closed:opacity-0"
+          initialFocus={false}
+          finalFocus={false}
           align="center"
           side="bottom"
         >

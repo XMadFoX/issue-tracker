@@ -98,7 +98,11 @@ function CodeBlockCombobox() {
                       'Plain Text'}</PopoverTrigger>
       <PopoverContent
         className="w-[200px] p-0"
-        onCloseAutoFocus={() => setSearchValue('')}
+        finalFocus={() => {
+          setSearchValue('');
+
+          return true;
+        }}
       >
         <Command shouldFilter={false}>
           <CommandInput

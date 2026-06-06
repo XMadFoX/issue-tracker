@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import type { DropdownMenuProps } from '@radix-ui/react-dropdown-menu';
-
 import { TablePlugin, useTableMergeState } from '@platejs/table/react';
 import {
   ArrowDown,
@@ -34,7 +32,7 @@ import { cn } from '@/lib/utils';
 
 import { ToolbarButton } from './toolbar';
 
-export function TableToolbarButton(props: DropdownMenuProps) {
+export function TableToolbarButton(props: React.ComponentProps<typeof DropdownMenu>) {
   const tableSelected = useEditorSelector(
     (editor) => editor.api.some({ match: { type: KEYS.table } }),
     []

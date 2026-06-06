@@ -103,11 +103,13 @@ export function TeamList({
 													}
 													showControls={false}
 													trigger={
-														<div
+														<button
 															className="size-4 rounded-full border-2 cursor-pointer"
 															style={{
 																backgroundColor: team.color ?? "transparent",
 															}}
+															type="button"
+															aria-label="Change team color"
 														/>
 													}
 												/>

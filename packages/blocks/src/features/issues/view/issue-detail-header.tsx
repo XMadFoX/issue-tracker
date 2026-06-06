@@ -100,12 +100,14 @@ export function IssueDetailHeader({ issue, workspaceId, onUpdate }: Props) {
 				</div>
 				{issue.archivedAt ? null : (
 					<DropdownMenu>
-						<DropdownMenuTrigger asChild>
-							<Button type="button" variant="ghost" size="icon">
-								<MoreHorizontal className="size-4" />
-								<span className="sr-only">Issue actions</span>
-							</Button>
-						</DropdownMenuTrigger>
+						<DropdownMenuTrigger
+							render={
+								<Button type="button" variant="ghost" size="icon">
+									<MoreHorizontal className="size-4" />
+									<span className="sr-only">Issue actions</span>
+								</Button>
+							}
+						/>
 						<DropdownMenuContent align="end">
 							<DropdownMenuItem onClick={handleArchiveToggle}>
 								<Archive className="size-4" />

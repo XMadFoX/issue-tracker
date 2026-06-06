@@ -79,6 +79,8 @@ export function CycleDurationControl({
 			<Select
 				value={selectValue}
 				onValueChange={(nextValue) => {
+					if (nextValue === null) return;
+
 					if (nextValue === CUSTOM_CYCLE_DURATION_VALUE) {
 						setIsCustomSelected(true);
 						return;

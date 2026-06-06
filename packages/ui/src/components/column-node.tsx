@@ -29,7 +29,6 @@ import {
 import { Button } from '@/components/button';
 import {
   Popover,
-  PopoverAnchor,
   PopoverContent,
 } from '@/components/popover';
 import { Separator } from '@/components/separator';
@@ -147,6 +146,7 @@ export function ColumnGroupElement(props: PlateElementProps) {
 }
 
 function ColumnFloatingToolbar({ children }: React.PropsWithChildren) {
+  const anchorRef = React.useRef<HTMLDivElement>(null);
   const editor = useEditorRef();
   const readOnly = useReadOnly();
   const element = useElement<TColumnElement>();
@@ -169,10 +169,11 @@ function ColumnFloatingToolbar({ children }: React.PropsWithChildren) {
 
   return (
     <Popover open={open} modal={false}>
-      <PopoverAnchor>{children}</PopoverAnchor>
+      <div ref={anchorRef}>{children}</div>
       <PopoverContent
+        anchor={anchorRef}
         className="w-auto p-1"
-        onOpenAutoFocus={(e) => e.preventDefault()}
+        initialFocus={false}
         align="center"
         side="top"
         sideOffset={10}
