@@ -1,9 +1,8 @@
 'use client';
 
-import { type Value, TrailingBlockPlugin } from 'platejs';
+import { type Value } from 'platejs';
 import { type TPlateEditor, useEditorRef } from 'platejs/react';
 
-import { AlignKit } from './plugins/align-kit';
 import { AutoformatKit } from './plugins/autoformat-kit';
 import { BasicBlocksKit } from './plugins/basic-blocks-kit';
 import { BasicMarksKit } from './plugins/basic-marks-kit';

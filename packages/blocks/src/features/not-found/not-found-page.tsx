@@ -8,10 +8,10 @@ import {
 	EmptyTitle,
 } from "@prism/ui/components/empty";
 import { FileQuestion } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 type NotFoundPageProps = {
-	homeLink?: ReactNode;
+	homeLink?: ReactElement;
 };
 
 export function NotFoundPage({ homeLink }: NotFoundPageProps) {
@@ -29,7 +29,7 @@ export function NotFoundPage({ homeLink }: NotFoundPageProps) {
 				</EmptyHeader>
 				{homeLink ? (
 					<EmptyContent>
-						<Button asChild>{homeLink}</Button>
+						<Button render={homeLink} />
 					</EmptyContent>
 				) : null}
 			</Empty>

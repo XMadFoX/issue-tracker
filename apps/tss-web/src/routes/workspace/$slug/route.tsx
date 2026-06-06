@@ -126,43 +126,51 @@ export function WorkspaceSidebar({
 					<SidebarGroupContent>
 						<SidebarMenu>
 							<SidebarMenuItem>
-								<SidebarMenuButton asChild>
-									<Link
-										to="/workspace/$slug/settings/members"
-										params={{ slug: workspace?.slug ?? "" }}
-									>
-										<span>Members</span>
-									</Link>
+								<SidebarMenuButton
+									render={
+										<Link
+											to="/workspace/$slug/settings/members"
+											params={{ slug: workspace?.slug ?? "" }}
+										/>
+									}
+								>
+									<span>Members</span>
 								</SidebarMenuButton>
 							</SidebarMenuItem>
 							<SidebarMenuItem>
-								<SidebarMenuButton asChild>
-									<Link
-										to="/workspace/$slug/settings/roles"
-										params={{ slug: workspace?.slug ?? "" }}
-									>
-										<span>Roles & permissions</span>
-									</Link>
+								<SidebarMenuButton
+									render={
+										<Link
+											to="/workspace/$slug/settings/roles"
+											params={{ slug: workspace?.slug ?? "" }}
+										/>
+									}
+								>
+									<span>Roles & permissions</span>
 								</SidebarMenuButton>
 							</SidebarMenuItem>
 							<SidebarMenuItem>
-								<SidebarMenuButton asChild>
-									<Link
-										to="/workspace/$slug/settings/labels"
-										params={{ slug: workspace?.slug ?? "" }}
-									>
-										<span>Labels</span>
-									</Link>
+								<SidebarMenuButton
+									render={
+										<Link
+											to="/workspace/$slug/settings/labels"
+											params={{ slug: workspace?.slug ?? "" }}
+										/>
+									}
+								>
+									<span>Labels</span>
 								</SidebarMenuButton>
 							</SidebarMenuItem>
 							<SidebarMenuItem>
-								<SidebarMenuButton asChild>
-									<Link
-										to="/workspace/$slug/settings/priorities"
-										params={{ slug: workspace?.slug ?? "" }}
-									>
-										<span>Priorities</span>
-									</Link>
+								<SidebarMenuButton
+									render={
+										<Link
+											to="/workspace/$slug/settings/priorities"
+											params={{ slug: workspace?.slug ?? "" }}
+										/>
+									}
+								>
+									<span>Priorities</span>
 								</SidebarMenuButton>
 							</SidebarMenuItem>
 						</SidebarMenu>
@@ -293,14 +301,12 @@ function TeamSidebarMenuOption({
 	return (
 		<SidebarMenuSubItem>
 			<SidebarMenuSubButton
-				asChild
 				isActive={option.isActive}
 				className="h-8 pl-7 [&>svg]:!text-sidebar-foreground/70 hover:[&>svg]:!text-sidebar-foreground data-[active=true]:[&>svg]:!text-sidebar-foreground"
+				render={<Link to={option.to} params={params} />}
 			>
-				<Link to={option.to} params={params}>
-					<Icon />
-					<span>{option.label}</span>
-				</Link>
+				<Icon />
+				<span>{option.label}</span>
 			</SidebarMenuSubButton>
 		</SidebarMenuSubItem>
 	);

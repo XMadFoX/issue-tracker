@@ -87,11 +87,14 @@ export function IssueSubIssuesSection({
 			{parentIssue && getIssueUrl ? (
 				<div className="flex flex-wrap items-center gap-2 text-sm">
 					<span className="text-muted-foreground">Parent</span>
-					<Badge variant="outline" asChild>
-						<Link to={getIssueUrl(parentIssue)}>
-							{getIssueReference(parentIssue)}
-						</Link>
-					</Badge>
+					<Badge
+						variant="outline"
+						render={
+							<Link to={getIssueUrl(parentIssue)}>
+								{getIssueReference(parentIssue)}
+							</Link>
+						}
+					/>
 					<span className="truncate text-muted-foreground">
 						{parentIssue.title}
 					</span>
