@@ -80,10 +80,8 @@ export function ConfirmActionDialog({
 					</div>
 				) : null}
 				<AlertDialogFooter>
-					<AlertDialogCancel asChild>
-						<Button type="button" variant="outline" disabled={isConfirming}>
-							{cancelLabel}
-						</Button>
+					<AlertDialogCancel disabled={isConfirming}>
+						{cancelLabel}
 					</AlertDialogCancel>
 					<Button
 						type="button"

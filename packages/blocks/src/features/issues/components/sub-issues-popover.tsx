@@ -19,11 +19,18 @@ export function SubIssuesPopover({ subIssues, getIssueUrl }: Props) {
 
 	return (
 		<Popover>
-			<PopoverTrigger asChild>
-				<Button type="button" variant="ghost" size="sm" className="h-7 px-1.5">
-					<Badge variant="secondary">{subIssues.length} sub-tasks</Badge>
-				</Button>
-			</PopoverTrigger>
+			<PopoverTrigger
+				render={
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className="h-7 px-1.5"
+					>
+						<Badge variant="secondary">{subIssues.length} sub-tasks</Badge>
+					</Button>
+				}
+			/>
 			<PopoverContent align="start" className="w-80 p-2">
 				<div className="max-h-72 overflow-y-auto">
 					{subIssues.map((subIssue) => {

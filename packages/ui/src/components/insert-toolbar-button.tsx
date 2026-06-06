@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import type { DropdownMenuProps } from '@radix-ui/react-dropdown-menu';
-
 import {
   CalendarIcon,
   ChevronRightIcon,
@@ -217,7 +215,7 @@ const groups: Group[] = [
   },
 ];
 
-export function InsertToolbarButton(props: DropdownMenuProps) {
+export function InsertToolbarButton(props: React.ComponentProps<typeof DropdownMenu>) {
   const editor = useEditorRef();
   const [open, setOpen] = React.useState(false);
 

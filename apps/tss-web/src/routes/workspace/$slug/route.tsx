@@ -264,27 +264,30 @@ function TeamSidebarMenuItem({
 	];
 
 	return (
-		<Collapsible asChild defaultOpen={true} className="group/team">
-			<SidebarMenuItem>
-				<CollapsibleTrigger asChild>
+		<Collapsible
+			defaultOpen={true}
+			render={<SidebarMenuItem className="group/team" />}
+		>
+			<CollapsibleTrigger
+				render={
 					<SidebarMenuButton className="text-sidebar-foreground/80 hover:text-sidebar-foreground">
 						<Contact className="text-sidebar-foreground/70" />
 						<span>{team.name}</span>
-						<ChevronRight className="ml-auto size-3.5 text-sidebar-foreground/50 transition-transform duration-200 group-data-[state=open]/team:rotate-90" />
+						<ChevronRight className="ml-auto size-3.5 text-sidebar-foreground/50 transition-transform duration-200 group-data-open/team:rotate-90" />
 					</SidebarMenuButton>
-				</CollapsibleTrigger>
-				<CollapsibleContent>
-					<SidebarMenuSub className="mx-0 border-l-0 px-0 py-1">
-						{options.map((option) => (
-							<TeamSidebarMenuOption
-								key={option.label}
-								option={option}
-								params={params}
-							/>
-						))}
-					</SidebarMenuSub>
-				</CollapsibleContent>
-			</SidebarMenuItem>
+				}
+			/>
+			<CollapsibleContent>
+				<SidebarMenuSub className="mx-0 border-l-0 px-0 py-1">
+					{options.map((option) => (
+						<TeamSidebarMenuOption
+							key={option.label}
+							option={option}
+							params={params}
+						/>
+					))}
+				</SidebarMenuSub>
+			</CollapsibleContent>
 		</Collapsible>
 	);
 }

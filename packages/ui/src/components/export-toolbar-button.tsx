@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import type { DropdownMenuProps } from '@radix-ui/react-dropdown-menu';
-
 import { exportToDocx } from '@platejs/docx-io';
 import { MarkdownPlugin } from '@platejs/markdown';
 import { ArrowDownToLineIcon } from 'lucide-react';
@@ -27,7 +25,7 @@ import { ToolbarButton } from './toolbar';
 
 const siteUrl = 'https://platejs.org';
 
-export function ExportToolbarButton(props: DropdownMenuProps) {
+export function ExportToolbarButton(props: React.ComponentProps<typeof DropdownMenu>) {
   const editor = useEditorRef();
   const [open, setOpen] = React.useState(false);
 

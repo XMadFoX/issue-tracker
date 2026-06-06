@@ -9,7 +9,6 @@ import {
   useFloatingToolbar,
   useFloatingToolbarState,
 } from '@platejs/floating';
-import { useComposedRef } from '@udecode/cn';
 import { KEYS } from 'platejs';
 import {
   useEditorId,
@@ -64,7 +63,18 @@ export function FloatingToolbar({
     ref: floatingRef,
   } = useFloatingToolbar(floatingToolbarState);
 
-  const ref = useComposedRef<HTMLDivElement>(props.ref, floatingRef);
+  const ref = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      if (typeof props.ref === 'function') {
+        props.ref(node);
+      } else if (props.ref) {
+        props.ref.current = node;
+      }
+
+      floatingRef(node);
+    },
+    [props.ref, floatingRef]
+  );
 
   if (hidden) return null;
 

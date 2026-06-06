@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import type { DropdownMenuProps } from '@radix-ui/react-dropdown-menu';
-
 import { LineHeightPlugin } from '@platejs/basic-styles/react';
 import { DropdownMenuItemIndicator } from '@radix-ui/react-dropdown-menu';
 import { CheckIcon, WrapText } from 'lucide-react';
@@ -19,7 +17,7 @@ import {
 
 import { ToolbarButton } from './toolbar';
 
-export function LineHeightToolbarButton(props: DropdownMenuProps) {
+export function LineHeightToolbarButton(props: React.ComponentProps<typeof DropdownMenu>) {
   const editor = useEditorRef();
   const { defaultNodeValue, validNodeValues: values = [] } =
     editor.getInjectProps(LineHeightPlugin);
