@@ -6,6 +6,7 @@ import {
 	type Subscription,
 } from "@nats-io/transport-node";
 import { env } from "../../env";
+import { logger } from "../../logger";
 import type { IssueWithRelations } from "./queries";
 
 export type IssueEvents = {
@@ -35,12 +36,34 @@ let connectionPromise: Promise<NatsConnection> | null = null;
 const eventHistory = new Map<string, EventWithId<unknown>[]>();
 
 async function getConnection(): Promise<NatsConnection> {
-	if (nc) return nc;
+	if (nc && !nc.isClosed()) return nc;
+	if (nc?.isClosed()) {
+		nc = null;
+	}
 	if (connectionPromise) return connectionPromise;
 
-	connectionPromise = connect({ servers: env.NATS_URL });
-	nc = await connectionPromise;
-	return nc;
+	connectionPromise = connect({ servers: env.NATS_URL })
+		.then((connection) => {
+			nc = connection;
+			return connection;
+		})
+		.catch((error: unknown) => {
+			nc = null;
+			throw error;
+		})
+		.finally(() => {
+			connectionPromise = null;
+		});
+
+	return connectionPromise;
+}
+
+export async function checkNatsReachable(): Promise<void> {
+	const connection = await getConnection();
+	if (connection.isClosed() || connection.isDraining()) {
+		throw new Error("NATS connection is not active");
+	}
+	await connection.flush();
 }
 
 export async function closeNatsConnection(): Promise<void> {
@@ -192,7 +215,11 @@ class NatsPublisher<T extends Record<string, unknown>> {
 									continue;
 								}
 								return { done: false, value: parsed.data };
-							} catch {}
+							} catch (error) {
+								logger.debug("Failed to parse NATS issue event: {error}", {
+									error,
+								});
+							}
 						}
 					},
 					return(): Promise<IteratorResult<T[K], unknown>> {
