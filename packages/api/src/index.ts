@@ -6,9 +6,18 @@ import { ensureApiInit } from "./init";
 import { logger } from "./logger";
 import { router } from "./router";
 
-logger.info("Running API init");
-await ensureApiInit();
-logger.info("API init done");
+const startApiInit = () => {
+	logger.info("Running API init");
+	void ensureApiInit()
+		.then(() => {
+			logger.info("API init done");
+		})
+		.catch((error: unknown) => {
+			logger.error("API init failed: {error}", { error });
+		});
+};
+
+startApiInit();
 
 export { router, prism, Elysia };
 

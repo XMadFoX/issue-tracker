@@ -6,8 +6,11 @@ import { ORPCError, onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { ResponseHeadersPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod";
+import { checkDbReachable } from "db";
 import { type Context, Elysia } from "elysia";
 import { env } from "./env";
+import { checkNatsReachable } from "./features/issues/publisher";
+import { isApiInitCompleted } from "./init";
 import { auth } from "./lib/auth";
 import { logger } from "./logger";
 import { instrumentation } from "./otel-instrumentation";
@@ -90,6 +93,78 @@ const betterAuthView = (context: Context) => {
 	return context.status(405);
 };
 
+type HealthStatus = "ok" | "unavailable";
+
+type HealthBody = {
+	status: HealthStatus;
+	checks?: {
+		init: boolean;
+		db: boolean;
+		nats: boolean;
+	};
+};
+
+const healthResponse = (status: number, body: HealthBody) => {
+	return new Response(JSON.stringify(body), {
+		status,
+		headers: { "Content-Type": "application/json" },
+	});
+};
+
+const livez = () => {
+	return healthResponse(200, { status: "ok" });
+};
+
+const READINESS_CHECK_TIMEOUT_MS = 2_000;
+
+const withTimeout = async (check: () => Promise<void>, label: string) => {
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+
+	try {
+		await Promise.race([
+			check(),
+			new Promise<never>((_, reject) => {
+				timeout = setTimeout(() => {
+					reject(
+						new Error(
+							`${label} readiness check timed out after ${READINESS_CHECK_TIMEOUT_MS}ms`,
+						),
+					);
+				}, READINESS_CHECK_TIMEOUT_MS);
+			}),
+		]);
+	} finally {
+		if (timeout) {
+			clearTimeout(timeout);
+		}
+	}
+};
+
+const checkReachable = async (label: string, check: () => Promise<void>) => {
+	try {
+		await withTimeout(check, label);
+		return true;
+	} catch (error) {
+		logger.warning("Readiness check failed: {error}", { error });
+		return false;
+	}
+};
+
+const readyz = async () => {
+	const init = isApiInitCompleted();
+	const [db, nats] = await Promise.all([
+		checkReachable("db", checkDbReachable),
+		checkReachable("nats", checkNatsReachable),
+	]);
+	const checks = { init, db, nats };
+
+	if (init && db && nats) {
+		return healthResponse(200, { status: "ok", checks });
+	}
+
+	return healthResponse(503, { status: "unavailable", checks });
+};
+
 const handleRpc = async ({
 	request,
 	path,
@@ -117,6 +192,9 @@ const handleRpc = async ({
 export const prism = new Elysia({ name: "prism" })
 	.use(instrumentation)
 	.use(cors({ origin: env.CORS_ORIGINS }))
+	.get("/livez", livez)
+	.get("/healthz", readyz)
+	.get("/readyz", readyz)
 	.all("/api/auth/*", betterAuthView)
 	.all("/rpc*", handleRpc, { parse: "none" })
 	.all("/api/rpc*", handleRpc, { parse: "none" })
