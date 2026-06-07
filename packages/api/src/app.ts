@@ -195,6 +195,12 @@ export const prism = new Elysia({ name: "prism" })
 	.get("/livez", livez)
 	.get("/healthz", readyz)
 	.get("/readyz", readyz)
+	.group("/api", (api) => {
+		return api
+			.get("/livez", livez)
+			.get("/healthz", readyz)
+			.get("/readyz", readyz);
+	})
 	.all("/api/auth/*", betterAuthView)
 	.all("/rpc*", handleRpc, { parse: "none" })
 	.all("/api/rpc*", handleRpc, { parse: "none" })
