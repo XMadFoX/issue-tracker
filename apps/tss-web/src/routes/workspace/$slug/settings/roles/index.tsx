@@ -21,7 +21,7 @@ export const Route = createFileRoute("/workspace/$slug/settings/roles/")({
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
+	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function getNestedRecord(
@@ -96,9 +96,11 @@ function normalizeAssignedPermissions(
 			return [];
 		}
 
+		const rowRecord: Record<string, unknown> = row;
 		const rolePermission =
-			getNestedRecord(row, ["rolePermissions", "role_permissions"]) ?? row;
-		const catalogEntry = getNestedRecord(row, [
+			getNestedRecord(rowRecord, ["rolePermissions", "role_permissions"]) ??
+			rowRecord;
+		const catalogEntry = getNestedRecord(rowRecord, [
 			"permissionsCatalog",
 			"permissions_catalog",
 		]);
@@ -111,6 +113,10 @@ function normalizeAssignedPermissions(
 		const resourceType = getString(catalogEntry, "resourceType");
 		const action = getString(catalogEntry, "action");
 		const description = getString(catalogEntry, "description");
+		const rolePermissionAttributes = rolePermission.attributes;
+		const attributes = isRecord(rolePermissionAttributes)
+			? rolePermissionAttributes
+			: {};
 
 		if (
 			!roleId ||
@@ -125,6 +131,7 @@ function normalizeAssignedPermissions(
 
 		return [
 			{
+				id: permissionId,
 				roleId,
 				permissionId,
 				key,
@@ -133,6 +140,7 @@ function normalizeAssignedPermissions(
 				description,
 				effect: effect === "deny" ? "deny" : "allow",
 				constraintId,
+				attributes,
 			},
 		];
 	});
