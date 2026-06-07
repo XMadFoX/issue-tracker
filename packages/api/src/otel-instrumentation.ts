@@ -4,6 +4,7 @@ import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-grpc";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-grpc";
 import { PgInstrumentation } from "@opentelemetry/instrumentation-pg";
 import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
+import { NodeSDK } from "@opentelemetry/sdk-node";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
 import { ORPCInstrumentation } from "@orpc/otel";
 import { setGlobalOtelConfig } from "@orpc/shared";
@@ -18,11 +19,16 @@ setGlobalOtelConfig({
 
 const url = env.OTEL_EXPORTER_OTLP_ENDPOINT;
 
-export const instrumentation = opentelemetry({
-	BatchSpanProcessor,
-	spanProcessor: new BatchSpanProcessor(new OTLPTraceExporter({ url })),
+const sdk = new NodeSDK({
+	serviceName: "Elysia",
+	spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter({ url }))],
 	logRecordProcessors: [
 		new BatchLogRecordProcessor(new OTLPLogExporter({ url })),
 	],
 	instrumentations: [new ORPCInstrumentation(), new PgInstrumentation()],
 });
+
+sdk.start();
+
+// elysias gonna attach to existing otel sdk instance started above
+export const instrumentation = opentelemetry();
