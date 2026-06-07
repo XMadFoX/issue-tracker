@@ -10,6 +10,20 @@ export const Route = createFileRoute(
 	component: RouteComponent,
 });
 
+function formatDebugScore(result: object): string | null {
+	if (!("debug" in result)) {
+		return null;
+	}
+
+	const { debug } = result;
+
+	if (typeof debug !== "object" || debug === null || !("score" in debug)) {
+		return null;
+	}
+
+	return typeof debug.score === "number" ? debug.score.toFixed(3) : null;
+}
+
 function RouteComponent() {
 	const { slug } = Route.useParams();
 	const [query, setQuery] = useState("");
@@ -66,7 +80,7 @@ function RouteComponent() {
 								<div className="flex items-center justify-between">
 									<p className="font-medium">{result.title}</p>
 									<span className="text-sm text-muted-foreground">
-										Score: {result?.debug?.score?.toFixed(3)}
+										Score: {formatDebugScore(result) ?? "—"}
 									</span>
 								</div>
 								<p className="text-sm text-muted-foreground">ID: {result.id}</p>
