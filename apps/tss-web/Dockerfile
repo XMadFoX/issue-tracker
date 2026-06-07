@@ -10,6 +10,7 @@ COPY packages/api/package.json ./packages/api/package.json
 COPY packages/blocks/package.json ./packages/blocks/package.json
 COPY packages/db/package.json ./packages/db/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
+COPY packages/features/package.json ./packages/features/package.json
 RUN bun install --frozen-lockfile --filter "./apps/tss-web"
 
 FROM base AS build
