@@ -8,11 +8,13 @@ import { ResponseHeadersPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod";
 import { checkDbReachable } from "db";
 import { type Context, Elysia } from "elysia";
+import { StatusMap } from "elysia/utils";
 import { env } from "./env";
 import { checkNatsReachable } from "./features/issues/publisher";
 import { isApiInitCompleted } from "./init";
 import { auth } from "./lib/auth";
 import { logger } from "./logger";
+import { addHttpActiveRequest, recordHttpRequest } from "./metrics";
 import { instrumentation } from "./otel-instrumentation";
 import { router } from "./router";
 
@@ -84,6 +86,101 @@ const rpcHandler = new RPCHandler(router, {
 		}),
 	],
 });
+
+const HTTP_STATUS_CODES: Readonly<Record<string, number>> = StatusMap;
+
+const requestStartTimes = new WeakMap<Request, number>();
+
+const normalizeRoute = (path: string) => {
+	if (path === "/livez" || path === "/api/livez") return "/livez";
+	if (
+		path === "/healthz" ||
+		path === "/readyz" ||
+		path === "/api/healthz" ||
+		path === "/api/readyz"
+	) {
+		return "/readyz";
+	}
+	if (path.startsWith("/api/auth/")) return "/api/auth/*";
+	if (path.startsWith("/api/rpc")) return "/api/rpc*";
+	if (path.startsWith("/rpc")) return "/rpc*";
+	if (path.startsWith("/api")) return "/api*";
+	return "unknown";
+};
+
+const getStatusCode = (status: number | string | undefined) => {
+	if (typeof status === "number") {
+		return status;
+	}
+	if (typeof status === "string") {
+		return HTTP_STATUS_CODES[status];
+	}
+	return undefined;
+};
+
+const getResponseStatus = (
+	status: number | string | undefined,
+	response: unknown,
+) => {
+	if (response instanceof Response) {
+		return response.status;
+	}
+	return getStatusCode(status) ?? 200;
+};
+
+const hasNumericStatus = (value: unknown): value is { status: number } => {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"status" in value &&
+		typeof value.status === "number"
+	);
+};
+
+const getErrorResponseStatus = (
+	status: number | string | undefined,
+	error: unknown,
+) => {
+	const statusCode = getStatusCode(status);
+	if (statusCode !== undefined) {
+		return statusCode;
+	}
+	if (hasNumericStatus(error)) {
+		return error.status;
+	}
+	return 500;
+};
+
+const startRequestMetrics = (request: Request) => {
+	requestStartTimes.set(request, performance.now());
+	addHttpActiveRequest(1, { "http.request.method": request.method });
+};
+
+const finishRequestMetrics = ({
+	request,
+	path,
+	status,
+}: {
+	request: Request;
+	path: string;
+	status: number;
+}) => {
+	const start = requestStartTimes.get(request);
+	if (start === undefined) {
+		return;
+	}
+
+	requestStartTimes.delete(request);
+	addHttpActiveRequest(-1, { "http.request.method": request.method });
+
+	const attributes = {
+		"http.request.method": request.method,
+		"http.route": normalizeRoute(path),
+		"http.response.status_code": status,
+	};
+
+	recordHttpRequest(performance.now() - start, status, attributes);
+};
 
 const betterAuthView = (context: Context) => {
 	const BETTER_AUTH_ACCEPT_METHODS = ["POST", "GET"];
@@ -192,6 +289,23 @@ const handleRpc = async ({
 export const prism = new Elysia({ name: "prism" })
 	.use(instrumentation)
 	.use(cors({ origin: env.CORS_ORIGINS }))
+	.onRequest(({ request }) => {
+		startRequestMetrics(request);
+	})
+	.onAfterHandle(({ request, path, response, set }) => {
+		finishRequestMetrics({
+			request,
+			path,
+			status: getResponseStatus(set.status, response),
+		});
+	})
+	.onError(({ request, path, set, error }) => {
+		finishRequestMetrics({
+			request,
+			path,
+			status: getErrorResponseStatus(set.status, error),
+		});
+	})
 	.get("/livez", livez)
 	.get("/healthz", readyz)
 	.get("/readyz", readyz)

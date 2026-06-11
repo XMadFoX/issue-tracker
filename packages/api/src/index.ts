@@ -1,10 +1,14 @@
 import { Elysia } from "elysia";
-import { prism } from "./app";
 import { env } from "./env";
 import { closeNatsConnection } from "./features/issues/publisher";
-import { ensureApiInit } from "./init";
 import { logger } from "./logger";
-import { router } from "./router";
+import { initOtel, shutdownOtel } from "./otel-instrumentation";
+
+initOtel();
+
+const { prism } = await import("./app");
+const { ensureApiInit } = await import("./init");
+const { router } = await import("./router");
 
 const startApiInit = () => {
 	logger.info("Running API init");
@@ -19,12 +23,14 @@ const startApiInit = () => {
 
 startApiInit();
 
-export { router, prism, Elysia };
+export { Elysia, prism, router };
 
 const port = env.PORT;
 export const ElysiaApp = new Elysia().use(prism).onStop(async () => {
 	await closeNatsConnection();
 	logger.info("NATS connection closed");
+	await shutdownOtel();
+	logger.info("OpenTelemetry SDK shut down");
 });
 
 // Only listen if this is the main module (standalone mode)

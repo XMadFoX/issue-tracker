@@ -7,6 +7,15 @@ import {
 } from "@nats-io/transport-node";
 import { env } from "../../env";
 import { logger } from "../../logger";
+import {
+	addNatsActiveSubscription,
+	recordNatsConnectionAttempt,
+	recordNatsConnectionError,
+	recordNatsParseError,
+	recordNatsPublish,
+	recordNatsPublishError,
+	recordNatsReceivedMessage,
+} from "../../metrics";
 import type { IssueWithRelations } from "./queries";
 
 export type IssueEvents = {
@@ -42,12 +51,15 @@ async function getConnection(): Promise<NatsConnection> {
 	}
 	if (connectionPromise) return connectionPromise;
 
+	recordNatsConnectionAttempt();
+
 	connectionPromise = connect({ servers: env.NATS_URL })
 		.then((connection) => {
 			nc = connection;
 			return connection;
 		})
 		.catch((error: unknown) => {
+			recordNatsConnectionError();
 			nc = null;
 			throw error;
 		})
@@ -108,22 +120,38 @@ function findEventIndex<K extends keyof IssueEvents>(
 
 class NatsPublisher<T extends Record<string, unknown>> {
 	async publish<K extends keyof T>(event: K, data: T[K]): Promise<void> {
-		const connection = await getConnection();
+		const start = performance.now();
 		const subject = String(event);
+		const attributes = {
+			"messaging.system": "nats",
+			"messaging.operation.name": "publish",
+			"messaging.destination.name": subject,
+		};
 
-		// Generate event ID for resume support
-		const eventId = nuid.next();
+		try {
+			const connection = await getConnection();
+			let payloadBytes = 0;
 
-		// Store in history for resume support
-		addToHistory(
-			event as keyof IssueEvents,
-			eventId,
-			data as IssueEvents[keyof IssueEvents],
-		);
+			// Generate event ID for resume support
+			const eventId = nuid.next();
 
-		// Publish with event ID embedded
-		const message = { _eventId: eventId, data };
-		connection.publish(subject, JSON.stringify(message));
+			// Store in history for resume support
+			addToHistory(
+				event as keyof IssueEvents,
+				eventId,
+				data as IssueEvents[keyof IssueEvents],
+			);
+
+			// Publish with event ID embedded
+			const message = { _eventId: eventId, data };
+			const payload = JSON.stringify(message);
+			payloadBytes = Buffer.byteLength(payload);
+			connection.publish(subject, payload);
+			recordNatsPublish(performance.now() - start, payloadBytes, attributes);
+		} catch (error) {
+			recordNatsPublishError(performance.now() - start, attributes);
+			throw error;
+		}
 	}
 
 	subscribe<K extends keyof T>(
@@ -155,9 +183,19 @@ class NatsPublisher<T extends Record<string, unknown>> {
 		let subscription: Subscription | null = null;
 		let subIterator: AsyncIterator<Msg> | null = null;
 		let done = false;
+		let activeSubscriptionRecorded = false;
+		const attributes = {
+			"messaging.system": "nats",
+			"messaging.operation.name": "receive",
+			"messaging.destination.name": subject,
+		};
 
 		const cleanup = () => {
 			done = true;
+			if (activeSubscriptionRecorded) {
+				addNatsActiveSubscription(-1, attributes);
+				activeSubscriptionRecorded = false;
+			}
 			if (subscription) {
 				subscription.unsubscribe();
 				subscription = null;
@@ -189,6 +227,8 @@ class NatsPublisher<T extends Record<string, unknown>> {
 							const connection = await getConnection();
 							subscription = connection.subscribe(subject);
 							subIterator = subscription[Symbol.asyncIterator]();
+							addNatsActiveSubscription(1, attributes);
+							activeSubscriptionRecorded = true;
 						}
 
 						// Get next message from subscription
@@ -198,7 +238,13 @@ class NatsPublisher<T extends Record<string, unknown>> {
 								return { done: true, value: undefined };
 							}
 
-							const result = await subIterator!.next();
+							const iterator = subIterator;
+							if (!iterator) {
+								cleanup();
+								return { done: true, value: undefined };
+							}
+
+							const result = await iterator.next();
 
 							if (result.done) {
 								cleanup();
@@ -214,8 +260,10 @@ class NatsPublisher<T extends Record<string, unknown>> {
 								if (lastEventId && parsed._eventId === lastEventId) {
 									continue;
 								}
+								recordNatsReceivedMessage(attributes);
 								return { done: false, value: parsed.data };
 							} catch (error) {
+								recordNatsParseError(attributes);
 								logger.debug("Failed to parse NATS issue event: {error}", {
 									error,
 								});

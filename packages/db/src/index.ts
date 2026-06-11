@@ -2,7 +2,9 @@ import { getLogger } from "@logtape/logtape";
 import { sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { drizzle as drizzleHttp } from "drizzle-orm/pg-proxy";
+import { Pool } from "pg";
 import { env } from "./env";
+import { observeDbPool, recordDbProxyQuery } from "./metrics";
 import { relations } from "./relations";
 import * as schema from "./schema";
 
@@ -33,6 +35,9 @@ function createDb() {
 
 		return drizzleHttp(
 			async (sql, params, method) => {
+				const start = performance.now();
+				let status: "ok" | "error" = "ok";
+
 				try {
 					const url = serverlessEnv.PG_PROXY_URL;
 					logger.debug("fetching from pg proxy", {
@@ -76,18 +81,22 @@ function createDb() {
 
 					return { rows: rows };
 				} catch (error: unknown) {
+					status = "error";
 					logger.error("Error from pg proxy server: {error}", { error });
 					throw error;
+				} finally {
+					recordDbProxyQuery(method, performance.now() - start, status);
 				}
 			},
 			{ relations },
 		);
 	} else {
 		logger.info("Initializing stateful database connection");
+		const pool = new Pool({ connectionString: env.DATABASE_URL });
+		observeDbPool(pool);
+
 		return drizzle({
-			connection: {
-				connectionString: env.DATABASE_URL,
-			},
+			client: pool,
 			relations,
 		});
 	}
