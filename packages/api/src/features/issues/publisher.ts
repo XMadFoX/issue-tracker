@@ -1,16 +1,8 @@
-import {
-	connect,
-	type Msg,
-	type NatsConnection,
-	nuid,
-	type Subscription,
-} from "@nats-io/transport-node";
-import { env } from "../../env";
+import { type Msg, nuid, type Subscription } from "@nats-io/transport-node";
+import { getNatsConnection } from "../../lib/nats";
 import { logger } from "../../logger";
 import {
 	addNatsActiveSubscription,
-	recordNatsConnectionAttempt,
-	recordNatsConnectionError,
 	recordNatsParseError,
 	recordNatsPublish,
 	recordNatsPublishError,
@@ -38,53 +30,10 @@ type EventWithId<T> = { _eventId: string; data: T };
 
 const MAX_HISTORY_SIZE = 1000;
 
-let nc: NatsConnection | null = null;
-let connectionPromise: Promise<NatsConnection> | null = null;
-
 // In-memory history for resume support (ring buffer)
 const eventHistory = new Map<string, EventWithId<unknown>[]>();
 
-async function getConnection(): Promise<NatsConnection> {
-	if (nc && !nc.isClosed()) return nc;
-	if (nc?.isClosed()) {
-		nc = null;
-	}
-	if (connectionPromise) return connectionPromise;
-
-	recordNatsConnectionAttempt();
-
-	connectionPromise = connect({ servers: env.NATS_URL })
-		.then((connection) => {
-			nc = connection;
-			return connection;
-		})
-		.catch((error: unknown) => {
-			recordNatsConnectionError();
-			nc = null;
-			throw error;
-		})
-		.finally(() => {
-			connectionPromise = null;
-		});
-
-	return connectionPromise;
-}
-
-export async function checkNatsReachable(): Promise<void> {
-	const connection = await getConnection();
-	if (connection.isClosed() || connection.isDraining()) {
-		throw new Error("NATS connection is not active");
-	}
-	await connection.flush();
-}
-
-export async function closeNatsConnection(): Promise<void> {
-	if (nc) {
-		await nc.drain();
-		nc = null;
-		connectionPromise = null;
-	}
-}
+export { checkNatsReachable, closeNatsConnection } from "../../lib/nats";
 
 function getEventHistory<K extends keyof IssueEvents>(
 	event: K,
@@ -129,7 +78,7 @@ class NatsPublisher<T extends Record<string, unknown>> {
 		};
 
 		try {
-			const connection = await getConnection();
+			const connection = await getNatsConnection();
 			let payloadBytes = 0;
 
 			// Generate event ID for resume support
@@ -224,7 +173,7 @@ class NatsPublisher<T extends Record<string, unknown>> {
 
 						// Then, subscribe to live events
 						if (!subscription) {
-							const connection = await getConnection();
+							const connection = await getNatsConnection();
 							subscription = connection.subscribe(subject);
 							subIterator = subscription[Symbol.asyncIterator]();
 							addNatsActiveSubscription(1, attributes);
