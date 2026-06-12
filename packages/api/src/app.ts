@@ -12,7 +12,7 @@ import { StatusMap } from "elysia/utils";
 import { env } from "./env";
 import { checkNatsReachable } from "./features/issues/publisher";
 import { isApiInitCompleted } from "./init";
-import { auth } from "./lib/auth";
+import { auth, checkAuthStorageReachable } from "./lib/auth";
 import { logger } from "./logger";
 import { addHttpActiveRequest, recordHttpRequest } from "./metrics";
 import { instrumentation } from "./otel-instrumentation";
@@ -198,6 +198,7 @@ type HealthBody = {
 		init: boolean;
 		db: boolean;
 		nats: boolean;
+		authStorage: boolean;
 	};
 };
 
@@ -249,13 +250,14 @@ const checkReachable = async (label: string, check: () => Promise<void>) => {
 
 const readyz = async () => {
 	const init = isApiInitCompleted();
-	const [db, nats] = await Promise.all([
+	const [db, nats, authStorage] = await Promise.all([
 		checkReachable("db", checkDbReachable),
 		checkReachable("nats", checkNatsReachable),
+		checkReachable("auth-storage", checkAuthStorageReachable),
 	]);
-	const checks = { init, db, nats };
+	const checks = { init, db, nats, authStorage };
 
-	if (init && db && nats) {
+	if (init && db && nats && authStorage) {
 		return healthResponse(200, { status: "ok", checks });
 	}
 

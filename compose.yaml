@@ -26,7 +26,7 @@ services:
     ports:
       - "4222:4222"
       - "8222:8222" # monitoring
-    command: "--http_port 8222"
+    command: "--http_port 8222 -js"
 
   pg-http-proxy-rs:
     image: xmadfox/pg-http-proxy-rs:0.1.5

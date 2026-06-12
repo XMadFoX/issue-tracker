@@ -102,7 +102,8 @@
         "@logtape/logtape": "^2.0.4",
         "@logtape/otel": "^2.0.4",
         "@logtape/pretty": "^2.0.4",
-        "@nats-io/transport-node": "^3.3.0",
+        "@nats-io/kv": "^3.4.0",
+        "@nats-io/transport-node": "^3.4.0",
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/api-logs": "^0.208.0",
         "@opentelemetry/exporter-logs-otlp-grpc": "^0.208.0",
@@ -591,13 +592,17 @@
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.1.1", "", { "dependencies": { "@emnapi/core": "1.7.1", "@emnapi/runtime": "1.7.1", "@tybys/wasm-util": "0.10.1" } }, "sha512-p64ah1M1ld8xjWv3qbvFwHiFVWrq1yFvV4f7w+mzaqiR4IlSgkqhcRdHwsGgomwzBH51sRY4NEowLxnaBjcW/A=="],
 
-    "@nats-io/nats-core": ["@nats-io/nats-core@3.3.0", "", { "dependencies": { "@nats-io/nkeys": "2.0.3", "@nats-io/nuid": "2.0.3" } }, "sha512-+ImSYab7NvOMvFFBSBbWl03a4s/OUXCpFFauZ4iRx8pp+5ptsaBQNpacyPXeg8jbjAMeEAWn2Zuyl7oJCUffJA=="],
+    "@nats-io/jetstream": ["@nats-io/jetstream@3.4.0", "", { "dependencies": { "@nats-io/nats-core": "3.4.0" } }, "sha512-GzHQodNJ942+R5LRb8PuZ5ugVWVWMRiufxUYLLVWkXKfwDXYN+Owo0d7L/b9O7BPyrbYD7jQWAC6+ZVuXa9Gyw=="],
+
+    "@nats-io/kv": ["@nats-io/kv@3.4.0", "", { "dependencies": { "@nats-io/jetstream": "3.4.0", "@nats-io/nats-core": "3.4.0" } }, "sha512-168pcRJxWcIRHwdyczI3DaGk5r3CAj3CyKXuk4Nmx5KKj7N1znQOJPIxCoV0TPlAvoTidVb7eBv41J9imapMeQ=="],
+
+    "@nats-io/nats-core": ["@nats-io/nats-core@3.4.0", "", { "dependencies": { "@nats-io/nkeys": "2.0.3", "@nats-io/nuid": "3.0.0" } }, "sha512-QMDM86EUNm+wudlKC67HLar/KHHQUvJGLfb4jbahje3pUk3K9afeck9fwsxBZF0eUFox6T/TA6m/t+lQqf+QsQ=="],
 
     "@nats-io/nkeys": ["@nats-io/nkeys@2.0.3", "", { "dependencies": { "tweetnacl": "1.0.3" } }, "sha512-JVt56GuE6Z89KUkI4TXUbSI9fmIfAmk6PMPknijmuL72GcD+UgIomTcRWiNvvJKxA01sBbmIPStqJs5cMRBC3A=="],
 
-    "@nats-io/nuid": ["@nats-io/nuid@2.0.3", "", {}, "sha512-TpA3HEBna/qMVudy+3HZr5M3mo/L1JPofpVT4t0HkFGkz2Cn9wrlrQC8tvR8Md5Oa9//GtGG26eN0qEWF5Vqew=="],
+    "@nats-io/nuid": ["@nats-io/nuid@3.0.0", "", {}, "sha512-QbXZDrxmYlrn5AD06gYcUTmEHwxn96HBQMIk7XTjDlEcx6FPzVBBPjp4AMRh1lEv6B4iJ6Xb/Uz61JugPXFRQg=="],
 
-    "@nats-io/transport-node": ["@nats-io/transport-node@3.3.0", "", { "dependencies": { "@nats-io/nats-core": "3.3.0", "@nats-io/nkeys": "2.0.3", "@nats-io/nuid": "2.0.3" } }, "sha512-A59+E0uL2FCzkvEbnhOPA4bKd4p1Ca6o5GwhVwVHzBPILjjGaSpgwgccaxnjwdsP+FBcMRrgXJ1wn6i1pf6nHQ=="],
+    "@nats-io/transport-node": ["@nats-io/transport-node@3.4.0", "", { "dependencies": { "@nats-io/nats-core": "3.4.0", "@nats-io/nkeys": "2.0.3", "@nats-io/nuid": "3.0.0" } }, "sha512-hH7u7ejIBTFEJIZ8rIcMrHJI6wl+HhpO5sVFs1+ppmXa8RuB2+Lh1+UwTzZ5xTNNm1TKcRkYy+2qCV56qp8RxA=="],
 
     "@noble/ciphers": ["@noble/ciphers@2.0.1", "", {}, "sha512-xHK3XHPUW8DTAobU+G0XT+/w+JLM7/8k1UFdB5xg/zTFPnFCobhftzw8wl4Lw2aq/Rvir5pxfZV5fEazmeCJ2g=="],
 

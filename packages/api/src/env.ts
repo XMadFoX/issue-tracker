@@ -7,6 +7,7 @@ export const env = createEnv({
 		PORT: z.coerce.number().optional().default(4000),
 		APP_URL: z.url().default("http://localhost:3000"),
 		NATS_URL: z.string().optional().default("nats://localhost:4222"),
+		NATS_AUTH_KV_BUCKET: z.string().optional().default("auth"),
 		CORS_ORIGINS: z
 			.string()
 			.optional()
