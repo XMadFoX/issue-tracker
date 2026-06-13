@@ -7,10 +7,12 @@ import {
 	SelectValue,
 } from "@prism/ui/components/select";
 import { IssueAssigneeSelect } from "../components/issue-assignee-select";
+import { IssueCycleSelect } from "../components/issue-cycle-select";
 import { IssueEstimateSelect } from "../components/issue-estimate-select";
 import { IssueLabelSelect } from "../components/issue-label-select";
 import { IssuePrioritySelect } from "../components/issue-priority-select";
 import type {
+	CycleList,
 	IssueActions,
 	IssueDetailData,
 	IssueStatusList,
@@ -25,11 +27,12 @@ type Props = {
 	statuses: IssueStatusList;
 	priorities: PriorityList;
 	labels: LabelList;
+	cycles: CycleList;
 	teamMembers: TeamMemberList;
 	workspaceId: string;
 	issueActions: Pick<
 		IssueActions,
-		"update" | "updatePriority" | "updateAssignee"
+		"update" | "updatePriority" | "updateAssignee" | "updateCycle"
 	>;
 	labelActions: LabelActions;
 };
@@ -39,6 +42,7 @@ export function IssuePropertyBar({
 	statuses,
 	priorities,
 	labels,
+	cycles,
 	teamMembers,
 	workspaceId,
 	issueActions,
@@ -46,6 +50,20 @@ export function IssuePropertyBar({
 }: Props) {
 	return (
 		<div className="flex flex-wrap gap-2">
+			<IssueCycleSelect
+				cycleId={issue.cycleId}
+				cycles={cycles}
+				currentCycle={issue.cycle}
+				triggerClassName="h-fit w-fit cursor-pointer border bg-transparent px-2 py-1 text-sm shadow-none"
+				onChange={(cycleId) =>
+					issueActions.updateCycle({
+						id: issue.id,
+						workspaceId,
+						cycleId,
+					})
+				}
+			/>
+
 			<IssuePrioritySelect
 				priorityId={issue.priorityId}
 				priorities={priorities}

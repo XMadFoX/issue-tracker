@@ -166,6 +166,7 @@ export function IssuesRouteContainer({
 					statuses={statuses.data}
 					priorities={priorities.data}
 					labels={labels.data}
+					cycles={cycles.data}
 					teamMembers={teamMembers.data}
 					getIssueUrl={getIssueUrl}
 					onClose={() => {
@@ -191,6 +192,7 @@ type SelectedIssueSheetProps = {
 	priorities: ComponentProps<typeof IssueDetailSheet>["priorities"];
 	labels: ComponentProps<typeof IssueDetailSheet>["labels"];
 	teamMembers: ComponentProps<typeof IssueDetailSheet>["teamMembers"];
+	cycles: ComponentProps<typeof IssueDetailSheet>["cycles"];
 	getIssueUrl: (issue: IssueLinkTarget) => `/${string}`;
 	onClose: () => void;
 };
@@ -206,6 +208,7 @@ function SelectedIssueSheet({
 	priorities,
 	labels,
 	teamMembers,
+	cycles,
 	getIssueUrl,
 	onClose,
 }: SelectedIssueSheetProps) {
@@ -243,6 +246,7 @@ function SelectedIssueSheet({
 			priorities={priorities}
 			labels={labels}
 			teamMembers={teamMembers}
+			cycles={cycles}
 			workspaceId={workspaceId}
 			teamId={teamId}
 			issueActions={issueActions}

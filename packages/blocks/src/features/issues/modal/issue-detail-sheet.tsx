@@ -7,6 +7,7 @@ import {
 import { ExternalLink } from "lucide-react";
 import { useRouterAdapter } from "../../../router/adapter";
 import type {
+	CycleList,
 	IssueActions,
 	IssueActivityList,
 	IssueDetailData,
@@ -29,12 +30,13 @@ type Props = {
 	statuses: IssueStatusList;
 	priorities: PriorityList;
 	labels: LabelList;
+	cycles: CycleList;
 	teamMembers: TeamMemberList;
 	workspaceId: string;
 	teamId: string;
 	issueActions: Pick<
 		IssueActions,
-		"update" | "updatePriority" | "updateAssignee"
+		"update" | "updatePriority" | "updateAssignee" | "updateCycle"
 	>;
 	labelActions: LabelActions;
 	parentIssue?: IssueListItem | null;
@@ -52,6 +54,7 @@ export function IssueDetailSheet({
 	statuses,
 	priorities,
 	labels,
+	cycles,
 	teamMembers,
 	workspaceId,
 	teamId,
@@ -90,6 +93,7 @@ export function IssueDetailSheet({
 					statuses={statuses}
 					priorities={priorities}
 					labels={labels}
+					cycles={cycles}
 					teamMembers={teamMembers}
 					workspaceId={workspaceId}
 					teamId={teamId}

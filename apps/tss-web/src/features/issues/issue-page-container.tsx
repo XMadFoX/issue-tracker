@@ -34,6 +34,7 @@ export function IssuePageContainer({ slug, teamSlug, issueId }: Props) {
 	const priorities = useSuspenseQuery(issueQueries.priorities(workspaceId));
 	const statuses = useSuspenseQuery(issueQueries.statuses(workspaceId));
 	const labels = useSuspenseQuery(issueQueries.labels(listInput));
+	const cycles = useSuspenseQuery(issueQueries.cycles(listInput));
 	const teamMembers = useSuspenseQuery(issueQueries.teamMembers(listInput));
 	const issues = useSuspenseQuery(issueQueries.issueList(listInput));
 	const { issueActions, labelActions, subIssueActions } = useIssueMutations({
@@ -62,6 +63,7 @@ export function IssuePageContainer({ slug, teamSlug, issueId }: Props) {
 				statuses={statuses.data}
 				priorities={priorities.data}
 				labels={labels.data}
+				cycles={cycles.data}
 				teamMembers={teamMembers.data}
 				workspaceId={workspaceId}
 				teamId={teamId}
