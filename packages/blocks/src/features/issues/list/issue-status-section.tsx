@@ -1,3 +1,4 @@
+import { useDroppable } from "@dnd-kit/core";
 import { Badge } from "@prism/ui/components/badge";
 import { Button } from "@prism/ui/components/button";
 import { Plus } from "lucide-react";
@@ -16,11 +17,30 @@ import type {
 } from "../types";
 import { IssuesTable } from "./issues-table";
 
+export const ISSUE_STATUS_DROP_ID_PREFIX = "issue-status:";
+
 function CreateIssueButton() {
 	return (
 		<Button variant="ghost" size="icon" type="button" className="ml-auto p-2">
 			<Plus className="size-3" />
 		</Button>
+	);
+}
+
+function EmptyStatusDropZone({ statusId }: { statusId: string }) {
+	const { isOver, setNodeRef } = useDroppable({
+		id: `${ISSUE_STATUS_DROP_ID_PREFIX}${statusId}`,
+	});
+
+	return (
+		<div
+			ref={setNodeRef}
+			className={`rounded-md border border-dashed px-4 py-6 text-center text-muted-foreground text-sm transition-colors ${
+				isOver ? "border-primary bg-primary/10 text-foreground" : ""
+			}`}
+		>
+			Drop issue here
+		</div>
 	);
 }
 
@@ -97,7 +117,9 @@ export function IssueStatusSection({
 					navigation={navigation}
 					subIssuesByParentId={subIssuesByParentId}
 				/>
-			) : null}
+			) : (
+				<EmptyStatusDropZone statusId={status.id} />
+			)}
 		</div>
 	);
 }

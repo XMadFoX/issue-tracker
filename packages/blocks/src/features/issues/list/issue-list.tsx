@@ -29,7 +29,10 @@ import type {
 	PriorityList,
 	TeamMemberList,
 } from "../types";
-import { IssueStatusSection } from "./issue-status-section";
+import {
+	ISSUE_STATUS_DROP_ID_PREFIX,
+	IssueStatusSection,
+} from "./issue-status-section";
 
 type IssueListProps = {
 	issues: IssueListData;
@@ -105,15 +108,33 @@ export function IssueList({
 			const { active, over } = event;
 			setActiveIssueId(null);
 
-			if (!over || !issueActions.move) return;
+			if (!over) return;
 
 			const draggedIssueId = String(active.id);
 			const targetId = String(over.id);
 			if (draggedIssueId === targetId) return;
 
 			const draggedIssue = issues.find((issue) => issue.id === draggedIssueId);
+			if (!draggedIssue) return;
+
+			if (targetId.startsWith(ISSUE_STATUS_DROP_ID_PREFIX)) {
+				const targetStatusId = targetId.slice(
+					ISSUE_STATUS_DROP_ID_PREFIX.length,
+				);
+				if (draggedIssue.statusId === targetStatusId) return;
+
+				await issueActions.update({
+					id: draggedIssueId,
+					workspaceId,
+					statusId: targetStatusId,
+				});
+				return;
+			}
+
+			if (!issueActions.move) return;
+
 			const targetIssue = issues.find((issue) => issue.id === targetId);
-			if (!draggedIssue || !targetIssue) return;
+			if (!targetIssue) return;
 
 			const activeIndex = issues.indexOf(draggedIssue);
 			const overIndex = issues.indexOf(targetIssue);
@@ -165,7 +186,7 @@ export function IssueList({
 			</div>
 			<DragOverlay>
 				{activeIssue ? (
-					<div className="rotate-1 rounded-md border bg-background opacity-90 shadow-lg">
+					<div className="rounded-md border bg-background opacity-90 shadow-lg">
 						<Table>
 							<TableBody>
 								<TableRow>
