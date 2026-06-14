@@ -27,7 +27,41 @@ function CreateIssueButton() {
 	);
 }
 
-function EmptyStatusDropZone({ statusId }: { statusId: string }) {
+function AddIssueInlineButton() {
+	return (
+		<Button
+			variant="link"
+			type="button"
+			className="inline h-auto border-0 bg-transparent p-0 align-baseline font-normal text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground hover:underline"
+		>
+			Add one
+		</Button>
+	);
+}
+
+type EmptyStatusDropZoneProps = Pick<
+	Props,
+	| "teamId"
+	| "workspaceId"
+	| "priorities"
+	| "statuses"
+	| "teamMembers"
+	| "labels"
+> & {
+	statusId: string;
+	onCreate: IssueActions["create"];
+};
+
+function EmptyStatusDropZone({
+	statusId,
+	workspaceId,
+	teamId,
+	priorities,
+	statuses,
+	teamMembers,
+	labels,
+	onCreate,
+}: EmptyStatusDropZoneProps) {
 	const { isOver, setNodeRef } = useDroppable({
 		id: `${ISSUE_STATUS_DROP_ID_PREFIX}${statusId}`,
 	});
@@ -35,11 +69,33 @@ function EmptyStatusDropZone({ statusId }: { statusId: string }) {
 	return (
 		<div
 			ref={setNodeRef}
-			className={`rounded-md border border-dashed px-4 py-6 text-center text-muted-foreground text-sm transition-colors ${
+			className={`grid h-24 place-items-center rounded-md border border-dashed px-4 text-center text-muted-foreground text-sm transition-colors ${
 				isOver ? "border-primary bg-primary/10 text-foreground" : ""
 			}`}
 		>
-			Drop issue here
+			<div className="flex h-10 flex-col justify-center">
+				{isOver ? (
+					<p className="font-medium text-foreground">Drop issue here</p>
+				) : (
+					<>
+						<p className="font-medium text-foreground">No issues</p>
+						<p>
+							Drag an issue here or{" "}
+							<IssueCreateModal
+								workspaceId={workspaceId}
+								teamId={teamId}
+								priorities={priorities}
+								statuses={statuses}
+								assignees={teamMembers}
+								labels={labels}
+								trigger={AddIssueInlineButton()}
+								onSubmit={onCreate}
+								initialStatusId={statusId}
+							/>
+						</p>
+					</>
+				)}
+			</div>
 		</div>
 	);
 }
@@ -118,7 +174,16 @@ export function IssueStatusSection({
 					subIssuesByParentId={subIssuesByParentId}
 				/>
 			) : (
-				<EmptyStatusDropZone statusId={status.id} />
+				<EmptyStatusDropZone
+					statusId={status.id}
+					workspaceId={workspaceId}
+					teamId={teamId}
+					priorities={priorities}
+					statuses={statuses}
+					teamMembers={teamMembers}
+					labels={labels}
+					onCreate={issueActions.create}
+				/>
 			)}
 		</div>
 	);
