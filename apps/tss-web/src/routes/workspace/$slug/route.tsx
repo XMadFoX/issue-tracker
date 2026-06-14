@@ -173,6 +173,18 @@ export function WorkspaceSidebar({
 									<span>Priorities</span>
 								</SidebarMenuButton>
 							</SidebarMenuItem>
+							<SidebarMenuItem>
+								<SidebarMenuButton
+									render={
+										<Link
+											to="/workspace/$slug/settings/workflow"
+											params={{ slug: workspace?.slug ?? "" }}
+										/>
+									}
+								>
+									<span>Workflow</span>
+								</SidebarMenuButton>
+							</SidebarMenuItem>
 						</SidebarMenu>
 					</SidebarGroupContent>
 				</SidebarGroup>
