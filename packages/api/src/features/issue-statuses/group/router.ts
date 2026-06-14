@@ -1,7 +1,10 @@
 import { ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
-import { issueStatusGroup } from "db/features/tracker/issue-statuses.schema";
+import {
+	issueStatus,
+	issueStatusGroup,
+} from "db/features/tracker/issue-statuses.schema";
 import { and, eq } from "drizzle-orm";
 import { omit } from "remeda";
 import { authedRouter } from "../../../context";
@@ -57,7 +60,12 @@ export const reorderStatusGroups = authedRouter
 				const [updated] = await tx
 					.update(issueStatusGroup)
 					.set({ orderIndex: i })
-					.where(eq(issueStatusGroup.id, id))
+					.where(
+						and(
+							eq(issueStatusGroup.id, id),
+							eq(issueStatusGroup.workspaceId, input.workspaceId),
+						),
+					)
 					.returning();
 				if (!updated) {
 					throw new ORPCError(`Status group ID ${id} not found`);
@@ -105,16 +113,21 @@ export const updateStatusGroup = authedRouter
 			.where(
 				and(
 					eq(issueStatusGroup.id, input.id),
+					eq(issueStatusGroup.workspaceId, input.workspaceId),
 					eq(issueStatusGroup.isEditable, true),
 				),
 			)
 			.returning();
+		if (!updated) throw new ORPCError("Status group not found");
 		return updated;
 	});
 
 export const deleteStatusGroup = authedRouter
 	.input(issueStatusGroupDeleteSchema)
-	.handler(async ({ context, input }) => {
+	.errors({
+		CONFLICT: {},
+	})
+	.handler(async ({ context, input, errors }) => {
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
@@ -122,16 +135,45 @@ export const deleteStatusGroup = authedRouter
 		});
 		if (!allowed) throw new ORPCError("Unauthorized to delete status group");
 
-		const [deleted] = await db
-			.delete(issueStatusGroup)
-			.where(
-				and(
-					eq(issueStatusGroup.id, input.id),
-					eq(issueStatusGroup.isEditable, true),
-				),
-			)
-			.returning();
-		return deleted;
+		return await db.transaction(async (tx) => {
+			const [group] = await tx
+				.select({ id: issueStatusGroup.id })
+				.from(issueStatusGroup)
+				.where(
+					and(
+						eq(issueStatusGroup.id, input.id),
+						eq(issueStatusGroup.workspaceId, input.workspaceId),
+						eq(issueStatusGroup.isEditable, true),
+					),
+				)
+				.limit(1)
+				.for("update");
+			if (!group) throw new ORPCError("Status group not found");
+
+			const [existingStatus] = await tx
+				.select({ id: issueStatus.id })
+				.from(issueStatus)
+				.where(eq(issueStatus.statusGroupId, input.id))
+				.limit(1);
+			if (existingStatus) {
+				throw errors.CONFLICT({
+					message: "Cannot delete a status group that contains statuses",
+				});
+			}
+
+			const [deleted] = await tx
+				.delete(issueStatusGroup)
+				.where(
+					and(
+						eq(issueStatusGroup.id, input.id),
+						eq(issueStatusGroup.workspaceId, input.workspaceId),
+						eq(issueStatusGroup.isEditable, true),
+					),
+				)
+				.returning();
+			if (!deleted) throw new ORPCError("Status group not found");
+			return deleted;
+		});
 	});
 
 export const issueStatusGroupRouter = {

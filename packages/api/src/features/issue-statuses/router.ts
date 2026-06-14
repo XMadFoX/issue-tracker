@@ -2,7 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import { issueStatus } from "db/features/tracker/issue-statuses.schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
@@ -60,7 +60,12 @@ export const reorderStatuses = authedRouter
 				const [updated] = await tx
 					.update(issueStatus)
 					.set({ orderIndex: i })
-					.where(eq(issueStatus.id, id))
+					.where(
+						and(
+							eq(issueStatus.id, id),
+							eq(issueStatus.workspaceId, input.workspaceId),
+						),
+					)
 					.returning();
 				if (!updated) {
 					throw new ORPCError(`Status ID ${id} not found`);
@@ -80,6 +85,14 @@ export const createStatus = authedRouter
 			permissionKey: "issue_status:create",
 		});
 		if (!allowed) throw new ORPCError("Unauthorized to create status");
+
+		const statusGroup = await db.query.issueStatusGroup.findFirst({
+			where: {
+				id: input.statusGroupId,
+				workspaceId: input.workspaceId,
+			},
+		});
+		if (!statusGroup) throw new ORPCError("Status group not found");
 
 		const [created] = await db
 			.insert(issueStatus)
@@ -101,12 +114,28 @@ export const updateStatus = authedRouter
 		});
 		if (!allowed) throw new ORPCError("Unauthorized to update status");
 
+		if (input.statusGroupId !== undefined) {
+			const statusGroup = await db.query.issueStatusGroup.findFirst({
+				where: {
+					id: input.statusGroupId,
+					workspaceId: input.workspaceId,
+				},
+			});
+			if (!statusGroup) throw new ORPCError("Status group not found");
+		}
+
 		const values = omit(input, ["id", "workspaceId"]);
 		const [updated] = await db
 			.update(issueStatus)
 			.set(values)
-			.where(eq(issueStatus.id, input.id))
+			.where(
+				and(
+					eq(issueStatus.id, input.id),
+					eq(issueStatus.workspaceId, input.workspaceId),
+				),
+			)
 			.returning();
+		if (!updated) throw new ORPCError("Status not found");
 		return updated;
 	});
 
@@ -122,8 +151,14 @@ export const deleteStatus = authedRouter
 
 		const [deleted] = await db
 			.delete(issueStatus)
-			.where(eq(issueStatus.id, input.id))
+			.where(
+				and(
+					eq(issueStatus.id, input.id),
+					eq(issueStatus.workspaceId, input.workspaceId),
+				),
+			)
 			.returning();
+		if (!deleted) throw new ORPCError("Status not found");
 		return deleted;
 	});
 
