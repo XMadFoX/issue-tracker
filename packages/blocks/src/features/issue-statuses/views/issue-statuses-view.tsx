@@ -219,31 +219,38 @@ export function IssueStatusesView({
 							</p>
 						</div>
 					) : null}
-					<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+					<div className="grid grid-cols-[repeat(auto-fit,minmax(20rem,1fr))] gap-4">
 						{orderedGroups.map((group, groupIndex) => {
 							const groupStatuses = orderedStatuses.filter(
 								(status) => status.statusGroupId === group.id,
 							);
 							return (
-								<Card key={group.id} className="bg-muted/20">
-									<CardHeader className="space-y-2 p-4">
-										<div className="flex items-start justify-between gap-2">
-											<div>
-												<CardTitle className="text-base">
-													{group.name}
-												</CardTitle>
+								<Card
+									key={group.id}
+									className="flex min-w-80 flex-col bg-muted/20"
+								>
+									<CardHeader className="flex min-h-28 flex-col">
+										<div className="flex items-start justify-between gap-2 w-full">
+											<div className="min-w-0 w-full">
+												<div className="flex justify-between gap-2">
+													<CardTitle className="truncate text-base">
+														{group.name}
+													</CardTitle>
+													{group.isEditable ? null : (
+														<Badge variant="outline" className="shrink-0">
+															<Lock className="size-3" />
+															System
+														</Badge>
+													)}
+												</div>
 												{group.description ? (
-													<CardDescription>{group.description}</CardDescription>
+													<CardDescription className="line-clamp-2">
+														{group.description}
+													</CardDescription>
 												) : null}
 											</div>
-											{group.isEditable ? null : (
-												<Badge variant="outline">
-													<Lock className="size-3" />
-													System
-												</Badge>
-											)}
 										</div>
-										<div className="flex gap-1">
+										<div className="mt-auto flex gap-1">
 											<Button
 												type="button"
 												variant="ghost"
@@ -293,20 +300,20 @@ export function IssueStatusesView({
 											/>
 										</div>
 									</CardHeader>
-									<CardContent className="space-y-2 p-4 pt-0">
+									<CardContent className="flex flex-1 flex-col gap-2 pt-0">
 										{groupStatuses.map((status, statusIndex) => (
 											<div
 												key={status.id}
 												className="rounded-md border bg-background p-3"
 											>
-												<div className="flex items-start gap-2">
+												<div className="flex min-h-14 items-center gap-3">
 													<span
-														className="mt-1 size-3 rounded-full border"
+														className="size-3 shrink-0 rounded-full border"
 														style={{
 															backgroundColor: status.color ?? "transparent",
 														}}
 													/>
-													<div className="min-w-0 flex-1">
+													<div className="min-w-0 flex-1 self-center">
 														<p className="truncate text-sm font-medium">
 															{status.name}
 														</p>
@@ -316,74 +323,78 @@ export function IssueStatusesView({
 															</p>
 														) : null}
 													</div>
-													<Button
-														type="button"
-														variant="ghost"
-														size="icon-sm"
-														disabled={readOnly || statusIndex === 0}
-														onClick={() => {
-															void moveStatus(status, -1);
-														}}
-														aria-label="Move status up"
-													>
-														<ArrowUp className="size-3" />
-													</Button>
-													<Button
-														type="button"
-														variant="ghost"
-														size="icon-sm"
-														disabled={
-															readOnly ||
-															statusIndex === groupStatuses.length - 1
-														}
-														onClick={() => {
-															void moveStatus(status, 1);
-														}}
-														aria-label="Move status down"
-													>
-														<ArrowDown className="size-3" />
-													</Button>
-													<StatusEditorSheet
-														workspaceId={workspaceId}
-														groups={groups}
-														teams={teams}
-														scope={scope}
-														status={status}
-														onSubmit={onUpdateStatus}
-														onDelete={setDeleteStatus}
-														trigger={
-															<Button
-																type="button"
-																variant="ghost"
-																size="sm"
-																disabled={readOnly}
-															>
-																Edit
-															</Button>
-														}
-													/>
+													<div className="ml-auto flex shrink-0 items-center gap-1">
+														<Button
+															type="button"
+															variant="ghost"
+															size="icon-sm"
+															disabled={readOnly || statusIndex === 0}
+															onClick={() => {
+																void moveStatus(status, -1);
+															}}
+															aria-label="Move status up"
+														>
+															<ArrowUp className="size-3" />
+														</Button>
+														<Button
+															type="button"
+															variant="ghost"
+															size="icon-sm"
+															disabled={
+																readOnly ||
+																statusIndex === groupStatuses.length - 1
+															}
+															onClick={() => {
+																void moveStatus(status, 1);
+															}}
+															aria-label="Move status down"
+														>
+															<ArrowDown className="size-3" />
+														</Button>
+														<StatusEditorSheet
+															workspaceId={workspaceId}
+															groups={groups}
+															teams={teams}
+															scope={scope}
+															status={status}
+															onSubmit={onUpdateStatus}
+															onDelete={setDeleteStatus}
+															trigger={
+																<Button
+																	type="button"
+																	variant="ghost"
+																	size="sm"
+																	disabled={readOnly}
+																>
+																	Edit
+																</Button>
+															}
+														/>
+													</div>
 												</div>
 											</div>
 										))}
-										<StatusEditorSheet
-											workspaceId={workspaceId}
-											groups={groups}
-											teams={teams}
-											scope={scope}
-											defaultGroupId={group.id}
-											onSubmit={onCreateStatus}
-											trigger={
-												<Button
-													type="button"
-													variant="ghost"
-													className="w-full"
-													disabled={!canCreateStatus}
-												>
-													<Plus className="size-4" />
-													Add status
-												</Button>
-											}
-										/>
+										<div className="mt-auto pt-2">
+											<StatusEditorSheet
+												workspaceId={workspaceId}
+												groups={groups}
+												teams={teams}
+												scope={scope}
+												defaultGroupId={group.id}
+												onSubmit={onCreateStatus}
+												trigger={
+													<Button
+														type="button"
+														variant="ghost"
+														className="w-full"
+														disabled={!canCreateStatus}
+													>
+														<Plus className="size-4" />
+														Add status
+													</Button>
+												}
+											/>
+										</div>
 									</CardContent>
 								</Card>
 							);
