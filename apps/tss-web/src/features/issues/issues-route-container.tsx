@@ -12,6 +12,7 @@ import { Button } from "@prism/ui/components/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuGroup,
 	DropdownMenuLabel,
 	DropdownMenuRadioGroup,
 	DropdownMenuRadioItem,
@@ -106,29 +107,34 @@ export function IssuesRouteContainer({
 						}
 					/>
 					<DropdownMenuContent align="end" className="w-56">
-						<DropdownMenuLabel>Archived issues</DropdownMenuLabel>
-						<DropdownMenuSeparator />
-						<DropdownMenuRadioGroup
-							value={archivedFilter}
-							onValueChange={(value) => {
-								const nextFilter = getIssueArchiveFilter(value);
-								if (!nextFilter) return;
+						<DropdownMenuGroup>
+							<DropdownMenuLabel>Archived issues</DropdownMenuLabel>
+							<DropdownMenuSeparator />
+							<DropdownMenuRadioGroup
+								value={archivedFilter}
+								onValueChange={(value) => {
+									const nextFilter = getIssueArchiveFilter(value);
+									if (!nextFilter) return;
 
-								navigate({
-									to: ".",
-									search: {
-										archivedFilter: nextFilter,
-										selectedIssue: undefined,
-									},
-								});
-							}}
-						>
-							{issueArchiveFilterOptions.map((option) => (
-								<DropdownMenuRadioItem key={option.value} value={option.value}>
-									{option.label}
-								</DropdownMenuRadioItem>
-							))}
-						</DropdownMenuRadioGroup>
+									navigate({
+										to: ".",
+										search: {
+											archivedFilter: nextFilter,
+											selectedIssue: undefined,
+										},
+									});
+								}}
+							>
+								{issueArchiveFilterOptions.map((option) => (
+									<DropdownMenuRadioItem
+										key={option.value}
+										value={option.value}
+									>
+										{option.label}
+									</DropdownMenuRadioItem>
+								))}
+							</DropdownMenuRadioGroup>
+						</DropdownMenuGroup>
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</div>
