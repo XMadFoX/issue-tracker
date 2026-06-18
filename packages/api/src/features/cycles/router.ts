@@ -25,21 +25,42 @@ import {
 } from "./schema";
 
 const commonErrors = {
-	UNAUTHORIZED: {},
-	NOT_FOUND: {},
+	UNAUTHORIZED: {
+		status: 401,
+		message: "You are not authorized to access this cycle.",
+	},
+	NOT_FOUND: {
+		status: 404,
+		message: "Cycle not found.",
+	},
 };
 
 const writeErrors = {
 	...commonErrors,
-	INVALID_DATE_RANGE: {},
-	CYCLE_OVERLAP: {},
-	INVALID_STATE_TRANSITION: {},
+	INVALID_DATE_RANGE: {
+		status: 400,
+		message: "Cycle end date must be after the start date.",
+	},
+	CYCLE_OVERLAP: {
+		status: 400,
+		message: "Cycle dates overlap an existing cycle.",
+	},
+	INVALID_STATE_TRANSITION: {
+		status: 400,
+		message: "Cycle state cannot be changed to the requested state.",
+	},
 };
 
 const assignErrors = {
 	...commonErrors,
-	TEAM_MISMATCH: {},
-	CYCLE_CLOSED: {},
+	TEAM_MISMATCH: {
+		status: 400,
+		message: "Issue and cycle must belong to the same team.",
+	},
+	CYCLE_CLOSED: {
+		status: 400,
+		message: "Cannot assign issues to a closed cycle.",
+	},
 };
 
 type CycleState = "planned" | "active" | "completed" | "canceled";
