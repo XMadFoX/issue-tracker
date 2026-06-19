@@ -19,6 +19,10 @@ export const Route = createFileRoute(
 	component: RouteComponent,
 });
 
+function getCycleErrorMessage(error: unknown, fallback: string) {
+	return error instanceof Error ? error.message : fallback;
+}
+
 function RouteComponent() {
 	const { slug, teamSlug } = Route.useParams();
 	const queryClient = useQueryClient();
@@ -83,7 +87,7 @@ function RouteComponent() {
 						toast.success("Cycle created");
 					} catch (error) {
 						console.error(error);
-						toast.error("Failed to create cycle");
+						toast.error(getCycleErrorMessage(error, "Failed to create cycle"));
 					}
 				}}
 				onUpdate={async (value) => {
@@ -96,7 +100,7 @@ function RouteComponent() {
 						toast.success("Cycle updated");
 					} catch (error) {
 						console.error(error);
-						toast.error("Failed to update cycle");
+						toast.error(getCycleErrorMessage(error, "Failed to update cycle"));
 					}
 				}}
 				onDelete={async (cycle) => {
@@ -113,7 +117,7 @@ function RouteComponent() {
 						toast.success("Cycle deleted");
 					} catch (error) {
 						console.error(error);
-						toast.error("Failed to delete cycle");
+						toast.error(getCycleErrorMessage(error, "Failed to delete cycle"));
 					}
 				}}
 			/>
