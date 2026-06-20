@@ -17,6 +17,7 @@ import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import { buildDefaultIssuePrioritySeed } from "../issue-priorities/defaults";
 import { buildDefaultIssueStatusSeed } from "../issue-statuses/defaults";
+import { ensureDefaultIssueTypes } from "../issue-types/defaults";
 import {
 	ensureTeamBuiltInRoles,
 	ensureWorkspaceBuiltInRoles,
@@ -103,6 +104,12 @@ export const create = authedRouter
 			// seed issue priorities
 			const { priorities } = buildDefaultIssuePrioritySeed(createdWorkspace.id);
 			await tx.insert(issuePriority).values(priorities);
+
+			// seed issue types
+			await ensureDefaultIssueTypes({
+				executor: tx,
+				workspaceId: createdWorkspace.id,
+			});
 
 			const roles = await ensureWorkspaceBuiltInRoles({
 				executor: tx,
