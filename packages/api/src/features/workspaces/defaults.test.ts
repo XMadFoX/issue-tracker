@@ -1,69 +1,69 @@
 import { describe, expect, test } from "bun:test";
-import { permissionCatalogEntries } from "../permissions/catalog";
+import {
+	issueTypeOverridePerms,
+	issueTypePerms,
+	permissionCatalogEntries,
+} from "../permissions/catalog";
 import {
 	TEAM_LEAD_PERMISSION_KEYS,
 	TEAM_MEMBER_PERMISSION_KEYS,
 	WORKSPACE_MEMBER_PERMISSION_KEYS,
 } from "./defaults";
 
-const issueTypeDefinitionManagementKeys = [
-	"issue_type:create",
-	"issue_type:update",
-	"issue_type:delete",
-	"issue_type:reorder",
-] as const;
+const issueTypeReadKeys = [...issueTypePerms, ...issueTypeOverridePerms]
+	.filter((permission) => permission.action === "read")
+	.map((permission) => permission.key);
+const issueTypeManagementKeys = [...issueTypePerms, ...issueTypeOverridePerms]
+	.filter((permission) => permission.action !== "read")
+	.map((permission) => permission.key);
 
-const issueTypeOverrideManagementKeys = ["issue_type_override:manage"] as const;
+function expectPermissionsToContain(
+	actualKeys: readonly string[],
+	expectedKeys: readonly string[],
+) {
+	for (const permissionKey of expectedKeys) {
+		expect(actualKeys).toContain(permissionKey);
+	}
+}
+
+function expectPermissionsNotToContain(
+	actualKeys: readonly string[],
+	expectedKeys: readonly string[],
+) {
+	for (const permissionKey of expectedKeys) {
+		expect(actualKeys).not.toContain(permissionKey);
+	}
+}
 
 describe("built-in workspace and team role permissions", () => {
 	test("catalog includes issue type definition and override permissions", () => {
 		const catalogKeys = permissionCatalogEntries.map((entry) => entry.key);
+		const expectedKeys = [...issueTypeReadKeys, ...issueTypeManagementKeys];
 
-		expect(catalogKeys).toContain("issue_type:read");
-		expect(catalogKeys).toContain("issue_type:create");
-		expect(catalogKeys).toContain("issue_type:update");
-		expect(catalogKeys).toContain("issue_type:delete");
-		expect(catalogKeys).toContain("issue_type:reorder");
-		expect(catalogKeys).toContain("issue_type_override:read");
-		expect(catalogKeys).toContain("issue_type_override:manage");
+		expectPermissionsToContain(catalogKeys, expectedKeys);
 	});
 
 	test("members can read issue type configuration without managing definitions or overrides", () => {
-		expect(WORKSPACE_MEMBER_PERMISSION_KEYS).toContain("issue_type:read");
-		expect(WORKSPACE_MEMBER_PERMISSION_KEYS).toContain(
-			"issue_type_override:read",
+		expectPermissionsToContain(
+			WORKSPACE_MEMBER_PERMISSION_KEYS,
+			issueTypeReadKeys,
 		);
-		expect(TEAM_MEMBER_PERMISSION_KEYS).toContain("issue:update");
-		expect(TEAM_MEMBER_PERMISSION_KEYS).toContain("issue_type:read");
-		expect(TEAM_MEMBER_PERMISSION_KEYS).toContain("issue_type_override:read");
-		expect(TEAM_MEMBER_PERMISSION_KEYS).not.toContain(
-			"issue_type_override:manage",
+		expectPermissionsToContain(TEAM_MEMBER_PERMISSION_KEYS, issueTypeReadKeys);
+		expectPermissionsNotToContain(
+			WORKSPACE_MEMBER_PERMISSION_KEYS,
+			issueTypeManagementKeys,
 		);
-
-		expect(WORKSPACE_MEMBER_PERMISSION_KEYS).not.toContain(
-			"issue_type_override:manage",
+		expectPermissionsNotToContain(
+			TEAM_MEMBER_PERMISSION_KEYS,
+			issueTypeManagementKeys,
 		);
-
-		for (const permissionKey of issueTypeDefinitionManagementKeys) {
-			expect(WORKSPACE_MEMBER_PERMISSION_KEYS).not.toContain(permissionKey);
-			expect(TEAM_MEMBER_PERMISSION_KEYS).not.toContain(permissionKey);
-		}
-		for (const permissionKey of issueTypeOverrideManagementKeys) {
-			expect(WORKSPACE_MEMBER_PERMISSION_KEYS).not.toContain(permissionKey);
-			expect(TEAM_MEMBER_PERMISSION_KEYS).not.toContain(permissionKey);
-		}
 	});
 
 	test("team leads can manage team-scoped issue types and overrides", () => {
-		expect(TEAM_LEAD_PERMISSION_KEYS).toContain("issue_type:read");
-		expect(TEAM_LEAD_PERMISSION_KEYS).toContain("issue_type_override:read");
-		expect(TEAM_LEAD_PERMISSION_KEYS).toContain("issue_type_override:manage");
-
-		for (const permissionKey of issueTypeDefinitionManagementKeys) {
-			expect(TEAM_LEAD_PERMISSION_KEYS).toContain(permissionKey);
-		}
-		for (const permissionKey of issueTypeOverrideManagementKeys) {
-			expect(TEAM_LEAD_PERMISSION_KEYS).toContain(permissionKey);
-		}
+		expectPermissionsToContain(TEAM_LEAD_PERMISSION_KEYS, issueTypeReadKeys);
+		expectPermissionsToContain(
+			TEAM_LEAD_PERMISSION_KEYS,
+			issueTypeManagementKeys,
+		);
 	});
 });

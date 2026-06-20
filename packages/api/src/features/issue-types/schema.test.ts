@@ -13,66 +13,87 @@ const teamId = "clx0000000000000000000001";
 const issueTypeId = "clx0000000000000000000002";
 const replacementIssueTypeId = "clx0000000000000000000003";
 
+const validCreateInput = {
+	workspaceId,
+	name: "Incident",
+	key: "incident",
+	icon: "🚨",
+	color: "#ef4444",
+	orderIndex: 0,
+};
+
 describe("issue type schemas", () => {
-	test("list defaults includeArchived to false", () => {
+	test("list defaults archived rows out unless explicitly included", () => {
 		expect(issueTypeListSchema.parse({ workspaceId })).toEqual({
 			workspaceId,
 			includeArchived: false,
 		});
-	});
-
-	test("create accepts global and team-scoped input", () => {
 		expect(
-			issueTypeCreateSchema.parse({
-				workspaceId,
-				teamId,
-				name: "Incident",
-				key: "incident",
-				icon: "🚨",
-				color: "#ef4444",
-				orderIndex: 0,
-			}),
-		).toMatchObject({ workspaceId, teamId, key: "incident" });
+			issueTypeListSchema.parse({ workspaceId, includeArchived: true }),
+		).toMatchObject({ includeArchived: true });
 	});
 
-	test("create rejects invalid keys", () => {
-		expect(() =>
-			issueTypeCreateSchema.parse({
-				workspaceId,
-				name: "Bad",
-				key: "Bad Key",
-				icon: "x",
-				color: "#000",
-				orderIndex: 0,
-			}),
-		).toThrow();
+	test("create supports workspace and team scopes", () => {
+		expect(issueTypeCreateSchema.parse(validCreateInput)).not.toHaveProperty(
+			"teamId",
+		);
+		expect(
+			issueTypeCreateSchema.parse({ ...validCreateInput, teamId: null }),
+		).toMatchObject({ teamId: null });
+		expect(
+			issueTypeCreateSchema.parse({ ...validCreateInput, teamId }),
+		).toMatchObject({ teamId });
 	});
 
-	test("update requires id and workspaceId", () => {
-		expect(() => issueTypeUpdateSchema.parse({ key: "task" })).toThrow();
+	test("create enforces issue type key format", () => {
+		expect(
+			issueTypeCreateSchema.parse({ ...validCreateInput, key: "bug-fix-2" }),
+		).toMatchObject({ key: "bug-fix-2" });
+
+		for (const key of ["Bad", "bad key", "bad_key", "", "bug.fix"]) {
+			expect(() =>
+				issueTypeCreateSchema.parse({ ...validCreateInput, key }),
+			).toThrow();
+		}
+	});
+
+	test("update requires identity but keeps fields partial", () => {
+		expect(() => issueTypeUpdateSchema.parse({ workspaceId })).toThrow();
+		expect(() => issueTypeUpdateSchema.parse({ id: issueTypeId })).toThrow();
 		expect(
 			issueTypeUpdateSchema.parse({
 				id: issueTypeId,
 				workspaceId,
 				key: "task",
 			}),
-		).toMatchObject({ id: issueTypeId, workspaceId, key: "task" });
+		).toEqual({ id: issueTypeId, workspaceId, key: "task" });
 	});
 
-	test("reorder requires at least one id", () => {
+	test("reorder requires at least one issue type id", () => {
 		expect(() =>
 			issueTypeReorderSchema.parse({ workspaceId, orderedIds: [] }),
 		).toThrow();
 		expect(
 			issueTypeReorderSchema.parse({
 				workspaceId,
-				teamId,
+				teamId: null,
 				orderedIds: [issueTypeId],
 			}),
-		).toMatchObject({ workspaceId, teamId, orderedIds: [issueTypeId] });
+		).toEqual({ workspaceId, teamId: null, orderedIds: [issueTypeId] });
 	});
 
-	test("reassign and replace require replacement ids", () => {
+	test("replacement operations require a replacement issue type id", () => {
+		expect(() =>
+			issueTypeReassignAndArchiveSchema.parse({ workspaceId, id: issueTypeId }),
+		).toThrow();
+		expect(() =>
+			issueTypeReplaceForTeamSchema.parse({
+				workspaceId,
+				teamId,
+				sourceIssueTypeId: issueTypeId,
+			}),
+		).toThrow();
+
 		expect(
 			issueTypeReassignAndArchiveSchema.parse({
 				workspaceId,
