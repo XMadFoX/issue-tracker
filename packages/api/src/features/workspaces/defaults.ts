@@ -21,24 +21,28 @@ export const BUILT_IN_TEAM_ROLE_NAMES = {
 	member: "member",
 } as const;
 
-const WORKSPACE_MEMBER_PERMISSION_KEYS = [
+export const WORKSPACE_MEMBER_PERMISSION_KEYS = [
 	"workspace:read",
 	"issue_priority:read",
+	"issue_type:read",
+	"issue_type_override:read",
 	"issue_status:read",
 	"issue_status_group:read",
 ] as const;
 
-const TEAM_MEMBER_PERMISSION_KEYS = [
+export const TEAM_MEMBER_PERMISSION_KEYS = [
 	"team:read",
 	"team:read_members",
 	"issue:read",
 	"issue:create",
 	"issue:update",
+	"issue_type:read",
+	"issue_type_override:read",
 	"cycle:read",
 	"label:read",
 ] as const;
 
-const TEAM_LEAD_PERMISSION_KEYS = [
+export const TEAM_LEAD_PERMISSION_KEYS = [
 	...TEAM_MEMBER_PERMISSION_KEYS,
 	"team:manage_members",
 	"label:create",
@@ -52,6 +56,7 @@ const TEAM_LEAD_PERMISSION_KEYS = [
 	"issue_priority:update",
 	"issue_priority:delete",
 	"issue_priority:reorder",
+	"issue_type_override:manage",
 	"issue_status:create",
 	"issue_status:update",
 	"issue_status:delete",
