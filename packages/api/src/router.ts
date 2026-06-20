@@ -7,6 +7,7 @@ import type {
 import { cycleRouter } from "./features/cycles/router";
 import { issuePriorityRouter } from "./features/issue-priorities/router";
 import { issueStatusRouter } from "./features/issue-statuses/router";
+import { issueTypeRouter } from "./features/issue-types/router";
 import { issueRouter } from "./features/issues/router";
 import { labelRouter } from "./features/labels/router";
 import { rolePermissionsRouter } from "./features/permissions/router";
@@ -26,6 +27,7 @@ export const router = {
 		...issueRouter,
 	},
 	priority: issuePriorityRouter,
+	issueType: issueTypeRouter,
 	label: labelRouter,
 	role: {
 		...roleRouter,
