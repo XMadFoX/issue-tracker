@@ -8,7 +8,10 @@ export const issueTypeRelations = defineRelationsPart(schema, (r) => ({
 			to: r.workspace.id,
 		}),
 		team: r.one.team({ from: r.issueType.teamId, to: r.team.id }),
-		issues: r.many.issue(),
+		issues: r.many.issue({
+			from: r.issueType.id,
+			to: r.issue.issueTypeId,
+		}),
 		sourceOverrides: r.many.issueTypeTeamOverride({
 			from: r.issueType.id,
 			to: r.issueTypeTeamOverride.sourceIssueTypeId,

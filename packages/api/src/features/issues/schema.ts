@@ -20,7 +20,6 @@ export const issueCreateSchema = issueInsertSchema
 		id: true,
 		creatorId: true,
 		number: true,
-		issueTypeId: true,
 		searchText: true,
 		searchVector: true,
 		embedding: true,
@@ -32,6 +31,7 @@ export const issueCreateSchema = issueInsertSchema
 		title: z.string().min(1).max(100),
 		description: issueDescriptionSchema.optional(),
 		teamId: teamInsertSchema.shape.id,
+		issueTypeId: z.string().optional(),
 		assigneeId: assigneeIdSchema.optional(),
 		estimate: estimateSchema.optional(),
 		labelIds: labelInsertSchema.shape.id.array().default([]),
@@ -52,6 +52,7 @@ export const issueUpdateParentSchema = z.object({
 export const issueListSchema = z.object({
 	workspaceId: workspaceInsertSchema.shape.id,
 	teamId: teamInsertSchema.shape.id.optional(),
+	issueTypeId: z.string().optional(),
 	limit: z.number().min(1).max(200).default(100),
 	offset: z.number().min(0).default(0),
 	archivedFilter: z
@@ -66,7 +67,6 @@ export const issueUpdateSchema = issueInsertSchema
 		teamId: true,
 		number: true,
 		creatorId: true,
-		issueTypeId: true,
 		searchText: true,
 		searchVector: true,
 		embedding: true,
@@ -78,6 +78,9 @@ export const issueUpdateSchema = issueInsertSchema
 	})
 	.extend({
 		estimate: estimateSchema.optional(),
+	})
+	.extend({
+		issueTypeId: z.string().optional(),
 	})
 	.required({
 		id: true,
@@ -138,6 +141,8 @@ export const issueSearchSchema = z.object({
 			assigneeId: assigneeIdSchema.optional(),
 			labelIds: labelInsertSchema.shape.id.array().optional(),
 			priorityId: issueInsertSchema.shape.priorityId.optional(),
+			issueTypeId: z.string().optional(),
+			issueTypeIds: z.string().array().optional(),
 			reporterId: userInsertSchema.shape.id.optional(),
 			creatorId: userInsertSchema.shape.id.optional(),
 			createdAtFrom: z.iso.datetime().optional(),
@@ -157,6 +162,7 @@ export const issueSearchSchema = z.object({
 			includeAssignee: z.boolean().default(false),
 			includeTeam: z.boolean().default(false),
 			includeLabels: z.boolean().default(false),
+			includeIssueType: z.boolean().default(false),
 		})
 		.optional(),
 	includeArchived: z.boolean().default(false),
