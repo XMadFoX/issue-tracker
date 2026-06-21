@@ -57,9 +57,12 @@ describe("issue type schemas", () => {
 		}
 	});
 
-	test("update requires identity but keeps fields partial", () => {
+	test("update requires identity and at least one mutable field", () => {
 		expect(() => issueTypeUpdateSchema.parse({ workspaceId })).toThrow();
 		expect(() => issueTypeUpdateSchema.parse({ id: issueTypeId })).toThrow();
+		expect(() =>
+			issueTypeUpdateSchema.parse({ id: issueTypeId, workspaceId }),
+		).toThrow("At least one mutable issue field is required");
 		expect(
 			issueTypeUpdateSchema.parse({
 				id: issueTypeId,
@@ -67,6 +70,19 @@ describe("issue type schemas", () => {
 				key: "task",
 			}),
 		).toEqual({ id: issueTypeId, workspaceId, key: "task" });
+		expect(
+			issueTypeUpdateSchema.parse({
+				id: issueTypeId,
+				workspaceId,
+				description: null,
+				orderIndex: 0,
+			}),
+		).toEqual({
+			id: issueTypeId,
+			workspaceId,
+			description: null,
+			orderIndex: 0,
+		});
 	});
 
 	test("reorder requires at least one issue type id", () => {

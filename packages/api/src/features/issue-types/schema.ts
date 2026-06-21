@@ -58,7 +58,14 @@ export const issueTypeUpdateSchema = issueTypeInsertSchema
 		orderIndex: true,
 	})
 	.partial()
-	.required({ id: true, workspaceId: true });
+	.required({ id: true, workspaceId: true })
+	.refine(
+		({ id: _id, workspaceId: _workspaceId, ...values }) =>
+			Object.values(values).some((value) => value !== undefined),
+		{
+			message: "At least one mutable issue field is required",
+		},
+	);
 
 export const issueTypeArchiveSchema = issueTypeInsertSchema.pick({
 	id: true,
