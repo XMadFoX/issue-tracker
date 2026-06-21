@@ -112,6 +112,15 @@ async function keyHasDependencies(issueTypeId: string) {
 	return Boolean(issueUse ?? statusUse ?? overrideUse);
 }
 
+async function hasReplacementOverrideReferences(issueTypeId: string) {
+	const [overrideUse] = await db
+		.select({ id: issueTypeTeamOverride.id })
+		.from(issueTypeTeamOverride)
+		.where(eq(issueTypeTeamOverride.replacementIssueTypeId, issueTypeId))
+		.limit(1);
+	return overrideUse !== undefined;
+}
+
 function isUniqueViolation(error: unknown) {
 	return (
 		typeof error === "object" &&
@@ -288,6 +297,9 @@ export const archiveIssueType = authedRouter
 			errors,
 		});
 		if (existing.isDefault) throw errors.DEFAULT_CONFLICT();
+		if (await hasReplacementOverrideReferences(existing.id)) {
+			throw errors.TYPE_IN_USE();
+		}
 		const [updated] = await db
 			.update(issueType)
 			.set({ archivedAt: new Date(), isDefault: false })
@@ -338,6 +350,9 @@ export const reassignAndArchiveIssueType = authedRouter
 			errors,
 		});
 		if (source.isDefault) throw errors.DEFAULT_CONFLICT();
+		if (await hasReplacementOverrideReferences(source.id)) {
+			throw errors.TYPE_IN_USE();
+		}
 		await db.transaction(async (tx) => {
 			await tx
 				.update(issue)
