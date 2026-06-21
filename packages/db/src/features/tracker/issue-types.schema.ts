@@ -18,7 +18,7 @@ export const issueType = pgTable(
 		workspaceId: text("workspace_id")
 			.notNull()
 			.references(() => workspace.id, { onDelete: "cascade" }),
-		teamId: text("team_id").references(() => team.id, { onDelete: "set null" }),
+		teamId: text("team_id").references(() => team.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
 		key: text("key").notNull(),
 		icon: text("icon").notNull(),
@@ -107,7 +107,7 @@ export const issueTypeAllowedStatus = pgTable(
 		workspaceId: text("workspace_id")
 			.notNull()
 			.references(() => workspace.id, { onDelete: "cascade" }),
-		teamId: text("team_id").references(() => team.id, { onDelete: "set null" }),
+		teamId: text("team_id").references(() => team.id, { onDelete: "cascade" }),
 		issueTypeId: text("issue_type_id")
 			.notNull()
 			.references(() => issueType.id, { onDelete: "cascade" }),
