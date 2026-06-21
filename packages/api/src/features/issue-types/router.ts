@@ -43,6 +43,9 @@ type ErrorFactory = Record<
 	(input?: { message?: string }) => Error
 >;
 
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type DbExecutor = typeof db | DbTransaction;
+
 async function ensureAllowed({
 	userId,
 	workspaceId,
@@ -73,8 +76,12 @@ async function ensureTeam(workspaceId: string, teamId: string) {
 	return row ?? null;
 }
 
-async function getIssueType(workspaceId: string, id: string) {
-	const [row] = await db
+async function getIssueType(
+	workspaceId: string,
+	id: string,
+	executor: DbExecutor = db,
+) {
+	const [row] = await executor
 		.select()
 		.from(issueType)
 		.where(and(eq(issueType.id, id), eq(issueType.workspaceId, workspaceId)));
@@ -112,8 +119,29 @@ async function keyHasDependencies(issueTypeId: string) {
 	return Boolean(issueUse ?? statusUse ?? overrideUse);
 }
 
-async function hasReplacementOverrideReferences(issueTypeId: string) {
-	const [overrideUse] = await db
+async function acquireIssueTypeMutationLock(
+	executor: DbExecutor,
+	issueTypeId: string,
+) {
+	await executor.execute(
+		sql`select pg_advisory_xact_lock(hashtext(${`issue-type:${issueTypeId}`}))`,
+	);
+}
+
+async function acquireIssueTypeMutationLocks(
+	executor: DbExecutor,
+	issueTypeIds: string[],
+) {
+	for (const issueTypeId of [...new Set(issueTypeIds)].sort()) {
+		await acquireIssueTypeMutationLock(executor, issueTypeId);
+	}
+}
+
+async function hasReplacementOverrideReferences(
+	executor: DbExecutor,
+	issueTypeId: string,
+) {
+	const [overrideUse] = await executor
 		.select({ id: issueTypeTeamOverride.id })
 		.from(issueTypeTeamOverride)
 		.where(eq(issueTypeTeamOverride.replacementIssueTypeId, issueTypeId))
@@ -133,8 +161,9 @@ function isUniqueViolation(error: unknown) {
 async function ensureOverrideSource(
 	workspaceId: string,
 	sourceIssueTypeId: string,
+	executor: DbExecutor = db,
 ) {
-	const source = await getIssueType(workspaceId, sourceIssueTypeId);
+	const source = await getIssueType(workspaceId, sourceIssueTypeId, executor);
 	return source && !source.teamId && !source.archivedAt ? source : null;
 }
 
@@ -142,12 +171,18 @@ async function ensureReplacement({
 	workspaceId,
 	teamId,
 	replacementIssueTypeId,
+	executor = db,
 }: {
 	workspaceId: string;
 	teamId: string;
 	replacementIssueTypeId: string;
+	executor?: DbExecutor;
 }) {
-	const replacement = await getIssueType(workspaceId, replacementIssueTypeId);
+	const replacement = await getIssueType(
+		workspaceId,
+		replacementIssueTypeId,
+		executor,
+	);
 	return replacement?.teamId === teamId && !replacement.archivedAt
 		? replacement
 		: null;
@@ -297,20 +332,23 @@ export const archiveIssueType = authedRouter
 			errors,
 		});
 		if (existing.isDefault) throw errors.DEFAULT_CONFLICT();
-		if (await hasReplacementOverrideReferences(existing.id)) {
-			throw errors.TYPE_IN_USE();
-		}
-		const [updated] = await db
-			.update(issueType)
-			.set({ archivedAt: new Date(), isDefault: false })
-			.where(
-				and(
-					eq(issueType.id, input.id),
-					eq(issueType.workspaceId, input.workspaceId),
-				),
-			)
-			.returning();
-		return updated;
+		return await db.transaction(async (tx) => {
+			await acquireIssueTypeMutationLock(tx, existing.id);
+			if (await hasReplacementOverrideReferences(tx, existing.id)) {
+				throw errors.TYPE_IN_USE();
+			}
+			const [updated] = await tx
+				.update(issueType)
+				.set({ archivedAt: new Date(), isDefault: false })
+				.where(
+					and(
+						eq(issueType.id, input.id),
+						eq(issueType.workspaceId, input.workspaceId),
+					),
+				)
+				.returning();
+			return updated;
+		});
 	});
 
 export const reassignAndArchiveIssueType = authedRouter
@@ -350,10 +388,11 @@ export const reassignAndArchiveIssueType = authedRouter
 			errors,
 		});
 		if (source.isDefault) throw errors.DEFAULT_CONFLICT();
-		if (await hasReplacementOverrideReferences(source.id)) {
-			throw errors.TYPE_IN_USE();
-		}
 		await db.transaction(async (tx) => {
+			await acquireIssueTypeMutationLock(tx, source.id);
+			if (await hasReplacementOverrideReferences(tx, source.id)) {
+				throw errors.TYPE_IN_USE();
+			}
 			await tx
 				.update(issue)
 				.set({ issueTypeId: replacement.id })
@@ -432,14 +471,18 @@ export const setDefaultIssueType = authedRouter
 			errors,
 		});
 		await db.transaction(async (tx) => {
+			await acquireIssueTypeMutationLock(tx, existing.id);
+			const current = await getIssueType(input.workspaceId, existing.id, tx);
+			if (!current) throw errors.NOT_FOUND();
+			if (current.archivedAt) throw errors.ARCHIVED_TYPE();
 			await tx
 				.update(issueType)
 				.set({ isDefault: false })
-				.where(scopePredicate(input.workspaceId, existing.teamId));
+				.where(scopePredicate(input.workspaceId, current.teamId));
 			await tx
 				.update(issueType)
 				.set({ isDefault: true })
-				.where(eq(issueType.id, existing.id));
+				.where(eq(issueType.id, current.id));
 		});
 		return { success: true };
 	});
@@ -457,30 +500,37 @@ export const hideIssueTypeForTeam = authedRouter
 		});
 		if (!(await ensureTeam(input.workspaceId, input.teamId)))
 			throw errors.TEAM_NOT_FOUND();
-		if (
-			!(await ensureOverrideSource(input.workspaceId, input.sourceIssueTypeId))
-		) {
-			throw errors.INVALID_OVERRIDE_SOURCE();
-		}
-		const [row] = await db
-			.insert(issueTypeTeamOverride)
-			.values({
-				id: createId(),
-				workspaceId: input.workspaceId,
-				teamId: input.teamId,
-				sourceIssueTypeId: input.sourceIssueTypeId,
-				replacementIssueTypeId: null,
-				hiddenAt: new Date(),
-			})
-			.onConflictDoUpdate({
-				target: [
-					issueTypeTeamOverride.teamId,
-					issueTypeTeamOverride.sourceIssueTypeId,
-				],
-				set: { replacementIssueTypeId: null, hiddenAt: new Date() },
-			})
-			.returning();
-		return row;
+		return await db.transaction(async (tx) => {
+			await acquireIssueTypeMutationLock(tx, input.sourceIssueTypeId);
+			if (
+				!(await ensureOverrideSource(
+					input.workspaceId,
+					input.sourceIssueTypeId,
+					tx,
+				))
+			) {
+				throw errors.INVALID_OVERRIDE_SOURCE();
+			}
+			const [row] = await tx
+				.insert(issueTypeTeamOverride)
+				.values({
+					id: createId(),
+					workspaceId: input.workspaceId,
+					teamId: input.teamId,
+					sourceIssueTypeId: input.sourceIssueTypeId,
+					replacementIssueTypeId: null,
+					hiddenAt: new Date(),
+				})
+				.onConflictDoUpdate({
+					target: [
+						issueTypeTeamOverride.teamId,
+						issueTypeTeamOverride.sourceIssueTypeId,
+					],
+					set: { replacementIssueTypeId: null, hiddenAt: new Date() },
+				})
+				.returning();
+			return row;
+		});
 	});
 
 export const replaceIssueTypeForTeam = authedRouter
@@ -496,42 +546,53 @@ export const replaceIssueTypeForTeam = authedRouter
 		});
 		if (!(await ensureTeam(input.workspaceId, input.teamId)))
 			throw errors.TEAM_NOT_FOUND();
-		if (
-			!(await ensureOverrideSource(input.workspaceId, input.sourceIssueTypeId))
-		) {
-			throw errors.INVALID_OVERRIDE_SOURCE();
-		}
-		if (
-			!(await ensureReplacement({
-				workspaceId: input.workspaceId,
-				teamId: input.teamId,
-				replacementIssueTypeId: input.replacementIssueTypeId,
-			}))
-		) {
-			throw errors.INVALID_REPLACEMENT();
-		}
-		const [row] = await db
-			.insert(issueTypeTeamOverride)
-			.values({
-				id: createId(),
-				workspaceId: input.workspaceId,
-				teamId: input.teamId,
-				sourceIssueTypeId: input.sourceIssueTypeId,
-				replacementIssueTypeId: input.replacementIssueTypeId,
-				hiddenAt: new Date(),
-			})
-			.onConflictDoUpdate({
-				target: [
-					issueTypeTeamOverride.teamId,
-					issueTypeTeamOverride.sourceIssueTypeId,
-				],
-				set: {
+		return await db.transaction(async (tx) => {
+			await acquireIssueTypeMutationLocks(tx, [
+				input.sourceIssueTypeId,
+				input.replacementIssueTypeId,
+			]);
+			if (
+				!(await ensureOverrideSource(
+					input.workspaceId,
+					input.sourceIssueTypeId,
+					tx,
+				))
+			) {
+				throw errors.INVALID_OVERRIDE_SOURCE();
+			}
+			if (
+				!(await ensureReplacement({
+					workspaceId: input.workspaceId,
+					teamId: input.teamId,
+					replacementIssueTypeId: input.replacementIssueTypeId,
+					executor: tx,
+				}))
+			) {
+				throw errors.INVALID_REPLACEMENT();
+			}
+			const [row] = await tx
+				.insert(issueTypeTeamOverride)
+				.values({
+					id: createId(),
+					workspaceId: input.workspaceId,
+					teamId: input.teamId,
+					sourceIssueTypeId: input.sourceIssueTypeId,
 					replacementIssueTypeId: input.replacementIssueTypeId,
 					hiddenAt: new Date(),
-				},
-			})
-			.returning();
-		return row;
+				})
+				.onConflictDoUpdate({
+					target: [
+						issueTypeTeamOverride.teamId,
+						issueTypeTeamOverride.sourceIssueTypeId,
+					],
+					set: {
+						replacementIssueTypeId: input.replacementIssueTypeId,
+						hiddenAt: new Date(),
+					},
+				})
+				.returning();
+			return row;
+		});
 	});
 
 export const restoreIssueTypeForTeam = authedRouter
