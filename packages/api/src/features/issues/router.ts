@@ -744,26 +744,6 @@ const createIssue = authedRouter
 			if (!allowedToUseCycle) throw errors.UNAUTHORIZED();
 		}
 
-		const resolvedType = await resolveIssueTypeForCreate(db, {
-			workspaceId,
-			teamId,
-			issueTypeId: input.issueTypeId,
-		});
-		if (!resolvedType.ok) throw errors.INVALID_ISSUE_TYPE();
-		const resolvedIssueTypeId = resolvedType.issueTypeId;
-
-		if (
-			input.statusId !== undefined &&
-			!(await isStatusAllowedForIssueType(db, {
-				workspaceId,
-				teamId,
-				issueTypeId: resolvedIssueTypeId,
-				statusId: input.statusId,
-			}))
-		) {
-			throw errors.INVALID_ISSUE_TYPE_STATUS();
-		}
-
 		const nextNumber = (maxRow?.maxNumber ?? 0) + 1;
 		const searchFields = await buildIssueSearchFields({
 			title: input.title,
@@ -782,6 +762,26 @@ const createIssue = authedRouter
 
 				const created = await db.transaction(async (tx) => {
 					await acquireIssueHierarchyLock(tx, { workspaceId, teamId });
+
+					const resolvedType = await resolveIssueTypeForCreate(tx, {
+						workspaceId,
+						teamId,
+						issueTypeId: input.issueTypeId,
+					});
+					if (!resolvedType.ok) throw errors.INVALID_ISSUE_TYPE();
+					const resolvedIssueTypeId = resolvedType.issueTypeId;
+
+					if (
+						input.statusId !== undefined &&
+						!(await isStatusAllowedForIssueType(tx, {
+							workspaceId,
+							teamId,
+							issueTypeId: resolvedIssueTypeId,
+							statusId: input.statusId,
+						}))
+					) {
+						throw errors.INVALID_ISSUE_TYPE_STATUS();
+					}
 
 					const hierarchyValidation = await validateIssueParentAssignment(tx, {
 						workspaceId,
@@ -931,15 +931,6 @@ const updateIssue = authedRouter
 			? input.issueTypeId
 			: existingIssue.issueTypeId;
 
-		if (typeChanging && input.issueTypeId !== undefined) {
-			const selectable = await isSelectableIssueType(db, {
-				workspaceId: input.workspaceId,
-				teamId: existingIssue.teamId,
-				issueTypeId: input.issueTypeId,
-			});
-			if (!selectable) throw errors.INVALID_ISSUE_TYPE();
-		}
-
 		const { values, updatedFields, updatedFieldSet } =
 			getChangedIssueUpdateFields(existingIssue, input);
 		const typeChanged = updatedFieldSet.has("issueTypeId");
@@ -972,18 +963,6 @@ const updateIssue = authedRouter
 				.limit(1);
 			if (!targetStatus) throw errors.INVALID_MOVE();
 
-			if (
-				effectiveIssueTypeId &&
-				!(await isStatusAllowedForIssueType(db, {
-					workspaceId: input.workspaceId,
-					teamId: existingIssue.teamId,
-					issueTypeId: effectiveIssueTypeId,
-					statusId: input.statusId,
-				}))
-			) {
-				throw errors.INVALID_ISSUE_TYPE_STATUS();
-			}
-
 			const firstRank = await db
 				.select({ minSort: sql<string>`min(${issue.sortOrder})` })
 				.from(issue)
@@ -1000,21 +979,6 @@ const updateIssue = authedRouter
 			values.sortOrder = calculateBeforeRank(firstRank || "a00");
 		}
 
-		if (
-			typeChanging &&
-			!statusChanged &&
-			effectiveIssueTypeId &&
-			existingIssue.statusId &&
-			!(await isStatusAllowedForIssueType(db, {
-				workspaceId: input.workspaceId,
-				teamId: existingIssue.teamId,
-				issueTypeId: effectiveIssueTypeId,
-				statusId: existingIssue.statusId,
-			}))
-		) {
-			throw errors.ISSUE_TYPE_STATUS_REQUIRED();
-		}
-
 		if (titleChanged || descriptionChanged) {
 			Object.assign(
 				values,
@@ -1029,6 +993,44 @@ const updateIssue = authedRouter
 		}
 
 		const updated = await db.transaction(async (tx) => {
+			if (typeChanging && input.issueTypeId !== undefined) {
+				const selectable = await isSelectableIssueType(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueTypeId: input.issueTypeId,
+				});
+				if (!selectable) throw errors.INVALID_ISSUE_TYPE();
+			}
+
+			if (
+				statusChanged &&
+				input.statusId !== undefined &&
+				effectiveIssueTypeId &&
+				!(await isStatusAllowedForIssueType(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueTypeId: effectiveIssueTypeId,
+					statusId: input.statusId,
+				}))
+			) {
+				throw errors.INVALID_ISSUE_TYPE_STATUS();
+			}
+
+			if (
+				typeChanging &&
+				!statusChanged &&
+				effectiveIssueTypeId &&
+				existingIssue.statusId &&
+				!(await isStatusAllowedForIssueType(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueTypeId: effectiveIssueTypeId,
+					statusId: existingIssue.statusId,
+				}))
+			) {
+				throw errors.ISSUE_TYPE_STATUS_REQUIRED();
+			}
+
 			const [updatedIssue] = await tx
 				.update(issue)
 				.set(values)
