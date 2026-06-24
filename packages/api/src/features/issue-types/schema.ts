@@ -39,11 +39,16 @@ export const issueTypeListSchema = z.object({
 });
 
 export const issueTypeCreateSchema = issueTypeInsertSchema
-	.omit({ id: true, createdAt: true, updatedAt: true, archivedAt: true })
+	.omit({
+		id: true,
+		createdAt: true,
+		updatedAt: true,
+		archivedAt: true,
+		isDefault: true,
+		isEditable: true,
+	})
 	.extend({
 		teamId: z.cuid2().nullable().optional(),
-		isDefault: z.boolean().optional(),
-		isEditable: z.boolean().optional(),
 	});
 
 export const issueTypeUpdateSchema = issueTypeInsertSchema

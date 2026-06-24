@@ -7,7 +7,7 @@ import {
 } from "db/features/tracker/issue-types.schema";
 import { issue } from "db/features/tracker/issues.schema";
 import { team } from "db/features/tracker/tracker.schema";
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
@@ -36,6 +36,8 @@ const commonErrors = {
 	TYPE_IN_USE: {},
 	INVALID_REPLACEMENT: {},
 	INVALID_OVERRIDE_SOURCE: {},
+	LAST_ISSUE_TYPE: {},
+	DEFAULT_REQUIRED: {},
 };
 
 type ErrorFactory = Record<
@@ -95,18 +97,21 @@ function scopePredicate(workspaceId: string, teamId?: string | null) {
 	);
 }
 
-async function keyHasDependencies(issueTypeId: string) {
-	const [issueUse] = await db
+async function keyHasDependencies(
+	issueTypeId: string,
+	executor: DbExecutor = db,
+) {
+	const [issueUse] = await executor
 		.select({ id: issue.id })
 		.from(issue)
 		.where(eq(issue.issueTypeId, issueTypeId))
 		.limit(1);
-	const [statusUse] = await db
+	const [statusUse] = await executor
 		.select({ id: issueTypeAllowedStatus.id })
 		.from(issueTypeAllowedStatus)
 		.where(eq(issueTypeAllowedStatus.issueTypeId, issueTypeId))
 		.limit(1);
-	const [overrideUse] = await db
+	const [overrideUse] = await executor
 		.select({ id: issueTypeTeamOverride.id })
 		.from(issueTypeTeamOverride)
 		.where(
@@ -147,6 +152,53 @@ async function hasReplacementOverrideReferences(
 		.where(eq(issueTypeTeamOverride.replacementIssueTypeId, issueTypeId))
 		.limit(1);
 	return overrideUse !== undefined;
+}
+
+/**
+ * Defensive backstop for the "at least one live type" invariant: a workspace
+ * must always keep one non-archived global issue type so issue creation can
+ * always resolve a default. Team-scoped sets may legitimately be empty (they
+ * fall back to the global scope), so this only guards the global scope.
+ */
+async function hasOtherLiveGlobalIssueType(
+	executor: DbExecutor,
+	workspaceId: string,
+	excludeId: string,
+) {
+	const [row] = await executor
+		.select({ id: issueType.id })
+		.from(issueType)
+		.where(
+			and(
+				eq(issueType.workspaceId, workspaceId),
+				isNull(issueType.teamId),
+				isNull(issueType.archivedAt),
+				ne(issueType.id, excludeId),
+			),
+		)
+		.limit(1);
+	return row !== undefined;
+}
+
+/** Whether a team has its own non-archived default issue type. */
+async function hasTeamScopedDefault(
+	executor: DbExecutor,
+	workspaceId: string,
+	teamId: string,
+) {
+	const [row] = await executor
+		.select({ id: issueType.id })
+		.from(issueType)
+		.where(
+			and(
+				eq(issueType.workspaceId, workspaceId),
+				eq(issueType.teamId, teamId),
+				isNull(issueType.archivedAt),
+				eq(issueType.isDefault, true),
+			),
+		)
+		.limit(1);
+	return row !== undefined;
 }
 
 function isUniqueViolation(error: unknown) {
@@ -291,27 +343,29 @@ export const updateIssueType = authedRouter
 			permissionKey: "issue_type:update",
 			errors,
 		});
-		if (!existing.isEditable) throw errors.TYPE_IN_USE();
-		if (
-			input.key &&
-			input.key !== existing.key &&
-			(await keyHasDependencies(existing.id))
-		) {
-			throw errors.KEY_IN_USE();
-		}
 		try {
-			const values = omit(input, ["id", "workspaceId"]);
-			const [updated] = await db
-				.update(issueType)
-				.set(values)
-				.where(
-					and(
-						eq(issueType.id, input.id),
-						eq(issueType.workspaceId, input.workspaceId),
-					),
-				)
-				.returning();
-			return updated;
+			return await db.transaction(async (tx) => {
+				await acquireIssueTypeMutationLock(tx, existing.id);
+				if (
+					input.key &&
+					input.key !== existing.key &&
+					(await keyHasDependencies(existing.id, tx))
+				) {
+					throw errors.KEY_IN_USE();
+				}
+				const values = omit(input, ["id", "workspaceId"]);
+				const [updated] = await tx
+					.update(issueType)
+					.set(values)
+					.where(
+						and(
+							eq(issueType.id, input.id),
+							eq(issueType.workspaceId, input.workspaceId),
+						),
+					)
+					.returning();
+				return updated;
+			});
 		} catch (error) {
 			if (isUniqueViolation(error)) throw errors.KEY_CONFLICT();
 			throw error;
@@ -334,6 +388,12 @@ export const archiveIssueType = authedRouter
 		if (existing.isDefault) throw errors.DEFAULT_CONFLICT();
 		return await db.transaction(async (tx) => {
 			await acquireIssueTypeMutationLock(tx, existing.id);
+			if (
+				!existing.teamId &&
+				!(await hasOtherLiveGlobalIssueType(tx, input.workspaceId, existing.id))
+			) {
+				throw errors.LAST_ISSUE_TYPE();
+			}
 			if (await hasReplacementOverrideReferences(tx, existing.id)) {
 				throw errors.TYPE_IN_USE();
 			}
@@ -390,6 +450,12 @@ export const reassignAndArchiveIssueType = authedRouter
 		if (source.isDefault) throw errors.DEFAULT_CONFLICT();
 		await db.transaction(async (tx) => {
 			await acquireIssueTypeMutationLock(tx, source.id);
+			if (
+				!source.teamId &&
+				!(await hasOtherLiveGlobalIssueType(tx, input.workspaceId, source.id))
+			) {
+				throw errors.LAST_ISSUE_TYPE();
+			}
 			if (await hasReplacementOverrideReferences(tx, source.id)) {
 				throw errors.TYPE_IN_USE();
 			}
@@ -502,14 +568,22 @@ export const hideIssueTypeForTeam = authedRouter
 			throw errors.TEAM_NOT_FOUND();
 		return await db.transaction(async (tx) => {
 			await acquireIssueTypeMutationLock(tx, input.sourceIssueTypeId);
-			if (
-				!(await ensureOverrideSource(
-					input.workspaceId,
-					input.sourceIssueTypeId,
-					tx,
-				))
-			) {
+			const source = await ensureOverrideSource(
+				input.workspaceId,
+				input.sourceIssueTypeId,
+				tx,
+			);
+			if (!source) {
 				throw errors.INVALID_OVERRIDE_SOURCE();
+			}
+			// Hiding the global default with no replacement would leave a team
+			// without a resolvable default. Require a team-scoped default first
+			// (or use replaceForTeam, which supplies an effective type).
+			if (
+				source.isDefault &&
+				!(await hasTeamScopedDefault(tx, input.workspaceId, input.teamId))
+			) {
+				throw errors.DEFAULT_REQUIRED();
 			}
 			const [row] = await tx
 				.insert(issueTypeTeamOverride)
