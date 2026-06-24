@@ -85,6 +85,14 @@ type IssueUpdatedActivity = ActivityInput<
 		}
 >;
 
+type IssueTypeChangedActivity = ActivityInput<
+	"issue.updated",
+	CurrentCycle &
+		FieldChange<"issueTypeId"> & {
+			metadata: IssueUpdatedActivityMetadata;
+		}
+>;
+
 type IssueStatusChangedActivity = ActivityInput<
 	"issue.status_changed",
 	CurrentCycle &
@@ -133,6 +141,7 @@ type CompleteActivityUnion<
 type WriteIssueActivityInput = CompleteActivityUnion<
 	| IssueCreatedActivity
 	| IssueUpdatedActivity
+	| IssueTypeChangedActivity
 	| IssueStatusChangedActivity
 	| IssueEstimateChangedActivity
 	| IssueCycleAssignedActivity

@@ -1,0 +1,2 @@
+ALTER TABLE "issue_type" DROP CONSTRAINT "issue_type_team_id_team_id_fkey", ADD CONSTRAINT "issue_type_team_id_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "team"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "issue_type_allowed_status" DROP CONSTRAINT "issue_type_allowed_status_team_id_team_id_fkey", ADD CONSTRAINT "issue_type_allowed_status_team_id_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "team"("id") ON DELETE CASCADE;

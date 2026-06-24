@@ -21,6 +21,7 @@ export async function getIssueWithRelations(id: string, workspaceId: string) {
 					statusGroup: true,
 				},
 			},
+			issueType: true,
 			priority: true,
 			cycle: true,
 			assignee: true,
@@ -40,6 +41,7 @@ export type IssueWithRelations = NonNullable<
 
 export type SearchIssueResult = IssueWithRelations & {
 	status?: IssueWithRelations["status"];
+	issueType?: IssueWithRelations["issueType"];
 	priority?: IssueWithRelations["priority"];
 	assignee?: IssueWithRelations["assignee"];
 	team?: IssueWithRelations["team"];
@@ -60,12 +62,13 @@ type IssueSearchScope = {
 
 type IssueConditionBuilder = (fields: typeof issue) => SQL | undefined;
 
-function buildIssueSearchWhere(input: {
+export function buildIssueSearchWhere(input: {
 	workspaceId: string;
 	teamId?: string | null;
 	statusId?: string | null;
 	assigneeId?: string | null;
 	priorityId?: string | null;
+	issueTypeId?: string | null;
 	reporterId?: string | null;
 	creatorId?: string | null;
 	rawConditions: Array<IssueConditionBuilder>;
@@ -85,6 +88,7 @@ function buildIssueSearchWhere(input: {
 		...(input.statusId ? { statusId: input.statusId } : {}),
 		...(input.assigneeId ? { assigneeId: input.assigneeId } : {}),
 		...(input.priorityId ? { priorityId: input.priorityId } : {}),
+		...(input.issueTypeId ? { issueTypeId: input.issueTypeId } : {}),
 		...(input.reporterId ? { reporterId: input.reporterId } : {}),
 		...(input.creatorId ? { creatorId: input.creatorId } : {}),
 		...rawWhere,
@@ -109,6 +113,8 @@ export async function searchIssues(
 		statusId,
 		assigneeId,
 		priorityId,
+		issueTypeId,
+		issueTypeIds,
 		reporterId,
 		creatorId,
 		createdAtFrom,
@@ -125,6 +131,7 @@ export async function searchIssues(
 		includeAssignee = false,
 		includeTeam = false,
 		includeLabels = false,
+		includeIssueType = false,
 		includeDebugInfo = false,
 		minScore = 0.2,
 		embeddingThreshold = 0.7,
@@ -178,8 +185,13 @@ export async function searchIssues(
 		);
 	}
 
+	if (issueTypeIds && issueTypeIds.length > 0) {
+		rawConditions.push((fields) => inArray(fields.issueTypeId, issueTypeIds));
+	}
+
 	const withClause: {
 		status?: { with: { statusGroup: true } } | true;
+		issueType?: true;
 		priority?: true;
 		assignee?: true;
 		team?: true;
@@ -188,6 +200,7 @@ export async function searchIssues(
 		...(includeStatus
 			? { status: includeStatusGroup ? { with: { statusGroup: true } } : true }
 			: {}),
+		...(includeIssueType ? { issueType: true } : {}),
 		...(includePriority ? { priority: true } : {}),
 		...(includeAssignee ? { assignee: true } : {}),
 		...(includeTeam ? { team: true } : {}),
@@ -219,6 +232,7 @@ export async function searchIssues(
 				statusId,
 				assigneeId,
 				priorityId,
+				issueTypeId,
 				reporterId,
 				creatorId,
 				rawConditions,
@@ -250,6 +264,7 @@ export async function searchIssues(
 				statusId,
 				assigneeId,
 				priorityId,
+				issueTypeId,
 				reporterId,
 				creatorId,
 				rawConditions,
@@ -328,6 +343,7 @@ export async function searchIssues(
 			statusId,
 			assigneeId,
 			priorityId,
+			issueTypeId,
 			reporterId,
 			creatorId,
 			rawConditions,

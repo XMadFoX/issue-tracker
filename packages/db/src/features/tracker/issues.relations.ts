@@ -9,6 +9,10 @@ export const issueRelations = defineRelationsPart(schema, (r) => ({
 		}),
 		team: r.one.team({ from: r.issue.teamId, to: r.team.id }),
 		status: r.one.issueStatus({ from: r.issue.statusId, to: r.issueStatus.id }),
+		issueType: r.one.issueType({
+			from: r.issue.issueTypeId,
+			to: r.issueType.id,
+		}),
 		priority: r.one.issuePriority({
 			from: r.issue.priorityId,
 			to: r.issuePriority.id,

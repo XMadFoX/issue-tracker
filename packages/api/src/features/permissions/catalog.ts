@@ -224,6 +224,54 @@ export const issuePriorityPerms = [
 	},
 ] as const;
 
+export const issueTypePerms = [
+	{
+		key: "issue_type:read",
+		resourceType: "issue_type",
+		action: "read",
+		description: "Read issue types",
+	},
+	{
+		key: "issue_type:create",
+		resourceType: "issue_type",
+		action: "create",
+		description: "Create issue types",
+	},
+	{
+		key: "issue_type:update",
+		resourceType: "issue_type",
+		action: "update",
+		description: "Update issue types",
+	},
+	{
+		key: "issue_type:delete",
+		resourceType: "issue_type",
+		action: "delete",
+		description: "Delete issue types",
+	},
+	{
+		key: "issue_type:reorder",
+		resourceType: "issue_type",
+		action: "reorder",
+		description: "Reorder issue types",
+	},
+] as const;
+
+export const issueTypeOverridePerms = [
+	{
+		key: "issue_type_override:read",
+		resourceType: "issue_type_override",
+		action: "read",
+		description: "Read issue type overrides",
+	},
+	{
+		key: "issue_type_override:manage",
+		resourceType: "issue_type_override",
+		action: "manage",
+		description: "Manage issue type overrides",
+	},
+] as const;
+
 export const issueStatusPerms = [
 	{
 		key: "issue_status:read",
@@ -299,6 +347,8 @@ export const permissionCatalogEntries = [
 	...issuePerms,
 	...cyclePerms,
 	...issuePriorityPerms,
+	...issueTypePerms,
+	...issueTypeOverridePerms,
 	...issueStatusPerms,
 	...issueStatusGroupPerms,
 ] as const;

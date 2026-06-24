@@ -15,6 +15,7 @@ import { user } from "../auth/auth.schema";
 import { cycle } from "./cycles.schema";
 import { issuePriority } from "./issue-priorities.schema";
 import { issueStatus } from "./issue-statuses.schema";
+import { issueType } from "./issue-types.schema";
 import { label } from "./labels.schema";
 import { team, workspace } from "./tracker.schema";
 
@@ -44,6 +45,9 @@ export const issue = pgTable(
 		statusId: text("status_id")
 			.notNull()
 			.references(() => issueStatus.id, { onDelete: "restrict" }),
+		issueTypeId: text("issue_type_id").references(() => issueType.id, {
+			onDelete: "restrict",
+		}),
 		priorityId: text("priority_id").references(() => issuePriority.id, {
 			onDelete: "set null",
 		}),
@@ -89,6 +93,11 @@ export const issue = pgTable(
 		index("issue_team_status_idx").on(
 			table.teamId,
 			table.statusId,
+			table.archivedAt,
+		),
+		index("issue_team_issue_type_idx").on(
+			table.teamId,
+			table.issueTypeId,
 			table.archivedAt,
 		),
 		// Speed up Cycle views

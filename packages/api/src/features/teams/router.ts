@@ -2,6 +2,12 @@ import { ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import {
+	issueType,
+	issueTypeAllowedStatus,
+	issueTypeTeamOverride,
+} from "db/features/tracker/issue-types.schema";
+import { issue } from "db/features/tracker/issues.schema";
+import {
 	team,
 	teamMembership,
 	workspace,
@@ -234,7 +240,9 @@ const deleteTeam = authedRouter
 		const [existingTeam] = await db
 			.select({ workspaceId: team.workspaceId })
 			.from(team)
-			.where(eq(team.id, input.id));
+			.where(
+				and(eq(team.id, input.id), eq(team.workspaceId, input.workspaceId)),
+			);
 
 		if (!existingTeam) {
 			throw new ORPCError("Team not found");
@@ -245,7 +253,46 @@ const deleteTeam = authedRouter
 				message: unauthorizedMessage("delete"),
 			});
 
-		return await db.delete(team).where(eq(team.id, input.id));
+		return await db.transaction(async (tx) => {
+			await tx
+				.delete(issue)
+				.where(
+					and(
+						eq(issue.workspaceId, input.workspaceId),
+						eq(issue.teamId, input.id),
+					),
+				);
+			await tx
+				.delete(issueTypeAllowedStatus)
+				.where(
+					and(
+						eq(issueTypeAllowedStatus.workspaceId, input.workspaceId),
+						eq(issueTypeAllowedStatus.teamId, input.id),
+					),
+				);
+			await tx
+				.delete(issueTypeTeamOverride)
+				.where(
+					and(
+						eq(issueTypeTeamOverride.workspaceId, input.workspaceId),
+						eq(issueTypeTeamOverride.teamId, input.id),
+					),
+				);
+			await tx
+				.delete(issueType)
+				.where(
+					and(
+						eq(issueType.workspaceId, input.workspaceId),
+						eq(issueType.teamId, input.id),
+					),
+				);
+
+			return await tx
+				.delete(team)
+				.where(
+					and(eq(team.id, input.id), eq(team.workspaceId, input.workspaceId)),
+				);
+		});
 	});
 
 export const teamRouter = {

@@ -5,8 +5,13 @@ import {
 	issueStatus,
 	issueStatusGroup,
 } from "db/features/tracker/issue-statuses.schema";
+import {
+	issueType,
+	issueTypeAllowedStatus,
+	issueTypeTeamOverride,
+} from "db/features/tracker/issue-types.schema";
 import { issue, issueLabel } from "db/features/tracker/issues.schema";
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { omit } from "remeda";
 import { z } from "zod";
 import { authedRouter } from "../../context";
@@ -58,12 +63,26 @@ const issueRelationErrors = {
 	CYCLE_CLOSED: {},
 };
 
+const issueTypeErrors = {
+	INVALID_ISSUE_TYPE: {},
+	ISSUE_TYPE_STATUS_REQUIRED: {},
+	INVALID_ISSUE_TYPE_STATUS: {},
+};
+
 const updateDeleteErrors = {
 	...commonErrors,
 	...hierarchyErrors,
 	...issueRelationErrors,
+	...issueTypeErrors,
 	INVALID_MOVE: {},
 	RANK_EXHAUSTED: {},
+};
+
+const createErrors = {
+	...commonErrors,
+	...hierarchyErrors,
+	...issueRelationErrors,
+	...issueTypeErrors,
 };
 
 function isRankExhaustedError(error: unknown): error is Error {
@@ -125,6 +144,7 @@ const issueUpdateFields = defineIssueUpdateFields([
 	{ field: "title" },
 	{ field: "description", isEqual: areJsonValuesEqual },
 	{ field: "statusId" },
+	{ field: "issueTypeId" },
 	{ field: "priorityId" },
 	{ field: "cycleId" },
 	{ field: "estimate" },
@@ -303,6 +323,293 @@ async function getIssueTeamId(id: string, workspaceId: string) {
 	return row?.teamId ?? null;
 }
 
+async function getIssueTypeById(
+	executor: DbExecutor,
+	workspaceId: string,
+	issueTypeId: string,
+) {
+	const [row] = await executor
+		.select()
+		.from(issueType)
+		.where(
+			and(
+				eq(issueType.id, issueTypeId),
+				eq(issueType.workspaceId, workspaceId),
+			),
+		)
+		.limit(1);
+	return row ?? null;
+}
+
+async function getTeamOverrideForSource(
+	executor: DbExecutor,
+	workspaceId: string,
+	teamId: string,
+	sourceIssueTypeId: string,
+) {
+	const [row] = await executor
+		.select()
+		.from(issueTypeTeamOverride)
+		.where(
+			and(
+				eq(issueTypeTeamOverride.workspaceId, workspaceId),
+				eq(issueTypeTeamOverride.teamId, teamId),
+				eq(issueTypeTeamOverride.sourceIssueTypeId, sourceIssueTypeId),
+			),
+		)
+		.limit(1);
+	return row ?? null;
+}
+
+async function isSelectableIssueType(
+	executor: DbExecutor,
+	{
+		workspaceId,
+		teamId,
+		issueTypeId,
+	}: {
+		workspaceId: string;
+		teamId: string;
+		issueTypeId: string;
+	},
+) {
+	const type = await getIssueTypeById(executor, workspaceId, issueTypeId);
+	if (!type) return false;
+	if (type.archivedAt) return false;
+	if (type.workspaceId !== workspaceId) return false;
+
+	if (type.teamId === teamId) return true;
+	if (type.teamId !== null) return false;
+
+	const override = await getTeamOverrideForSource(
+		executor,
+		workspaceId,
+		teamId,
+		issueTypeId,
+	);
+	return !(override?.hiddenAt ?? override?.replacementIssueTypeId);
+}
+
+async function resolveEffectiveIssueTypeForTeam(
+	executor: DbExecutor,
+	{
+		workspaceId,
+		teamId,
+		issueTypeId,
+	}: {
+		workspaceId: string;
+		teamId: string;
+		issueTypeId: string;
+	},
+): Promise<string | null> {
+	const type = await getIssueTypeById(executor, workspaceId, issueTypeId);
+	if (!type) return null;
+	if (type.archivedAt) return null;
+	if (type.workspaceId !== workspaceId) return null;
+
+	if (type.teamId === teamId) return type.id;
+	if (type.teamId !== null) return null;
+
+	const override = await getTeamOverrideForSource(
+		executor,
+		workspaceId,
+		teamId,
+		issueTypeId,
+	);
+	if (override?.hiddenAt && !override.replacementIssueTypeId) return null;
+	if (override?.replacementIssueTypeId) {
+		const replacement = await getIssueTypeById(
+			executor,
+			workspaceId,
+			override.replacementIssueTypeId,
+		);
+		if (
+			replacement &&
+			!replacement.archivedAt &&
+			replacement.teamId === teamId
+		) {
+			return replacement.id;
+		}
+		return null;
+	}
+
+	return type.id;
+}
+
+async function resolveDefaultIssueTypeForCreate(
+	executor: DbExecutor,
+	{
+		workspaceId,
+		teamId,
+	}: {
+		workspaceId: string;
+		teamId: string;
+	},
+) {
+	const candidates = await executor
+		.select()
+		.from(issueType)
+		.where(
+			and(
+				eq(issueType.workspaceId, workspaceId),
+				isNull(issueType.archivedAt),
+				eq(issueType.isDefault, true),
+				or(isNull(issueType.teamId), eq(issueType.teamId, teamId)),
+			),
+		)
+		.orderBy(asc(issueType.teamId), asc(issueType.orderIndex));
+
+	const teamDefault = candidates.find((row) => row.teamId === teamId);
+	const globalDefault = candidates.find((row) => row.teamId === null);
+	const orderedCandidates = [
+		...(teamDefault ? [teamDefault] : []),
+		...(globalDefault ? [globalDefault] : []),
+	];
+
+	for (const candidate of orderedCandidates) {
+		const effectiveId = await resolveEffectiveIssueTypeForTeam(executor, {
+			workspaceId,
+			teamId,
+			issueTypeId: candidate.id,
+		});
+		if (effectiveId) {
+			return { ok: true, issueTypeId: effectiveId } as const;
+		}
+	}
+
+	const [taskRow] = await executor
+		.select()
+		.from(issueType)
+		.where(
+			and(
+				eq(issueType.workspaceId, workspaceId),
+				isNull(issueType.teamId),
+				isNull(issueType.archivedAt),
+				eq(issueType.key, "task"),
+			),
+		)
+		.limit(1);
+
+	if (taskRow) {
+		const effectiveId = await resolveEffectiveIssueTypeForTeam(executor, {
+			workspaceId,
+			teamId,
+			issueTypeId: taskRow.id,
+		});
+		if (effectiveId) {
+			return { ok: true, issueTypeId: effectiveId } as const;
+		}
+	}
+
+	return { ok: false, code: "NO_DEFAULT_ISSUE_TYPE" } as const;
+}
+
+async function resolveIssueTypeForCreate(
+	executor: DbExecutor,
+	{
+		workspaceId,
+		teamId,
+		issueTypeId,
+	}: {
+		workspaceId: string;
+		teamId: string;
+		issueTypeId: string | undefined;
+	},
+) {
+	if (issueTypeId !== undefined) {
+		const selectable = await isSelectableIssueType(executor, {
+			workspaceId,
+			teamId,
+			issueTypeId,
+		});
+		return selectable
+			? ({ ok: true, issueTypeId } as const)
+			: ({ ok: false, code: "INVALID_ISSUE_TYPE" } as const);
+	}
+
+	return resolveDefaultIssueTypeForCreate(executor, { workspaceId, teamId });
+}
+
+async function validateStatusExistsInScope(
+	executor: DbExecutor,
+	{
+		workspaceId,
+		teamId,
+		statusId,
+	}: {
+		workspaceId: string;
+		teamId: string;
+		statusId: string;
+	},
+) {
+	const [row] = await executor
+		.select({ id: issueStatus.id })
+		.from(issueStatus)
+		.where(
+			and(
+				eq(issueStatus.id, statusId),
+				eq(issueStatus.workspaceId, workspaceId),
+				or(isNull(issueStatus.teamId), eq(issueStatus.teamId, teamId)),
+			),
+		)
+		.limit(1);
+	return row !== undefined;
+}
+
+async function isStatusAllowedForIssueType(
+	executor: DbExecutor,
+	{
+		workspaceId,
+		teamId,
+		issueTypeId,
+		statusId,
+	}: {
+		workspaceId: string;
+		teamId: string;
+		issueTypeId: string;
+		statusId: string;
+	},
+) {
+	const statusExists = await validateStatusExistsInScope(executor, {
+		workspaceId,
+		teamId,
+		statusId,
+	});
+	if (!statusExists) return false;
+
+	const teamScopedRows = await executor
+		.select({ statusId: issueTypeAllowedStatus.statusId })
+		.from(issueTypeAllowedStatus)
+		.where(
+			and(
+				eq(issueTypeAllowedStatus.workspaceId, workspaceId),
+				eq(issueTypeAllowedStatus.issueTypeId, issueTypeId),
+				eq(issueTypeAllowedStatus.teamId, teamId),
+			),
+		);
+
+	if (teamScopedRows.length > 0) {
+		return teamScopedRows.some((row) => row.statusId === statusId);
+	}
+
+	const globalRows = await executor
+		.select({ statusId: issueTypeAllowedStatus.statusId })
+		.from(issueTypeAllowedStatus)
+		.where(
+			and(
+				eq(issueTypeAllowedStatus.workspaceId, workspaceId),
+				eq(issueTypeAllowedStatus.issueTypeId, issueTypeId),
+				isNull(issueTypeAllowedStatus.teamId),
+			),
+		);
+
+	if (globalRows.length > 0) {
+		return globalRows.some((row) => row.statusId === statusId);
+	}
+
+	return true;
+}
+
 const listIssues = authedRouter
 	.input(issueListSchema)
 	.errors(commonErrors)
@@ -319,6 +626,7 @@ const listIssues = authedRouter
 			where: {
 				workspaceId: input.workspaceId,
 				...(input.teamId ? { teamId: input.teamId } : {}),
+				...(input.issueTypeId ? { issueTypeId: input.issueTypeId } : {}),
 				...getArchivedIssueFilter(input.archivedFilter),
 			},
 			with: {
@@ -327,6 +635,7 @@ const listIssues = authedRouter
 						statusGroup: true,
 					},
 				},
+				issueType: true,
 				priority: true,
 				cycle: true,
 				assignee: true,
@@ -403,11 +712,7 @@ const listIssueActivity = authedRouter
 
 const createIssue = authedRouter
 	.input(issueCreateSchema)
-	.errors({
-		...commonErrors,
-		...hierarchyErrors,
-		...issueRelationErrors,
-	})
+	.errors(createErrors)
 	.handler(async ({ context, input, errors }) => {
 		const { workspaceId, teamId, labelIds } = input;
 		const allowed = await isAllowed({
@@ -458,6 +763,26 @@ const createIssue = authedRouter
 				const created = await db.transaction(async (tx) => {
 					await acquireIssueHierarchyLock(tx, { workspaceId, teamId });
 
+					const resolvedType = await resolveIssueTypeForCreate(tx, {
+						workspaceId,
+						teamId,
+						issueTypeId: input.issueTypeId,
+					});
+					if (!resolvedType.ok) throw errors.INVALID_ISSUE_TYPE();
+					const resolvedIssueTypeId = resolvedType.issueTypeId;
+
+					if (
+						input.statusId !== undefined &&
+						!(await isStatusAllowedForIssueType(tx, {
+							workspaceId,
+							teamId,
+							issueTypeId: resolvedIssueTypeId,
+							statusId: input.statusId,
+						}))
+					) {
+						throw errors.INVALID_ISSUE_TYPE_STATUS();
+					}
+
 					const hierarchyValidation = await validateIssueParentAssignment(tx, {
 						workspaceId,
 						teamId,
@@ -475,6 +800,7 @@ const createIssue = authedRouter
 							creatorId: context.auth.session.userId,
 							sortOrder,
 							...omit(input, ["labelIds"]),
+							issueTypeId: resolvedIssueTypeId,
 							...searchFields,
 						})
 						.returning();
@@ -598,10 +924,18 @@ const updateIssue = authedRouter
 			if (!allowedToUseCycle) throw errors.UNAUTHORIZED();
 		}
 
+		const typeChanging =
+			input.issueTypeId !== undefined &&
+			input.issueTypeId !== existingIssue.issueTypeId;
+		const effectiveIssueTypeId = typeChanging
+			? input.issueTypeId
+			: existingIssue.issueTypeId;
+
 		const { values, updatedFields, updatedFieldSet } =
 			getChangedIssueUpdateFields(existingIssue, input);
+		const typeChanged = updatedFieldSet.has("issueTypeId");
 		const genericUpdatedFields = updatedFields.filter(
-			(field) => !dedicatedActivityFields.has(field),
+			(field) => !dedicatedActivityFields.has(field) && field !== "issueTypeId",
 		);
 		const titleChanged = updatedFieldSet.has("title");
 		const descriptionChanged = updatedFieldSet.has("description");
@@ -659,6 +993,44 @@ const updateIssue = authedRouter
 		}
 
 		const updated = await db.transaction(async (tx) => {
+			if (typeChanging && input.issueTypeId !== undefined) {
+				const selectable = await isSelectableIssueType(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueTypeId: input.issueTypeId,
+				});
+				if (!selectable) throw errors.INVALID_ISSUE_TYPE();
+			}
+
+			if (
+				statusChanged &&
+				input.statusId !== undefined &&
+				effectiveIssueTypeId &&
+				!(await isStatusAllowedForIssueType(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueTypeId: effectiveIssueTypeId,
+					statusId: input.statusId,
+				}))
+			) {
+				throw errors.INVALID_ISSUE_TYPE_STATUS();
+			}
+
+			if (
+				typeChanging &&
+				!statusChanged &&
+				effectiveIssueTypeId &&
+				existingIssue.statusId &&
+				!(await isStatusAllowedForIssueType(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueTypeId: effectiveIssueTypeId,
+					statusId: existingIssue.statusId,
+				}))
+			) {
+				throw errors.ISSUE_TYPE_STATUS_REQUIRED();
+			}
+
 			const [updatedIssue] = await tx
 				.update(issue)
 				.set(values)
@@ -678,6 +1050,23 @@ const updateIssue = authedRouter
 					actionType: "issue.updated",
 					metadata: {
 						updatedFields: genericUpdatedFields,
+					},
+				});
+			}
+
+			if (typeChanged) {
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+					issueId: input.id,
+					actorId: context.auth.session.userId,
+					cycleId: updatedIssue.cycleId,
+					actionType: "issue.updated",
+					field: "issueTypeId",
+					fromValue: existingIssue.issueTypeId,
+					toValue: updatedIssue.issueTypeId,
+					metadata: {
+						updatedFields: ["issueTypeId"],
 					},
 				});
 			}
@@ -1293,6 +1682,18 @@ const moveIssue = authedRouter
 					)
 					.limit(1);
 				if (!targetStatus) throw errors.INVALID_MOVE();
+
+				if (
+					issueRecord.issueTypeId &&
+					!(await isStatusAllowedForIssueType(tx, {
+						workspaceId: input.workspaceId,
+						teamId: issueRecord.teamId,
+						issueTypeId: issueRecord.issueTypeId,
+						statusId: targetStatusId,
+					}))
+				) {
+					throw errors.INVALID_ISSUE_TYPE_STATUS();
+				}
 
 				const allNeighbors = await tx
 					.select()
