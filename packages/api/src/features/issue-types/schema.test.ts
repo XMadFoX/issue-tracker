@@ -98,6 +98,24 @@ describe("issue type schemas", () => {
 		).toEqual({ workspaceId, teamId: null, orderedIds: [issueTypeId] });
 	});
 
+	test("reorder rejects more than 100 ids", () => {
+		const ids = Array.from({ length: 101 }, (_, i) =>
+			`clx${String(i).padStart(22, "0")}`,
+		);
+		expect(() =>
+			issueTypeReorderSchema.parse({ workspaceId, orderedIds: ids }),
+		).toThrow();
+	});
+
+	test("reorder rejects duplicate ids", () => {
+		expect(() =>
+			issueTypeReorderSchema.parse({
+				workspaceId,
+				orderedIds: [issueTypeId, issueTypeId],
+			}),
+		).toThrow();
+	});
+
 	test("replacement operations require a replacement issue type id", () => {
 		expect(() =>
 			issueTypeReassignAndArchiveSchema.parse({ workspaceId, id: issueTypeId }),

@@ -81,11 +81,21 @@ export const issueTypeReassignAndArchiveSchema = issueTypeArchiveSchema.extend({
 	replacementIssueTypeId: issueTypeInsertSchema.shape.id,
 });
 
-export const issueTypeReorderSchema = z.object({
-	workspaceId: workspaceInsertSchema.shape.id,
-	teamId: z.cuid2().nullable().optional(),
-	orderedIds: z.array(issueTypeInsertSchema.shape.id).min(1),
-});
+const MAX_REORDERED_ISSUE_TYPES = 100;
+
+export const issueTypeReorderSchema = z
+	.object({
+		workspaceId: workspaceInsertSchema.shape.id,
+		teamId: z.cuid2().nullable().optional(),
+		orderedIds: z
+			.array(issueTypeInsertSchema.shape.id)
+			.min(1)
+			.max(MAX_REORDERED_ISSUE_TYPES),
+	})
+	.refine(
+		({ orderedIds }) => new Set(orderedIds).size === orderedIds.length,
+		{ message: "orderedIds must not contain duplicates" },
+	);
 
 export const issueTypeSetDefaultSchema = issueTypeArchiveSchema;
 
