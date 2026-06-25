@@ -23,6 +23,7 @@ import {
 	calculateMiddleRank,
 } from "../../utils/lexorank";
 import { rebalanceStatusIssues } from "../../utils/rebalancing";
+import { isPureHideOverride, omitsSourceType } from "../issue-types/helpers";
 import { type DbExecutor, writeIssueActivity } from "./activity";
 import {
 	acquireIssueHierarchyLock,
@@ -387,7 +388,7 @@ async function isSelectableIssueType(
 		teamId,
 		issueTypeId,
 	);
-	return !(override?.hiddenAt ?? override?.replacementIssueTypeId);
+	return override == null || !omitsSourceType(override);
 }
 
 async function resolveEffectiveIssueTypeForTeam(
@@ -416,7 +417,7 @@ async function resolveEffectiveIssueTypeForTeam(
 		teamId,
 		issueTypeId,
 	);
-	if (override?.hiddenAt && !override.replacementIssueTypeId) return null;
+	if (override != null && isPureHideOverride(override)) return null;
 	if (override?.replacementIssueTypeId) {
 		const replacement = await getIssueTypeById(
 			executor,

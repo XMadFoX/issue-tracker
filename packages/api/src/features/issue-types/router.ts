@@ -11,6 +11,7 @@ import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
+import { omitsSourceType } from "./helpers";
 import {
 	issueTypeArchiveSchema,
 	issueTypeCreateSchema,
@@ -293,9 +294,7 @@ export const listIssueTypes = authedRouter
 
 		const omittedSourceIds = new Set(
 			overrides
-				.filter(
-					(override) => override.hiddenAt ?? override.replacementIssueTypeId,
-				)
+				.filter(omitsSourceType)
 				.map((override) => override.sourceIssueTypeId),
 		);
 
