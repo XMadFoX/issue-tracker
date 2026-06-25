@@ -4,6 +4,7 @@ import { createInsertSchema } from "drizzle-orm/zod";
 import type { Value } from "platejs";
 import { z } from "zod";
 import { issuePriorityInsertSchema } from "../issue-priorities/issue-priority.schema";
+import { issueTypeInsertSchema } from "../issue-types/schema";
 import { labelInsertSchema } from "../labels/schema";
 import { teamInsertSchema } from "../teams/schema";
 import { workspaceInsertSchema } from "../workspaces/schema";
@@ -14,6 +15,7 @@ export const userInsertSchema = createInsertSchema(user);
 const assigneeIdSchema = userInsertSchema.shape.id.nullable();
 const issueDescriptionSchema = z.custom<Value>().nullable();
 const estimateSchema = z.number().int().min(0).nullable();
+const issueTypeIdSchema = issueTypeInsertSchema.shape.id;
 
 export const issueCreateSchema = issueInsertSchema
 	.omit({
@@ -31,7 +33,7 @@ export const issueCreateSchema = issueInsertSchema
 		title: z.string().min(1).max(100),
 		description: issueDescriptionSchema.optional(),
 		teamId: teamInsertSchema.shape.id,
-		issueTypeId: z.string().optional(),
+		issueTypeId: issueTypeIdSchema.optional(),
 		assigneeId: assigneeIdSchema.optional(),
 		estimate: estimateSchema.optional(),
 		labelIds: labelInsertSchema.shape.id.array().default([]),
@@ -52,7 +54,7 @@ export const issueUpdateParentSchema = z.object({
 export const issueListSchema = z.object({
 	workspaceId: workspaceInsertSchema.shape.id,
 	teamId: teamInsertSchema.shape.id.optional(),
-	issueTypeId: z.string().optional(),
+	issueTypeId: issueTypeIdSchema.optional(),
 	limit: z.number().min(1).max(200).default(100),
 	offset: z.number().min(0).default(0),
 	archivedFilter: z
@@ -80,7 +82,7 @@ export const issueUpdateSchema = issueInsertSchema
 		estimate: estimateSchema.optional(),
 	})
 	.extend({
-		issueTypeId: z.string().optional(),
+		issueTypeId: issueTypeIdSchema.optional(),
 	})
 	.required({
 		id: true,
@@ -141,8 +143,8 @@ export const issueSearchSchema = z.object({
 			assigneeId: assigneeIdSchema.optional(),
 			labelIds: labelInsertSchema.shape.id.array().optional(),
 			priorityId: issueInsertSchema.shape.priorityId.optional(),
-			issueTypeId: z.string().optional(),
-			issueTypeIds: z.string().array().optional(),
+			issueTypeId: issueTypeIdSchema.optional(),
+			issueTypeIds: issueTypeIdSchema.array().optional(),
 			reporterId: userInsertSchema.shape.id.optional(),
 			creatorId: userInsertSchema.shape.id.optional(),
 			createdAtFrom: z.iso.datetime().optional(),
