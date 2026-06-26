@@ -1,5 +1,6 @@
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
+import { issueStatus } from "db/features/tracker/issue-statuses.schema";
 import {
 	issueType,
 	issueTypeAllowedStatus,
@@ -7,12 +8,24 @@ import {
 } from "db/features/tracker/issue-types.schema";
 import { issue } from "db/features/tracker/issues.schema";
 import { team } from "db/features/tracker/tracker.schema";
-import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	eq,
+	inArray,
+	isNull,
+	ne,
+	notExists,
+	or,
+	sql,
+} from "drizzle-orm";
 import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import { omitsSourceType } from "./helpers";
 import {
+	issueTypeAllowedStatusListSchema,
+	issueTypeAllowedStatusSetSchema,
 	issueTypeArchiveSchema,
 	issueTypeCreateSchema,
 	issueTypeHideForTeamSchema,
@@ -39,6 +52,8 @@ const commonErrors = {
 	INVALID_OVERRIDE_SOURCE: {},
 	LAST_ISSUE_TYPE: {},
 	DEFAULT_REQUIRED: {},
+	INVALID_STATUS: {},
+	STATUS_IN_USE: {},
 };
 
 type ErrorFactory = Record<
@@ -239,6 +254,138 @@ async function ensureReplacement({
 	return replacement?.teamId === teamId && !replacement.archivedAt
 		? replacement
 		: null;
+}
+
+function resolveAllowedStatusTeamId({
+	issueTypeTeamId,
+	inputTeamId,
+}: {
+	issueTypeTeamId: string | null;
+	inputTeamId?: string | null;
+}) {
+	return inputTeamId ?? issueTypeTeamId;
+}
+
+async function validateAllowedStatusScope({
+	executor,
+	workspaceId,
+	teamId,
+	statusIds,
+}: {
+	executor: DbExecutor;
+	workspaceId: string;
+	teamId: string | null;
+	statusIds: string[];
+}) {
+	const rows = await executor
+		.select({ id: issueStatus.id })
+		.from(issueStatus)
+		.where(
+			and(
+				eq(issueStatus.workspaceId, workspaceId),
+				inArray(issueStatus.id, statusIds),
+				teamId
+					? or(isNull(issueStatus.teamId), eq(issueStatus.teamId, teamId))
+					: isNull(issueStatus.teamId),
+			),
+		);
+
+	return rows.length === statusIds.length;
+}
+
+async function sourceIssuesCanUseReplacementType({
+	executor,
+	workspaceId,
+	sourceIssueTypeId,
+	replacementIssueTypeId,
+}: {
+	executor: DbExecutor;
+	workspaceId: string;
+	sourceIssueTypeId: string;
+	replacementIssueTypeId: string;
+}) {
+	const rows = await executor
+		.selectDistinct({ teamId: issue.teamId, statusId: issue.statusId })
+		.from(issue)
+		.where(
+			and(
+				eq(issue.workspaceId, workspaceId),
+				eq(issue.issueTypeId, sourceIssueTypeId),
+			),
+		);
+
+	if (rows.length === 0) return true;
+
+	const teamIds = [...new Set(rows.map((row) => row.teamId))];
+	const statusIds = [...new Set(rows.map((row) => row.statusId))];
+
+	const statusRows = await executor
+		.select({ id: issueStatus.id, teamId: issueStatus.teamId })
+		.from(issueStatus)
+		.where(
+			and(
+				eq(issueStatus.workspaceId, workspaceId),
+				inArray(issueStatus.id, statusIds),
+			),
+		);
+	const statusTeamById = new Map(
+		statusRows.map((status) => [status.id, status.teamId]),
+	);
+
+	const allowedRows = await executor
+		.select({
+			teamId: issueTypeAllowedStatus.teamId,
+			statusId: issueTypeAllowedStatus.statusId,
+		})
+		.from(issueTypeAllowedStatus)
+		.where(
+			and(
+				eq(issueTypeAllowedStatus.workspaceId, workspaceId),
+				eq(issueTypeAllowedStatus.issueTypeId, replacementIssueTypeId),
+				or(
+					isNull(issueTypeAllowedStatus.teamId),
+					inArray(issueTypeAllowedStatus.teamId, teamIds),
+				),
+			),
+		);
+
+	const globalAllowedStatusIds = new Set<string>();
+	const teamAllowedStatusIds = new Map<string, Set<string>>();
+	for (const allowedRow of allowedRows) {
+		if (!allowedRow.teamId) {
+			globalAllowedStatusIds.add(allowedRow.statusId);
+			continue;
+		}
+
+		const existing = teamAllowedStatusIds.get(allowedRow.teamId);
+		if (existing) {
+			existing.add(allowedRow.statusId);
+			continue;
+		}
+
+		teamAllowedStatusIds.set(allowedRow.teamId, new Set([allowedRow.statusId]));
+	}
+
+	for (const row of rows) {
+		const statusTeamId = statusTeamById.get(row.statusId);
+		if (statusTeamId === undefined) return false;
+		if (statusTeamId !== null && statusTeamId !== row.teamId) return false;
+
+		const teamAllowed = teamAllowedStatusIds.get(row.teamId);
+		if (teamAllowed) {
+			if (!teamAllowed.has(row.statusId)) return false;
+			continue;
+		}
+
+		if (
+			globalAllowedStatusIds.size > 0 &&
+			!globalAllowedStatusIds.has(row.statusId)
+		) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 export const listIssueTypes = authedRouter
@@ -458,6 +605,16 @@ export const reassignAndArchiveIssueType = authedRouter
 			if (await hasReplacementOverrideReferences(tx, source.id)) {
 				throw errors.TYPE_IN_USE();
 			}
+			if (
+				!(await sourceIssuesCanUseReplacementType({
+					executor: tx,
+					workspaceId: input.workspaceId,
+					sourceIssueTypeId: source.id,
+					replacementIssueTypeId: replacement.id,
+				}))
+			) {
+				throw errors.INVALID_STATUS();
+			}
 			await tx
 				.update(issue)
 				.set({ issueTypeId: replacement.id })
@@ -550,6 +707,184 @@ export const setDefaultIssueType = authedRouter
 				.where(eq(issueType.id, current.id));
 		});
 		return { success: true };
+	});
+
+export const listIssueTypeAllowedStatuses = authedRouter
+	.input(issueTypeAllowedStatusListSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const existing = await getIssueType(input.workspaceId, input.issueTypeId);
+		if (!existing) throw errors.NOT_FOUND();
+
+		const teamId = resolveAllowedStatusTeamId({
+			issueTypeTeamId: existing.teamId,
+			inputTeamId: input.teamId,
+		});
+		if (existing.teamId && teamId !== existing.teamId) {
+			throw errors.INVALID_SCOPE();
+		}
+		if (teamId && !(await ensureTeam(input.workspaceId, teamId))) {
+			throw errors.TEAM_NOT_FOUND();
+		}
+
+		await ensureAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId,
+			permissionKey: "issue_type:read",
+			errors,
+		});
+
+		return db
+			.select()
+			.from(issueTypeAllowedStatus)
+			.where(
+				and(
+					eq(issueTypeAllowedStatus.workspaceId, input.workspaceId),
+					eq(issueTypeAllowedStatus.issueTypeId, input.issueTypeId),
+					teamId
+						? eq(issueTypeAllowedStatus.teamId, teamId)
+						: isNull(issueTypeAllowedStatus.teamId),
+				),
+			)
+			.orderBy(
+				asc(issueTypeAllowedStatus.orderIndex),
+				asc(issueTypeAllowedStatus.statusId),
+			);
+	});
+
+export const setIssueTypeAllowedStatuses = authedRouter
+	.input(issueTypeAllowedStatusSetSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const existing = await getIssueType(input.workspaceId, input.issueTypeId);
+		if (!existing) throw errors.NOT_FOUND();
+		if (existing.archivedAt) throw errors.ARCHIVED_TYPE();
+
+		const teamId = resolveAllowedStatusTeamId({
+			issueTypeTeamId: existing.teamId,
+			inputTeamId: input.teamId,
+		});
+		if (existing.teamId && teamId !== existing.teamId) {
+			throw errors.INVALID_SCOPE();
+		}
+		if (teamId && !(await ensureTeam(input.workspaceId, teamId))) {
+			throw errors.TEAM_NOT_FOUND();
+		}
+
+		await ensureAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId,
+			permissionKey: "issue_type:update",
+			errors,
+		});
+
+		const statusIds = input.statuses.map((status) => status.statusId);
+		return await db.transaction(async (tx) => {
+			await acquireIssueTypeMutationLock(tx, existing.id);
+			if (
+				!(await validateAllowedStatusScope({
+					executor: tx,
+					workspaceId: input.workspaceId,
+					teamId,
+					statusIds,
+				}))
+			) {
+				throw errors.INVALID_STATUS();
+			}
+
+			// Determine which statuses are being removed from the allowed set.
+			const currentAllowed = await tx
+				.select({ statusId: issueTypeAllowedStatus.statusId })
+				.from(issueTypeAllowedStatus)
+				.where(
+					and(
+						eq(issueTypeAllowedStatus.workspaceId, input.workspaceId),
+						eq(issueTypeAllowedStatus.issueTypeId, input.issueTypeId),
+						teamId
+							? eq(issueTypeAllowedStatus.teamId, teamId)
+							: isNull(issueTypeAllowedStatus.teamId),
+					),
+				);
+
+			const newStatusIdSet = new Set(statusIds);
+			const removedStatusIds = currentAllowed
+				.map((row) => row.statusId)
+				.filter((id) => !newStatusIdSet.has(id));
+
+			// Reject narrowing when existing issues still reference a removed
+			// status. The set of issues governed by this scope must mirror
+			// `isStatusAllowedForIssueType` exactly (team-scoped rows win, global
+			// only governs teams that have no team-scoped rows for this type):
+			//   - team scope (teamId set): only that team's issues.
+			//   - global scope (teamId null): only issues whose team has NO
+			//     team-scoped allowed-status rows for this issue type. Issues in
+			//     teams with their own set are governed by that set, not this one.
+			if (removedStatusIds.length > 0) {
+				const [conflictingIssue] = await tx
+					.select({ id: issue.id })
+					.from(issue)
+					.where(
+						and(
+							eq(issue.workspaceId, input.workspaceId),
+							eq(issue.issueTypeId, input.issueTypeId),
+							inArray(issue.statusId, removedStatusIds),
+							teamId
+								? eq(issue.teamId, teamId)
+								: notExists(
+										tx
+											.select({ one: sql`1` })
+											.from(issueTypeAllowedStatus)
+											.where(
+												and(
+													eq(
+														issueTypeAllowedStatus.workspaceId,
+														input.workspaceId,
+													),
+													eq(
+														issueTypeAllowedStatus.issueTypeId,
+														input.issueTypeId,
+													),
+													eq(issueTypeAllowedStatus.teamId, issue.teamId),
+												),
+											),
+									),
+						),
+					)
+					.limit(1);
+
+				if (conflictingIssue) {
+					throw errors.STATUS_IN_USE();
+				}
+			}
+
+			await tx
+				.delete(issueTypeAllowedStatus)
+				.where(
+					and(
+						eq(issueTypeAllowedStatus.workspaceId, input.workspaceId),
+						eq(issueTypeAllowedStatus.issueTypeId, input.issueTypeId),
+						teamId
+							? eq(issueTypeAllowedStatus.teamId, teamId)
+							: isNull(issueTypeAllowedStatus.teamId),
+					),
+				);
+			return await tx
+				.insert(issueTypeAllowedStatus)
+				.values(
+					input.statuses.map((status) => ({
+						id: createId(),
+						workspaceId: input.workspaceId,
+						teamId,
+						issueTypeId: input.issueTypeId,
+						statusId: status.statusId,
+						isInitial: status.isInitial,
+						orderIndex: status.orderIndex,
+					})),
+				)
+				.returning();
+		});
 	});
 
 export const hideIssueTypeForTeam = authedRouter
@@ -702,6 +1037,8 @@ export const issueTypeRouter = {
 	reassignAndArchive: reassignAndArchiveIssueType,
 	reorder: reorderIssueTypes,
 	setDefault: setDefaultIssueType,
+	listAllowedStatuses: listIssueTypeAllowedStatuses,
+	setAllowedStatuses: setIssueTypeAllowedStatuses,
 	hideForTeam: hideIssueTypeForTeam,
 	replaceForTeam: replaceIssueTypeForTeam,
 	restoreForTeam: restoreIssueTypeForTeam,

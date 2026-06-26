@@ -1,5 +1,6 @@
 import {
 	issueType,
+	issueTypeAllowedStatus,
 	issueTypeTeamOverride,
 } from "db/features/tracker/issue-types.schema";
 import { createInsertSchema } from "drizzle-orm/zod";
@@ -30,6 +31,17 @@ export const issueTypeTeamOverrideInsertSchema = createInsertSchema(
 	teamId: z.cuid2(),
 	sourceIssueTypeId: z.cuid2(),
 	replacementIssueTypeId: z.cuid2().nullable().optional(),
+});
+
+export const issueTypeAllowedStatusInsertSchema = createInsertSchema(
+	issueTypeAllowedStatus,
+).extend({
+	id: z.cuid2(),
+	workspaceId: workspaceInsertSchema.shape.id,
+	teamId: z.cuid2().nullable().optional(),
+	issueTypeId: issueTypeInsertSchema.shape.id,
+	statusId: z.cuid2(),
+	orderIndex: z.number().int().min(0),
 });
 
 export const issueTypeListSchema = z.object({
@@ -92,12 +104,43 @@ export const issueTypeReorderSchema = z
 			.min(1)
 			.max(MAX_REORDERED_ISSUE_TYPES),
 	})
-	.refine(
-		({ orderedIds }) => new Set(orderedIds).size === orderedIds.length,
-		{ message: "orderedIds must not contain duplicates" },
-	);
+	.refine(({ orderedIds }) => new Set(orderedIds).size === orderedIds.length, {
+		message: "orderedIds must not contain duplicates",
+	});
 
 export const issueTypeSetDefaultSchema = issueTypeArchiveSchema;
+
+const MAX_ALLOWED_STATUSES = 100;
+
+export const issueTypeAllowedStatusListSchema = z.object({
+	workspaceId: workspaceInsertSchema.shape.id,
+	issueTypeId: issueTypeInsertSchema.shape.id,
+	teamId: z.cuid2().nullable().optional(),
+});
+
+export const issueTypeAllowedStatusSetSchema = issueTypeAllowedStatusListSchema
+	.extend({
+		statuses: z
+			.array(
+				z.object({
+					statusId: issueTypeAllowedStatusInsertSchema.shape.statusId,
+					isInitial: z.boolean().default(false),
+					orderIndex: issueTypeAllowedStatusInsertSchema.shape.orderIndex,
+				}),
+			)
+			.min(1)
+			.max(MAX_ALLOWED_STATUSES),
+	})
+	.refine(
+		({ statuses }) =>
+			new Set(statuses.map((status) => status.statusId)).size ===
+			statuses.length,
+		{ message: "statuses must not contain duplicate status ids" },
+	)
+	.refine(
+		({ statuses }) => statuses.filter((status) => status.isInitial).length <= 1,
+		{ message: "at most one allowed status can be initial" },
+	);
 
 export const issueTypeHideForTeamSchema = z.object({
 	workspaceId: workspaceInsertSchema.shape.id,

@@ -33,6 +33,7 @@ export const issueCreateSchema = issueInsertSchema
 		title: z.string().min(1).max(100),
 		description: issueDescriptionSchema.optional(),
 		teamId: teamInsertSchema.shape.id,
+		statusId: issueInsertSchema.shape.statusId.optional(),
 		issueTypeId: issueTypeIdSchema.optional(),
 		assigneeId: assigneeIdSchema.optional(),
 		estimate: estimateSchema.optional(),

@@ -34,6 +34,16 @@ describe("issue schemas", () => {
 			expect(parsed.issueTypeId).toBe(issueTypeId);
 		});
 
+		test("accepts omitted statusId for server-side initial status resolution", () => {
+			const parsed = issueCreateSchema.parse({
+				workspaceId,
+				teamId,
+				title: "Issue with inferred status",
+				issueTypeId,
+			});
+			expect(parsed.statusId).toBeUndefined();
+		});
+
 		test("rejects null issueTypeId", () => {
 			expect(() =>
 				issueCreateSchema.parse({

@@ -611,6 +611,101 @@ async function isStatusAllowedForIssueType(
 	return true;
 }
 
+async function getConfiguredInitialStatus(
+	executor: DbExecutor,
+	{
+		workspaceId,
+		teamId,
+		issueTypeId,
+	}: {
+		workspaceId: string;
+		teamId: string | null;
+		issueTypeId: string;
+	},
+) {
+	const rows = await executor
+		.select({
+			statusId: issueTypeAllowedStatus.statusId,
+			isInitial: issueTypeAllowedStatus.isInitial,
+		})
+		.from(issueTypeAllowedStatus)
+		.innerJoin(issueStatus, eq(issueTypeAllowedStatus.statusId, issueStatus.id))
+		.where(
+			and(
+				eq(issueTypeAllowedStatus.workspaceId, workspaceId),
+				eq(issueTypeAllowedStatus.issueTypeId, issueTypeId),
+				teamId
+					? eq(issueTypeAllowedStatus.teamId, teamId)
+					: isNull(issueTypeAllowedStatus.teamId),
+				eq(issueStatus.workspaceId, workspaceId),
+				teamId
+					? or(isNull(issueStatus.teamId), eq(issueStatus.teamId, teamId))
+					: isNull(issueStatus.teamId),
+			),
+		)
+		.orderBy(
+			asc(issueTypeAllowedStatus.orderIndex),
+			asc(issueTypeAllowedStatus.statusId),
+		);
+
+	return (
+		rows.find((row) => row.isInitial)?.statusId ?? rows[0]?.statusId ?? null
+	);
+}
+
+async function resolveInitialStatusForIssueType(
+	executor: DbExecutor,
+	{
+		workspaceId,
+		teamId,
+		issueTypeId,
+	}: {
+		workspaceId: string;
+		teamId: string;
+		issueTypeId: string;
+	},
+) {
+	const teamInitialStatus = await getConfiguredInitialStatus(executor, {
+		workspaceId,
+		teamId,
+		issueTypeId,
+	});
+	if (teamInitialStatus) return teamInitialStatus;
+
+	const globalInitialStatus = await getConfiguredInitialStatus(executor, {
+		workspaceId,
+		teamId: null,
+		issueTypeId,
+	});
+	if (globalInitialStatus) return globalInitialStatus;
+
+	// Join issueStatusGroup so we can order by the group's position in the
+	// workflow before falling back to the status's own orderIndex.  Without
+	// this join we could accidentally pick a non-initial status whose
+	// orderIndex happens to sort first within its group.
+	const [firstStatus] = await executor
+		.select({ id: issueStatus.id })
+		.from(issueStatus)
+		.innerJoin(
+			issueStatusGroup,
+			eq(issueStatus.statusGroupId, issueStatusGroup.id),
+		)
+		.where(
+			and(
+				eq(issueStatus.workspaceId, workspaceId),
+				or(isNull(issueStatus.teamId), eq(issueStatus.teamId, teamId)),
+			),
+		)
+		.orderBy(
+			asc(issueStatusGroup.orderIndex),
+			asc(issueStatus.orderIndex),
+			asc(issueStatus.id),
+		)
+		.limit(1);
+
+	return firstStatus?.id ?? null;
+}
+
 const listIssues = authedRouter
 	.input(issueListSchema)
 	.errors(commonErrors)
@@ -751,16 +846,9 @@ const createIssue = authedRouter
 			description: input.description,
 		});
 
+		let attemptedStatusId: string | null = null;
 		for (let attempt = 0; attempt <= 1; attempt++) {
 			try {
-				const [maxSortRow] = await db
-					.select({ maxSort: sql<string>`max(${issue.sortOrder})` })
-					.from(issue)
-					.where(eq(issue.statusId, input.statusId))
-					.limit(1);
-
-				const sortOrder = calculateAfterRank(maxSortRow?.maxSort || "a00");
-
 				const created = await db.transaction(async (tx) => {
 					await acquireIssueHierarchyLock(tx, { workspaceId, teamId });
 
@@ -771,18 +859,34 @@ const createIssue = authedRouter
 					});
 					if (!resolvedType.ok) throw errors.INVALID_ISSUE_TYPE();
 					const resolvedIssueTypeId = resolvedType.issueTypeId;
+					const resolvedStatusId =
+						input.statusId ??
+						(await resolveInitialStatusForIssueType(tx, {
+							workspaceId,
+							teamId,
+							issueTypeId: resolvedIssueTypeId,
+						}));
+					if (!resolvedStatusId) throw errors.INVALID_ISSUE_TYPE_STATUS();
+					attemptedStatusId = resolvedStatusId;
 
 					if (
-						input.statusId !== undefined &&
 						!(await isStatusAllowedForIssueType(tx, {
 							workspaceId,
 							teamId,
 							issueTypeId: resolvedIssueTypeId,
-							statusId: input.statusId,
+							statusId: resolvedStatusId,
 						}))
 					) {
 						throw errors.INVALID_ISSUE_TYPE_STATUS();
 					}
+
+					const [maxSortRow] = await tx
+						.select({ maxSort: sql<string>`max(${issue.sortOrder})` })
+						.from(issue)
+						.where(eq(issue.statusId, resolvedStatusId))
+						.limit(1);
+
+					const sortOrder = calculateAfterRank(maxSortRow?.maxSort || "a00");
 
 					const hierarchyValidation = await validateIssueParentAssignment(tx, {
 						workspaceId,
@@ -802,6 +906,7 @@ const createIssue = authedRouter
 							sortOrder,
 							...omit(input, ["labelIds"]),
 							issueTypeId: resolvedIssueTypeId,
+							statusId: resolvedStatusId,
 							...searchFields,
 						})
 						.returning();
@@ -870,8 +975,8 @@ const createIssue = authedRouter
 					throw error;
 				}
 
-				if (attempt === 0) {
-					await rebalanceStatusIssues(input.statusId);
+				if (attempt === 0 && attemptedStatusId) {
+					await rebalanceStatusIssues(attemptedStatusId);
 				} else {
 					throw error;
 				}

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	issueTypeAllowedStatusSetSchema,
 	issueTypeCreateSchema,
 	issueTypeListSchema,
 	issueTypeReassignAndArchiveSchema,
@@ -12,6 +13,8 @@ const workspaceId = "clx0000000000000000000000";
 const teamId = "clx0000000000000000000001";
 const issueTypeId = "clx0000000000000000000002";
 const replacementIssueTypeId = "clx0000000000000000000003";
+const statusId = "clx0000000000000000000004";
+const secondStatusId = "clx0000000000000000000005";
 
 const validCreateInput = {
 	workspaceId,
@@ -99,8 +102,9 @@ describe("issue type schemas", () => {
 	});
 
 	test("reorder rejects more than 100 ids", () => {
-		const ids = Array.from({ length: 101 }, (_, i) =>
-			`clx${String(i).padStart(22, "0")}`,
+		const ids = Array.from(
+			{ length: 101 },
+			(_, i) => `clx${String(i).padStart(22, "0")}`,
 		);
 		expect(() =>
 			issueTypeReorderSchema.parse({ workspaceId, orderedIds: ids }),
@@ -143,5 +147,40 @@ describe("issue type schemas", () => {
 				replacementIssueTypeId,
 			}),
 		).toMatchObject({ replacementIssueTypeId });
+	});
+
+	test("allowed status configuration rejects duplicates and multiple initials", () => {
+		expect(
+			issueTypeAllowedStatusSetSchema.parse({
+				workspaceId,
+				issueTypeId,
+				statuses: [{ statusId, isInitial: true, orderIndex: 0 }],
+			}),
+		).toEqual({
+			workspaceId,
+			issueTypeId,
+			statuses: [{ statusId, isInitial: true, orderIndex: 0 }],
+		});
+
+		expect(() =>
+			issueTypeAllowedStatusSetSchema.parse({
+				workspaceId,
+				issueTypeId,
+				statuses: [
+					{ statusId, orderIndex: 0 },
+					{ statusId, orderIndex: 1 },
+				],
+			}),
+		).toThrow("statuses must not contain duplicate status ids");
+		expect(() =>
+			issueTypeAllowedStatusSetSchema.parse({
+				workspaceId,
+				issueTypeId,
+				statuses: [
+					{ statusId, isInitial: true, orderIndex: 0 },
+					{ statusId: secondStatusId, isInitial: true, orderIndex: 1 },
+				],
+			}),
+		).toThrow("at most one allowed status can be initial");
 	});
 });
