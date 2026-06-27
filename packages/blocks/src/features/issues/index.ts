@@ -6,6 +6,9 @@ export {
 	getIssueReference,
 	IssueReference,
 } from "./components/issue-reference";
+export { IssueTypeCell } from "./components/issue-type-cell";
+export type { IssueTypeSelectProps } from "./components/issue-type-select";
+export { IssueTypeSelect } from "./components/issue-type-select";
 export { SubIssuesPopover } from "./components/sub-issues-popover";
 export { IssueCreateForm } from "./form/create";
 export { IssueList } from "./list/issue-list";
@@ -23,6 +26,9 @@ export type {
 	IssueNavigation,
 	IssueSearchResult,
 	IssueStatusList,
+	IssueType,
+	IssueTypeAllowedStatusIdsByType,
+	IssueTypeList,
 	LabelActions,
 	LabelList,
 	PriorityList,

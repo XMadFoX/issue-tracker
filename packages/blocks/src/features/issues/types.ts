@@ -15,6 +15,12 @@ export type PriorityList = Outputs["priority"]["list"];
 export type LabelList = Outputs["label"]["list"];
 export type TeamMemberList = Outputs["teamMembership"]["list"];
 export type CycleList = Outputs["cycle"]["list"];
+export type IssueType = Outputs["issueType"]["list"][number];
+export type IssueTypeList = Outputs["issueType"]["list"];
+export type IssueTypeAllowedStatusIdsByType = Record<
+	string,
+	ReadonlyArray<string>
+>;
 
 export type IssueLinkTarget = {
 	id: string;
@@ -37,10 +43,23 @@ export type IssueCycleUpdateInput = {
 	cycleId: string | null;
 };
 
+export type UpdateIssueTypeResult =
+	| { ok: true }
+	| {
+			ok: false;
+			reason: "STATUS_REQUIRED";
+			compatibleStatuses: IssueStatusList;
+	  };
+
 export type IssueActions = {
 	update: (
 		input: Inputs["issue"]["update"],
 	) => Promise<Outputs["issue"]["update"]>;
+	updateIssueType: (input: {
+		id: string;
+		workspaceId: string;
+		issueTypeId: string;
+	}) => Promise<UpdateIssueTypeResult>;
 	updatePriority: (
 		input: Inputs["issue"]["updatePriority"],
 	) => Promise<Outputs["issue"]["updatePriority"]>;
