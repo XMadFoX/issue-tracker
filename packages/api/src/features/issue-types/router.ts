@@ -735,22 +735,34 @@ export const listIssueTypeAllowedStatuses = authedRouter
 			errors,
 		});
 
+		// Mirror the fallback semantics of isStatusAllowedForIssueType:
+		//   1. If a teamId is in scope, check team-scoped rows first.
+		//   2. If those are empty, fall back to global (null-teamId) rows.
+		//   3. If neither has rows the constraint is open (return empty → caller
+		//      should treat all statuses as valid).
+		const baseWhere = and(
+			eq(issueTypeAllowedStatus.workspaceId, input.workspaceId),
+			eq(issueTypeAllowedStatus.issueTypeId, input.issueTypeId),
+		);
+		const orderBy = [
+			asc(issueTypeAllowedStatus.orderIndex),
+			asc(issueTypeAllowedStatus.statusId),
+		] as const;
+
+		if (teamId) {
+			const teamRows = await db
+				.select()
+				.from(issueTypeAllowedStatus)
+				.where(and(baseWhere, eq(issueTypeAllowedStatus.teamId, teamId)))
+				.orderBy(...orderBy);
+			if (teamRows.length > 0) return teamRows;
+		}
+
 		return db
 			.select()
 			.from(issueTypeAllowedStatus)
-			.where(
-				and(
-					eq(issueTypeAllowedStatus.workspaceId, input.workspaceId),
-					eq(issueTypeAllowedStatus.issueTypeId, input.issueTypeId),
-					teamId
-						? eq(issueTypeAllowedStatus.teamId, teamId)
-						: isNull(issueTypeAllowedStatus.teamId),
-				),
-			)
-			.orderBy(
-				asc(issueTypeAllowedStatus.orderIndex),
-				asc(issueTypeAllowedStatus.statusId),
-			);
+			.where(and(baseWhere, isNull(issueTypeAllowedStatus.teamId)))
+			.orderBy(...orderBy);
 	});
 
 export const setIssueTypeAllowedStatuses = authedRouter
