@@ -2,9 +2,11 @@ import {
 	IssueDetailSheet,
 	type IssueLinkTarget,
 	IssueList,
+	type IssueTypeAllowedStatusIdsByType,
 } from "@prism/blocks/src/features/issues";
 import {
 	type IssueArchivedFilter,
+	type IssueTypeList,
 	useIssueDetailModel,
 } from "@prism/features/issues";
 import { Badge } from "@prism/ui/components/badge";
@@ -19,9 +21,13 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@prism/ui/components/dropdown-menu";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import {
+	useQuery,
+	useSuspenseQueries,
+	useSuspenseQuery,
+} from "@tanstack/react-query";
 import { Outlet, useNavigate } from "@tanstack/react-router";
-import type { ComponentProps } from "react";
+import { type ComponentProps, useMemo } from "react";
 import { buildIssueUrl } from "./issue-url";
 import {
 	issueQueries,
@@ -35,6 +41,7 @@ type Props = {
 	teamSlug: string;
 	selectedIssueId?: string;
 	archivedFilter: IssueArchivedFilter;
+	issueTypeId?: string;
 };
 
 const issueArchiveFilterOptions = [
@@ -61,6 +68,7 @@ export function IssuesRouteContainer({
 	teamSlug,
 	selectedIssueId,
 	archivedFilter,
+	issueTypeId,
 }: Props) {
 	const navigate = useNavigate();
 	const workspace = useSuspenseQuery(issueQueries.workspaceBySlug(slug));
@@ -69,13 +77,37 @@ export function IssuesRouteContainer({
 		issueQueries.teamBySlug({ workspaceId, teamSlug }),
 	);
 	const teamId = team.data.id;
-	const listInput = { workspaceId, teamId, archivedFilter };
+	const listInput = { workspaceId, teamId, archivedFilter, issueTypeId };
 	const priorities = useSuspenseQuery(issueQueries.priorities(workspaceId));
 	const statuses = useSuspenseQuery(issueQueries.statuses(workspaceId));
 	const labels = useSuspenseQuery(issueQueries.labels(listInput));
 	const teamMembers = useSuspenseQuery(issueQueries.teamMembers(listInput));
 	const cycles = useSuspenseQuery(issueQueries.cycles(listInput));
 	const issues = useSuspenseQuery(issueQueries.issueList(listInput));
+	const issueTypes = useSuspenseQuery(
+		issueQueries.issueTypes({ workspaceId, teamId }),
+	);
+	const issueTypeAllowedStatuses = useSuspenseQueries({
+		queries: issueTypes.data.map((type) =>
+			issueQueries.issueTypeAllowedStatuses({
+				workspaceId,
+				teamId,
+				issueTypeId: type.id,
+			}),
+		),
+	});
+	const allowedStatusesByIssueTypeId = useMemo(
+		() =>
+			Object.fromEntries(
+				issueTypes.data.map((type, index) => [
+					type.id,
+					issueTypeAllowedStatuses[index]?.data.map(
+						(allowedStatus) => allowedStatus.statusId,
+					) ?? [],
+				]),
+			),
+		[issueTypes.data, issueTypeAllowedStatuses],
+	);
 	const { issueActions, labelActions } = useIssueMutations({
 		workspaceId,
 		teamId,
@@ -87,6 +119,11 @@ export function IssuesRouteContainer({
 	const getIssueUrl = (issue: IssueLinkTarget) =>
 		buildIssueUrl({ slug, teamSlug, issue });
 
+	const selectedTypeName =
+		issueTypeId !== undefined
+			? issueTypes.data.find((t) => t.id === issueTypeId)?.name
+			: undefined;
+
 	return (
 		<div className="relative w-full space-y-8 p-6">
 			<div className="flex items-center justify-between gap-4">
@@ -95,6 +132,11 @@ export function IssuesRouteContainer({
 					{archivedFilter !== "unarchived" ? (
 						<Badge variant="secondary" className="font-normal">
 							{issueArchiveFilterSummary[archivedFilter]}
+						</Badge>
+					) : null}
+					{selectedTypeName ? (
+						<Badge variant="secondary" className="font-normal">
+							Type: {selectedTypeName}
 						</Badge>
 					) : null}
 				</div>
@@ -121,6 +163,7 @@ export function IssuesRouteContainer({
 										search: {
 											archivedFilter: nextFilter,
 											selectedIssue: undefined,
+											issueTypeId,
 										},
 									});
 								}}
@@ -135,6 +178,35 @@ export function IssuesRouteContainer({
 								))}
 							</DropdownMenuRadioGroup>
 						</DropdownMenuGroup>
+						{issueTypes.data.length > 0 ? (
+							<DropdownMenuGroup>
+								<DropdownMenuSeparator />
+								<DropdownMenuLabel>Issue type</DropdownMenuLabel>
+								<DropdownMenuSeparator />
+								<DropdownMenuRadioGroup
+									value={issueTypeId ?? ""}
+									onValueChange={(value) => {
+										navigate({
+											to: ".",
+											search: {
+												archivedFilter,
+												selectedIssue: undefined,
+												issueTypeId: value || undefined,
+											},
+										});
+									}}
+								>
+									<DropdownMenuRadioItem value="">
+										All types
+									</DropdownMenuRadioItem>
+									{issueTypes.data.map((type) => (
+										<DropdownMenuRadioItem key={type.id} value={type.id}>
+											{type.icon} {type.name}
+										</DropdownMenuRadioItem>
+									))}
+								</DropdownMenuRadioGroup>
+							</DropdownMenuGroup>
+						) : null}
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</div>
@@ -144,6 +216,9 @@ export function IssuesRouteContainer({
 				statuses={statuses.data}
 				teamId={teamId}
 				priorities={priorities.data}
+				issueTypes={issueTypes.data}
+				allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
+				initialIssueTypeId={issueTypeId}
 				labels={labels.data}
 				teamMembers={teamMembers.data}
 				cycles={cycles.data}
@@ -154,7 +229,7 @@ export function IssuesRouteContainer({
 					onIssueClick: (issueId) => {
 						navigate({
 							to: ".",
-							search: { archivedFilter, selectedIssue: issueId },
+							search: { archivedFilter, issueTypeId, selectedIssue: issueId },
 						});
 					},
 					getIssueUrl,
@@ -171,6 +246,8 @@ export function IssuesRouteContainer({
 					issues={issues.data}
 					statuses={statuses.data}
 					priorities={priorities.data}
+					issueTypes={issueTypes.data}
+					allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 					labels={labels.data}
 					cycles={cycles.data}
 					teamMembers={teamMembers.data}
@@ -178,7 +255,7 @@ export function IssuesRouteContainer({
 					onClose={() => {
 						navigate({
 							to: ".",
-							search: { archivedFilter, selectedIssue: undefined },
+							search: { archivedFilter, issueTypeId, selectedIssue: undefined },
 						});
 					}}
 				/>
@@ -196,6 +273,8 @@ type SelectedIssueSheetProps = {
 	issues: ComponentProps<typeof IssueList>["issues"];
 	statuses: ComponentProps<typeof IssueDetailSheet>["statuses"];
 	priorities: ComponentProps<typeof IssueDetailSheet>["priorities"];
+	issueTypes: IssueTypeList;
+	allowedStatusesByIssueTypeId?: IssueTypeAllowedStatusIdsByType;
 	labels: ComponentProps<typeof IssueDetailSheet>["labels"];
 	teamMembers: ComponentProps<typeof IssueDetailSheet>["teamMembers"];
 	cycles: ComponentProps<typeof IssueDetailSheet>["cycles"];
@@ -212,6 +291,8 @@ function SelectedIssueSheet({
 	issues,
 	statuses,
 	priorities,
+	issueTypes,
+	allowedStatusesByIssueTypeId,
 	labels,
 	teamMembers,
 	cycles,
@@ -250,6 +331,8 @@ function SelectedIssueSheet({
 			onClose={onClose}
 			statuses={statuses}
 			priorities={priorities}
+			issueTypes={issueTypes}
+			allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 			labels={labels}
 			teamMembers={teamMembers}
 			cycles={cycles}

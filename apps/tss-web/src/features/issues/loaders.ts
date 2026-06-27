@@ -7,6 +7,7 @@ export type TeamIssuesLoaderParams = {
 	slug: string;
 	teamSlug: string;
 	archivedFilter?: IssueArchivedFilter;
+	issueTypeId?: string;
 };
 
 export type IssuePageLoaderParams = TeamIssuesLoaderParams & {
@@ -18,6 +19,7 @@ export async function loadTeamIssuesRoute({
 	slug,
 	teamSlug,
 	archivedFilter,
+	issueTypeId,
 }: TeamIssuesLoaderParams) {
 	const workspace = await queryClient.ensureQueryData(
 		issueQueries.workspaceBySlug(slug),
@@ -25,7 +27,12 @@ export async function loadTeamIssuesRoute({
 	const team = await queryClient.ensureQueryData(
 		issueQueries.teamBySlug({ workspaceId: workspace.id, teamSlug }),
 	);
-	const input = { workspaceId: workspace.id, teamId: team.id, archivedFilter };
+	const input = {
+		workspaceId: workspace.id,
+		teamId: team.id,
+		archivedFilter,
+		issueTypeId,
+	};
 
 	await Promise.all([
 		queryClient.ensureQueryData(issueQueries.priorities(workspace.id)),
@@ -33,6 +40,9 @@ export async function loadTeamIssuesRoute({
 		queryClient.ensureQueryData(issueQueries.labels(input)),
 		queryClient.ensureQueryData(issueQueries.teamMembers(input)),
 		queryClient.ensureQueryData(issueQueries.issueList(input)),
+		queryClient.ensureQueryData(
+			issueQueries.issueTypes({ workspaceId: workspace.id, teamId: team.id }),
+		),
 	]);
 
 	return { workspace, team };

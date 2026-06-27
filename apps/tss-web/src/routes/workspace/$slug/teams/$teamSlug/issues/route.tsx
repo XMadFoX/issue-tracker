@@ -8,6 +8,7 @@ const searchParamsSchema = z.object({
 	archivedFilter: z
 		.enum(["unarchived", "archived", "all"])
 		.default("unarchived"),
+	issueTypeId: z.string().optional(),
 });
 
 export const Route = createFileRoute("/workspace/$slug/teams/$teamSlug/issues")(
@@ -15,6 +16,7 @@ export const Route = createFileRoute("/workspace/$slug/teams/$teamSlug/issues")(
 		validateSearch: searchParamsSchema,
 		loaderDeps: ({ search }) => ({
 			archivedFilter: search.archivedFilter,
+			issueTypeId: search.issueTypeId,
 		}),
 		loader: ({ context, params, deps }) =>
 			loadTeamIssuesRoute({
@@ -22,6 +24,7 @@ export const Route = createFileRoute("/workspace/$slug/teams/$teamSlug/issues")(
 				slug: params.slug,
 				teamSlug: params.teamSlug,
 				archivedFilter: deps.archivedFilter,
+				issueTypeId: deps.issueTypeId,
 			}),
 		component: RouteComponent,
 	},
@@ -37,6 +40,7 @@ function RouteComponent() {
 			teamSlug={teamSlug}
 			selectedIssueId={search.selectedIssue}
 			archivedFilter={search.archivedFilter}
+			issueTypeId={search.issueTypeId}
 		/>
 	);
 }

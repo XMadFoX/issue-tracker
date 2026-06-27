@@ -5,8 +5,10 @@ import { client, orpc } from "@/orpc/client";
 export const {
 	issueQueries,
 	issueQueryKeys,
+	issueTypeQueryKeys,
 	useIssueLiveUpdates,
 	useIssueMutations,
+	useIssueTypeMutations,
 	useSubIssueSearch,
 } = createIssuesFeature({
 	client,

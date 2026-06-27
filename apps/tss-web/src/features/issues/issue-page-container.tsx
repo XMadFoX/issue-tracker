@@ -3,7 +3,8 @@ import {
 	type IssueLinkTarget,
 } from "@prism/blocks/src/features/issues";
 import { useIssueDetailModel } from "@prism/features/issues";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQueries, useSuspenseQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { buildIssueUrl } from "./issue-url";
 import {
 	issueQueries,
@@ -37,6 +38,30 @@ export function IssuePageContainer({ slug, teamSlug, issueId }: Props) {
 	const cycles = useSuspenseQuery(issueQueries.cycles(listInput));
 	const teamMembers = useSuspenseQuery(issueQueries.teamMembers(listInput));
 	const issues = useSuspenseQuery(issueQueries.issueList(listInput));
+	const issueTypes = useSuspenseQuery(
+		issueQueries.issueTypes({ workspaceId, teamId }),
+	);
+	const issueTypeAllowedStatuses = useSuspenseQueries({
+		queries: issueTypes.data.map((type) =>
+			issueQueries.issueTypeAllowedStatuses({
+				workspaceId,
+				teamId,
+				issueTypeId: type.id,
+			}),
+		),
+	});
+	const allowedStatusesByIssueTypeId = useMemo(
+		() =>
+			Object.fromEntries(
+				issueTypes.data.map((type, index) => [
+					type.id,
+					issueTypeAllowedStatuses[index]?.data.map(
+						(allowedStatus) => allowedStatus.statusId,
+					) ?? [],
+				]),
+			),
+		[issueTypes.data, issueTypeAllowedStatuses],
+	);
 	const { issueActions, labelActions, subIssueActions } = useIssueMutations({
 		workspaceId,
 		teamId,
@@ -62,6 +87,8 @@ export function IssuePageContainer({ slug, teamSlug, issueId }: Props) {
 				activity={activity.data}
 				statuses={statuses.data}
 				priorities={priorities.data}
+				issueTypes={issueTypes.data}
+				allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 				labels={labels.data}
 				cycles={cycles.data}
 				teamMembers={teamMembers.data}
