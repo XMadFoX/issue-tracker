@@ -1,21 +1,25 @@
+import { ORPCError } from "@orpc/server";
 import type { Outputs } from "@prism/api/src/router";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import z from "zod";
 import { createIssueQueries } from "./create-issue-queries";
 import type {
 	IssueActions,
 	IssueCreateInput,
 	IssueFeatureNotifications,
+	IssueTypeActions,
 	LabelActions,
+	NormalizedTeamIssuesInput,
 	PrismOrpc,
 	PrismRouterClient,
 	SubIssueActions,
 	SubIssueSearchState,
 	SubmitResult,
 	TeamIssuesInput,
+	UpdateIssueTypeResult,
 } from "./types";
-import { ISSUE_ARCHIVED_FILTERS, normalizeTeamIssuesInput } from "./types";
 
 const TEXT_SUB_ISSUE_QUERY_MIN_LENGTH = 2;
 const ISSUE_NUMBER_QUERY_MIN_LENGTH = 1;
@@ -36,6 +40,37 @@ type SubIssueSearchParams = TeamIssuesInput & {
 	selectedIssueId: string;
 	subIssues: Outputs["issue"]["list"];
 };
+
+const issueListQueryOptionsSchema = z.object({
+	input: z.unknown(),
+});
+
+const issueListQueryInputSchema = z.object({
+	workspaceId: z.string(),
+	teamId: z.string(),
+	archivedFilter: z
+		.enum(["unarchived", "archived", "all"])
+		.default("unarchived"),
+	issueTypeId: z.string().optional(),
+});
+
+const issueSearchQueryInputSchema = z.object({
+	workspaceId: z.string(),
+	filters: z
+		.object({
+			teamId: z.string().optional(),
+		})
+		.optional(),
+});
+
+const issueTypeListQueryInputSchema = z.object({
+	workspaceId: z.string(),
+	teamId: z.string().optional(),
+});
+
+const workspaceScopedQueryInputSchema = z.object({
+	workspaceId: z.string(),
+});
 
 function getMinSubIssueQueryLength(query: string) {
 	return ISSUE_NUMBER_QUERY_REGEX.test(query)
@@ -72,6 +107,31 @@ function isDescriptionOnlyIssueUpdate(
 	});
 }
 
+/**
+ * Extracts and validates the issue list input from an oRPC query key.
+ * oRPC keys have the shape `[path, { type?, input? }]`.
+ * Returns null if the key cannot be parsed as a valid issue list input.
+ */
+function parseQueryInput<TInput>(
+	queryKey: unknown,
+	schema: z.ZodType<TInput>,
+): TInput | null {
+	if (!Array.isArray(queryKey) || queryKey.length < 2) return null;
+	const optionsResult = issueListQueryOptionsSchema.safeParse(queryKey[1]);
+	if (!optionsResult.success) return null;
+
+	const inputResult = schema.safeParse(optionsResult.data.input);
+	if (!inputResult.success) return null;
+
+	return inputResult.data;
+}
+
+function parseIssueListQueryInput(
+	queryKey: unknown,
+): NormalizedTeamIssuesInput | null {
+	return parseQueryInput(queryKey, issueListQueryInputSchema);
+}
+
 function affectsCycleMetrics(input: Parameters<IssueActions["update"]>[0]) {
 	return (
 		input.cycleId !== undefined ||
@@ -80,34 +140,38 @@ function affectsCycleMetrics(input: Parameters<IssueActions["update"]>[0]) {
 	);
 }
 
+type IssueTypeMutationParams = {
+	workspaceId: string;
+	teamId?: string | null;
+};
+
 export function createIssuesFeature({
 	orpc,
 	client,
 	notify,
 }: CreateIssuesFeatureParams) {
-	const { issueQueries, issueQueryKeys } = createIssueQueries(orpc);
+	const { issueQueries, issueQueryKeys, issueTypeQueryKeys } =
+		createIssueQueries(orpc);
 
 	function useIssueMutations({
 		workspaceId,
-		teamId,
+		teamId: _teamId,
 		selectedIssueId,
 	}: IssueMutationParams) {
 		const queryClient = useQueryClient();
-		const listInputs = ISSUE_ARCHIVED_FILTERS.map((filter) =>
-			normalizeTeamIssuesInput({
-				workspaceId,
-				teamId,
-				archivedFilter: filter,
-			}),
-		);
 
 		const invalidateIssueList = () => {
-			for (const input of listInputs) {
-				queryClient.invalidateQueries({
-					queryKey: issueQueryKeys.issueList(input),
-					exact: true,
-				});
-			}
+			queryClient.invalidateQueries({
+				queryKey: orpc.issue.list.key(),
+				predicate: (query) => {
+					const listInput = parseIssueListQueryInput(query.queryKey);
+
+					return (
+						listInput?.workspaceId === workspaceId &&
+						listInput.teamId === _teamId
+					);
+				},
+			});
 		};
 
 		const invalidateCycleMetrics = (cycleId?: string | null) => {
@@ -142,12 +206,13 @@ export function createIssuesFeature({
 		};
 
 		const getCachedIssue = (issueId: string) => {
-			for (const input of listInputs) {
-				const issues = queryClient.getQueryData<Outputs["issue"]["list"]>(
-					issueQueryKeys.issueList(input),
-				);
-				const issue = issues?.find((candidate) => candidate.id === issueId);
-				if (issue) return issue;
+			// Search all cached list variants (including issueTypeId-filtered ones)
+			const allLists = queryClient.getQueriesData<Outputs["issue"]["list"]>({
+				queryKey: orpc.issue.list.key(),
+			});
+			for (const [, data] of allLists) {
+				const found = data?.find((candidate) => candidate.id === issueId);
+				if (found) return found;
 			}
 		};
 
@@ -346,8 +411,60 @@ export function createIssuesFeature({
 			});
 		};
 
+		const updateIssueType = async ({
+			id,
+			workspaceId: issueWorkspaceId,
+			issueTypeId,
+		}: {
+			id: string;
+			workspaceId: string;
+			issueTypeId: string;
+		}): Promise<UpdateIssueTypeResult> => {
+			try {
+				await updateIssue.mutateAsync({
+					id,
+					workspaceId: issueWorkspaceId,
+					issueTypeId,
+				});
+				return { ok: true };
+			} catch (err) {
+				if (!(err instanceof ORPCError) || !err.defined) throw err;
+
+				if (err.code === "ISSUE_TYPE_STATUS_REQUIRED") {
+					const allowed = await queryClient.fetchQuery(
+						orpc.issueType.listAllowedStatuses.queryOptions({
+							input: {
+								workspaceId: issueWorkspaceId,
+								issueTypeId,
+								teamId: _teamId ?? undefined,
+							},
+						}),
+					);
+					const allStatuses = await queryClient.fetchQuery(
+						orpc.issue.status.list.queryOptions({
+							input: { id: issueWorkspaceId },
+						}),
+					);
+					const compatibleStatuses =
+						allowed.length === 0
+							? allStatuses
+							: allStatuses.filter((s) =>
+									allowed.some((a) => a.statusId === s.id),
+								);
+					return {
+						ok: false,
+						reason: "STATUS_REQUIRED",
+						compatibleStatuses,
+					};
+				}
+
+				throw err;
+			}
+		};
+
 		const issueActions: IssueActions = {
 			update: updateIssue.mutateAsync,
+			updateIssueType,
 			updatePriority: updateIssuePriority.mutateAsync,
 			updateAssignee: updateIssueAssignee.mutateAsync,
 			updateCycle: updateIssueCycle,
@@ -371,6 +488,234 @@ export function createIssuesFeature({
 			labelActions,
 			subIssueActions,
 		};
+	}
+
+	function useIssueTypeMutations({
+		workspaceId,
+		teamId,
+	}: IssueTypeMutationParams) {
+		const queryClient = useQueryClient();
+
+		const matchesTeamScope = (queryTeamId?: string) =>
+			teamId === undefined ||
+			teamId === null ||
+			queryTeamId === undefined ||
+			queryTeamId === teamId;
+
+		const invalidateIssueTypes = () => {
+			queryClient.invalidateQueries({
+				queryKey: issueTypeQueryKeys.all(),
+				predicate: (query) => {
+					const input = parseQueryInput(
+						query.queryKey,
+						issueTypeListQueryInputSchema,
+					);
+					return (
+						input?.workspaceId === workspaceId && matchesTeamScope(input.teamId)
+					);
+				},
+			});
+		};
+
+		const invalidateIssueListsAndSearch = () => {
+			queryClient.invalidateQueries({
+				queryKey: orpc.issue.list.key(),
+				predicate: (query) => {
+					const input = parseIssueListQueryInput(query.queryKey);
+					return (
+						input?.workspaceId === workspaceId && matchesTeamScope(input.teamId)
+					);
+				},
+			});
+			queryClient.invalidateQueries({
+				queryKey: orpc.issue.search.key(),
+				predicate: (query) => {
+					const input = parseQueryInput(
+						query.queryKey,
+						issueSearchQueryInputSchema,
+					);
+					return (
+						input?.workspaceId === workspaceId &&
+						matchesTeamScope(input.filters?.teamId)
+					);
+				},
+			});
+		};
+
+		const invalidateIssueDetailsAndActivity = () => {
+			queryClient.invalidateQueries({
+				queryKey: orpc.issue.get.key(),
+				predicate: (query) => {
+					const input = parseQueryInput(
+						query.queryKey,
+						workspaceScopedQueryInputSchema,
+					);
+					return input?.workspaceId === workspaceId;
+				},
+			});
+			queryClient.invalidateQueries({
+				queryKey: orpc.issue.activity.list.key(),
+				predicate: (query) => {
+					const input = parseQueryInput(
+						query.queryKey,
+						workspaceScopedQueryInputSchema,
+					);
+					return input?.workspaceId === workspaceId;
+				},
+			});
+		};
+
+		const invalidateCycleMetrics = () => {
+			queryClient.invalidateQueries({
+				queryKey: orpc.cycle.metrics.key(),
+				predicate: (query) => {
+					const input = parseQueryInput(
+						query.queryKey,
+						workspaceScopedQueryInputSchema,
+					);
+					return input?.workspaceId === workspaceId;
+				},
+			});
+		};
+
+		const invalidateSettingsMetadata = () => {
+			invalidateIssueTypes();
+		};
+
+		const createIssueType = useMutation(
+			orpc.issueType.create.mutationOptions({
+				onSuccess: () => {
+					invalidateSettingsMetadata();
+					invalidateIssueListsAndSearch();
+					notify?.success("Issue type created");
+				},
+				onError: () => {
+					notify?.error("Failed to create issue type");
+				},
+			}),
+		);
+
+		const updateIssueType = useMutation(
+			orpc.issueType.update.mutationOptions({
+				onSuccess: () => {
+					invalidateSettingsMetadata();
+					invalidateIssueListsAndSearch();
+					invalidateIssueDetailsAndActivity();
+					notify?.success("Issue type updated");
+				},
+				onError: () => {
+					notify?.error("Failed to update issue type");
+				},
+			}),
+		);
+
+		const archiveIssueType = useMutation(
+			orpc.issueType.archive.mutationOptions({
+				onSuccess: () => {
+					invalidateSettingsMetadata();
+					invalidateIssueListsAndSearch();
+					invalidateIssueDetailsAndActivity();
+					notify?.success("Issue type archived");
+				},
+				onError: () => {
+					notify?.error("Failed to archive issue type");
+				},
+			}),
+		);
+
+		const reassignAndArchiveIssueType = useMutation(
+			orpc.issueType.reassignAndArchive.mutationOptions({
+				onSuccess: () => {
+					invalidateSettingsMetadata();
+					invalidateIssueListsAndSearch();
+					invalidateIssueDetailsAndActivity();
+					invalidateCycleMetrics();
+					notify?.success("Issue type archived and issues reassigned");
+				},
+				onError: () => {
+					notify?.error("Failed to reassign and archive issue type");
+				},
+			}),
+		);
+
+		const reorderIssueTypes = useMutation(
+			orpc.issueType.reorder.mutationOptions({
+				onSuccess: () => {
+					invalidateSettingsMetadata();
+					invalidateIssueListsAndSearch();
+					notify?.success("Issue types reordered");
+				},
+				onError: () => {
+					notify?.error("Failed to reorder issue types");
+				},
+			}),
+		);
+
+		const setDefaultIssueType = useMutation(
+			orpc.issueType.setDefault.mutationOptions({
+				onSuccess: () => {
+					invalidateSettingsMetadata();
+					invalidateIssueListsAndSearch();
+					notify?.success("Default issue type set");
+				},
+				onError: () => {
+					notify?.error("Failed to set default issue type");
+				},
+			}),
+		);
+
+		const hideIssueTypeForTeam = useMutation(
+			orpc.issueType.hideForTeam.mutationOptions({
+				onSuccess: () => {
+					invalidateSettingsMetadata();
+					invalidateIssueListsAndSearch();
+					notify?.success("Issue type hidden for team");
+				},
+				onError: () => {
+					notify?.error("Failed to hide issue type for team");
+				},
+			}),
+		);
+
+		const replaceIssueTypeForTeam = useMutation(
+			orpc.issueType.replaceForTeam.mutationOptions({
+				onSuccess: () => {
+					invalidateSettingsMetadata();
+					invalidateIssueListsAndSearch();
+					notify?.success("Issue type replaced for team");
+				},
+				onError: () => {
+					notify?.error("Failed to replace issue type for team");
+				},
+			}),
+		);
+
+		const restoreIssueTypeForTeam = useMutation(
+			orpc.issueType.restoreForTeam.mutationOptions({
+				onSuccess: () => {
+					invalidateSettingsMetadata();
+					invalidateIssueListsAndSearch();
+					notify?.success("Issue type restored for team");
+				},
+				onError: () => {
+					notify?.error("Failed to restore issue type for team");
+				},
+			}),
+		);
+
+		const issueTypeActions: IssueTypeActions = {
+			createIssueType: createIssueType.mutateAsync,
+			updateIssueType: updateIssueType.mutateAsync,
+			archiveIssueType: archiveIssueType.mutateAsync,
+			reassignAndArchiveIssueType: reassignAndArchiveIssueType.mutateAsync,
+			reorderIssueTypes: reorderIssueTypes.mutateAsync,
+			setDefaultIssueType: setDefaultIssueType.mutateAsync,
+			hideIssueTypeForTeam: hideIssueTypeForTeam.mutateAsync,
+			replaceIssueTypeForTeam: replaceIssueTypeForTeam.mutateAsync,
+			restoreIssueTypeForTeam: restoreIssueTypeForTeam.mutateAsync,
+		};
+
+		return { issueTypeActions };
 	}
 
 	function useSubIssueSearch({
@@ -432,17 +777,13 @@ export function createIssuesFeature({
 			const abortController = new AbortController();
 
 			function getCachedLiveIssue(issueId: string) {
-				for (const filter of ISSUE_ARCHIVED_FILTERS) {
-					const input = normalizeTeamIssuesInput({
-						workspaceId,
-						teamId,
-						archivedFilter: filter,
-					});
-					const issues = queryClient.getQueryData<Outputs["issue"]["list"]>(
-						issueQueryKeys.issueList(input),
-					);
-					const issue = issues?.find((candidate) => candidate.id === issueId);
-					if (issue) return issue;
+				// Search all cached list variants, including issueTypeId-filtered ones
+				const allLists = queryClient.getQueriesData<Outputs["issue"]["list"]>({
+					queryKey: orpc.issue.list.key(),
+				});
+				for (const [, data] of allLists) {
+					const found = data?.find((candidate) => candidate.id === issueId);
+					if (found) return found;
 				}
 			}
 
@@ -494,28 +835,46 @@ export function createIssuesFeature({
 							}
 						}
 
-						for (const filter of ISSUE_ARCHIVED_FILTERS) {
-							const filteredListInput = normalizeTeamIssuesInput({
-								workspaceId,
-								teamId,
-								archivedFilter: filter,
-							});
+						// Update all cached list variants in-place (including issueTypeId-filtered
+						// ones), so that type-filtered views receive live updates correctly.
+						const allCachedLists = queryClient.getQueriesData<
+							Outputs["issue"]["list"]
+						>({ queryKey: orpc.issue.list.key() });
+
+						for (const [cachedKey] of allCachedLists) {
+							const listInput = parseIssueListQueryInput(cachedKey);
+							if (!listInput) continue;
+							// Only update cache entries that belong to this live-update
+							// subscription's workspace/team context; skip foreign lists.
+							if (
+								listInput.workspaceId !== workspaceId ||
+								listInput.teamId !== teamId
+							)
+								continue;
 
 							queryClient.setQueryData<Outputs["issue"]["list"]>(
-								issueQueryKeys.issueList(filteredListInput),
+								cachedKey,
 								(oldData) => {
 									if (!oldData) return oldData;
 
 									if (event.type === "create") {
-										return isIssueVisibleForArchivedFilter(event.issue, filter)
-											? [...oldData, event.issue]
-											: oldData;
+										const visible =
+											isIssueVisibleForArchivedFilter(
+												event.issue,
+												listInput.archivedFilter,
+											) &&
+											(listInput.issueTypeId === undefined ||
+												event.issue.issueTypeId === listInput.issueTypeId);
+										return visible ? [...oldData, event.issue] : oldData;
 									}
 									if (event.type === "update") {
-										const visible = isIssueVisibleForArchivedFilter(
-											event.issue,
-											filter,
-										);
+										const visible =
+											isIssueVisibleForArchivedFilter(
+												event.issue,
+												listInput.archivedFilter,
+											) &&
+											(listInput.issueTypeId === undefined ||
+												event.issue.issueTypeId === listInput.issueTypeId);
 										const hasIssue = oldData.some(
 											(issue) => issue.id === event.issue.id,
 										);
@@ -557,7 +916,9 @@ export function createIssuesFeature({
 	return {
 		issueQueries,
 		issueQueryKeys,
+		issueTypeQueryKeys,
 		useIssueMutations,
+		useIssueTypeMutations,
 		useSubIssueSearch,
 		useIssueLiveUpdates,
 	};

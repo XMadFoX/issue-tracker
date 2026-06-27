@@ -17,10 +17,29 @@ export type IssueActivityList = Outputs["issue"]["activity"]["list"];
 export type IssueSearchResult = Outputs["issue"]["search"]["issues"][number];
 export type CycleList = Outputs["cycle"]["list"];
 
+export type IssueType = Outputs["issueType"]["list"][number];
+export type IssueTypeList = Outputs["issueType"]["list"];
+export type IssueTypeListInput = Inputs["issueType"]["list"];
+export type IssueTypeAllowedStatusListInput =
+	Inputs["issueType"]["listAllowedStatuses"];
+export type IssueTypeCreateInput = Inputs["issueType"]["create"];
+export type IssueTypeUpdateInput = Inputs["issueType"]["update"];
+export type IssueTypeArchiveInput = Inputs["issueType"]["archive"];
+export type IssueTypeReassignAndArchiveInput =
+	Inputs["issueType"]["reassignAndArchive"];
+export type IssueTypeReorderInput = Inputs["issueType"]["reorder"];
+export type IssueTypeSetDefaultInput = Inputs["issueType"]["setDefault"];
+export type IssueTypeHideForTeamInput = Inputs["issueType"]["hideForTeam"];
+export type IssueTypeReplaceForTeamInput =
+	Inputs["issueType"]["replaceForTeam"];
+export type IssueTypeRestoreForTeamInput =
+	Inputs["issueType"]["restoreForTeam"];
+
 export type TeamIssuesInput = {
 	workspaceId: string;
 	teamId: string;
 	archivedFilter?: Inputs["issue"]["list"]["archivedFilter"];
+	issueTypeId?: Inputs["issue"]["list"]["issueTypeId"];
 };
 
 export type IssueArchivedFilter = NonNullable<
@@ -45,11 +64,13 @@ export function normalizeTeamIssuesInput({
 	workspaceId,
 	teamId,
 	archivedFilter,
+	issueTypeId,
 }: TeamIssuesInput): NormalizedTeamIssuesInput {
 	return {
 		workspaceId,
 		teamId,
 		archivedFilter: archivedFilter ?? DEFAULT_ARCHIVED_FILTER,
+		...(issueTypeId !== undefined ? { issueTypeId } : {}),
 	};
 }
 
@@ -75,10 +96,23 @@ export type IssueCycleUpdateInput = {
 	cycleId: string | null;
 };
 
+export type UpdateIssueTypeResult =
+	| { ok: true }
+	| {
+			ok: false;
+			reason: "STATUS_REQUIRED";
+			compatibleStatuses: Outputs["issue"]["status"]["list"];
+	  };
+
 export type IssueActions = {
 	update: (
 		input: Inputs["issue"]["update"],
 	) => Promise<Outputs["issue"]["update"]>;
+	updateIssueType: (input: {
+		id: string;
+		workspaceId: string;
+		issueTypeId: string;
+	}) => Promise<UpdateIssueTypeResult>;
 	updatePriority: (
 		input: Inputs["issue"]["updatePriority"],
 	) => Promise<Outputs["issue"]["updatePriority"]>;
@@ -95,6 +129,36 @@ export type LabelActions = {
 	deleteLabels: (
 		input: Inputs["issue"]["labels"]["bulkDelete"],
 	) => Promise<void>;
+};
+
+export type IssueTypeActions = {
+	createIssueType: (
+		input: IssueTypeCreateInput,
+	) => Promise<Outputs["issueType"]["create"]>;
+	updateIssueType: (
+		input: IssueTypeUpdateInput,
+	) => Promise<Outputs["issueType"]["update"]>;
+	archiveIssueType: (
+		input: IssueTypeArchiveInput,
+	) => Promise<Outputs["issueType"]["archive"]>;
+	reassignAndArchiveIssueType: (
+		input: IssueTypeReassignAndArchiveInput,
+	) => Promise<Outputs["issueType"]["reassignAndArchive"]>;
+	reorderIssueTypes: (
+		input: IssueTypeReorderInput,
+	) => Promise<Outputs["issueType"]["reorder"]>;
+	setDefaultIssueType: (
+		input: IssueTypeSetDefaultInput,
+	) => Promise<Outputs["issueType"]["setDefault"]>;
+	hideIssueTypeForTeam: (
+		input: IssueTypeHideForTeamInput,
+	) => Promise<Outputs["issueType"]["hideForTeam"]>;
+	replaceIssueTypeForTeam: (
+		input: IssueTypeReplaceForTeamInput,
+	) => Promise<Outputs["issueType"]["replaceForTeam"]>;
+	restoreIssueTypeForTeam: (
+		input: IssueTypeRestoreForTeamInput,
+	) => Promise<Outputs["issueType"]["restoreForTeam"]>;
 };
 
 export type SubIssueSearchState = {

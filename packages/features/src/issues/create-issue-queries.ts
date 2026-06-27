@@ -1,11 +1,22 @@
 import type {
 	IssueDetailInput,
 	IssueSearchInput,
+	IssueTypeAllowedStatusListInput,
+	IssueTypeListInput,
 	PrismOrpc,
 	TeamBySlugInput,
 	TeamIssuesInput,
 } from "./types";
 import { normalizeTeamIssuesInput } from "./types";
+
+function normalizeIssueTypeListInput(
+	input: IssueTypeListInput,
+): IssueTypeListInput {
+	return {
+		...input,
+		includeArchived: input.includeArchived ?? false,
+	};
+}
 
 export function createIssueQueries(orpc: PrismOrpc) {
 	const issueQueries = {
@@ -43,6 +54,12 @@ export function createIssueQueries(orpc: PrismOrpc) {
 			orpc.issue.activity.list.queryOptions({
 				input: { workspaceId, issueId },
 			}),
+		issueTypes: (input: IssueTypeListInput) =>
+			orpc.issueType.list.queryOptions({
+				input: normalizeIssueTypeListInput(input),
+			}),
+		issueTypeAllowedStatuses: (input: IssueTypeAllowedStatusListInput) =>
+			orpc.issueType.listAllowedStatuses.queryOptions({ input }),
 		subIssueSearch: ({ workspaceId, teamId, query }: IssueSearchInput) =>
 			orpc.issue.search.queryOptions({
 				input: {
@@ -72,5 +89,13 @@ export function createIssueQueries(orpc: PrismOrpc) {
 			orpc.issue.activity.list.queryKey({ input: { workspaceId, issueId } }),
 	};
 
-	return { issueQueries, issueQueryKeys };
+	const issueTypeQueryKeys = {
+		issueTypes: (input: IssueTypeListInput) =>
+			orpc.issueType.list.queryKey({
+				input: normalizeIssueTypeListInput(input),
+			}),
+		all: () => orpc.issueType.list.key(),
+	};
+
+	return { issueQueries, issueQueryKeys, issueTypeQueryKeys };
 }
