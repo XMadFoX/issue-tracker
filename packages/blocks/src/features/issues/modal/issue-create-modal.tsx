@@ -19,6 +19,10 @@ type IssueCreateModalProps = {
 	teamId: string;
 	priorities: Outputs["priority"]["list"];
 	statuses: Outputs["issue"]["status"]["list"];
+	issueTypes?: Outputs["issueType"]["list"];
+	allowedStatusesByIssueTypeId?: ComponentProps<
+		typeof IssueCreateForm
+	>["allowedStatusesByIssueTypeId"];
 	assignees?: Outputs["teamMembership"]["list"];
 	labels?: Outputs["label"]["list"];
 	onSubmit: (issue: z.input<typeof issueCreateSchema>) => Promise<SubmitResult>;
@@ -27,6 +31,9 @@ type IssueCreateModalProps = {
 	description?: string;
 	className?: string;
 	initialStatusId?: ComponentProps<typeof IssueCreateForm>["initialStatusId"];
+	initialIssueTypeId?: ComponentProps<
+		typeof IssueCreateForm
+	>["initialIssueTypeId"];
 	initialParentIssueId?: ComponentProps<
 		typeof IssueCreateForm
 	>["initialParentIssueId"];
@@ -41,6 +48,8 @@ export function IssueCreateModal({
 	teamId,
 	priorities,
 	statuses,
+	issueTypes,
+	allowedStatusesByIssueTypeId,
 	assignees,
 	labels,
 	onSubmit,
@@ -49,6 +58,7 @@ export function IssueCreateModal({
 	description = "Fill in the details below.",
 	className,
 	initialStatusId,
+	initialIssueTypeId,
 	initialParentIssueId,
 	initialTitle,
 	initialDescription,
@@ -71,6 +81,8 @@ export function IssueCreateModal({
 					teamId={teamId}
 					priorities={priorities}
 					statuses={statuses}
+					issueTypes={issueTypes}
+					allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 					assignees={assignees}
 					labels={labels}
 					onSubmit={async (issue) => {
@@ -81,6 +93,7 @@ export function IssueCreateModal({
 						return res;
 					}}
 					initialStatusId={initialStatusId}
+					initialIssueTypeId={initialIssueTypeId}
 					initialParentIssueId={initialParentIssueId}
 					initialTitle={initialTitle}
 					initialDescription={initialDescription}

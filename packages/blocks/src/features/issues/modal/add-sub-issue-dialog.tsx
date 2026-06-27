@@ -17,6 +17,8 @@ import type {
 	IssueDetailData,
 	IssueSearchResult,
 	IssueStatusList,
+	IssueTypeAllowedStatusIdsByType,
+	IssueTypeList,
 	LabelList,
 	PriorityList,
 	SubIssueSearchState,
@@ -29,6 +31,8 @@ type Props = {
 	teamId: string;
 	statuses: IssueStatusList;
 	priorities: PriorityList;
+	issueTypes?: IssueTypeList;
+	allowedStatusesByIssueTypeId?: IssueTypeAllowedStatusIdsByType;
 	labels: LabelList;
 	teamMembers: TeamMemberList;
 	search: SubIssueSearchState;
@@ -63,6 +67,8 @@ export function AddSubIssueDialog({
 	teamId,
 	statuses,
 	priorities,
+	issueTypes,
+	allowedStatusesByIssueTypeId,
 	labels,
 	teamMembers,
 	search,
@@ -194,9 +200,12 @@ export function AddSubIssueDialog({
 							teamId={teamId}
 							priorities={priorities}
 							statuses={statuses}
+							issueTypes={issueTypes}
+							allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 							assignees={teamMembers}
 							labels={labels}
 							initialStatusId={issue.statusId}
+							initialIssueTypeId={issue.issueTypeId ?? undefined}
 							initialParentIssueId={issue.id}
 							onSubmit={async (value) => {
 								const result = await onCreateSubIssue(value);

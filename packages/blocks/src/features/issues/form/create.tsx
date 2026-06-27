@@ -9,15 +9,20 @@ import {
 } from "@prism/ui/components/field";
 import { useAppForm } from "@prism/ui/components/form/form-hooks";
 import { cn } from "@prism/ui/lib/utils";
+import { useStore } from "@tanstack/react-form";
+import { useCallback, useEffect, useMemo } from "react";
 import type z from "zod";
 import { DescriptionEditor } from "@/components/description-editor";
 import { LabelMultiSelect } from "@/features/labels/components/label-multi-select";
+import type { IssueTypeAllowedStatusIdsByType } from "../types";
 
 type Props = {
 	workspaceId: string;
 	teamId: string;
 	priorities: Outputs["priority"]["list"];
 	statuses: Outputs["issue"]["status"]["list"];
+	issueTypes?: Outputs["issueType"]["list"];
+	allowedStatusesByIssueTypeId?: IssueTypeAllowedStatusIdsByType;
 	assignees?: Outputs["teamMembership"]["list"];
 	labels?: Outputs["label"]["list"];
 	onSubmit: (
@@ -25,6 +30,7 @@ type Props = {
 	) => Promise<{ success: true } | { error: unknown }>;
 	className?: string;
 	initialStatusId?: Outputs["issue"]["status"]["list"][0]["id"];
+	initialIssueTypeId?: z.input<typeof issueCreateSchema>["issueTypeId"];
 	initialParentIssueId?: z.input<typeof issueCreateSchema>["parentIssueId"];
 	initialTitle?: string;
 	initialDescription?: z.input<typeof issueCreateSchema>["description"];
@@ -35,21 +41,60 @@ export function IssueCreateForm({
 	teamId,
 	statuses,
 	priorities,
+	issueTypes,
+	allowedStatusesByIssueTypeId,
 	assignees,
 	labels,
 	onSubmit,
 	className,
 	initialStatusId,
+	initialIssueTypeId,
 	initialParentIssueId = null,
 	initialTitle = "",
 	initialDescription = [],
 }: Props) {
+	const isStatusAllowedForIssueType = useCallback(
+		(issueTypeId: string | undefined, statusId: string | undefined) => {
+			if (!issueTypeId || !statusId) return true;
+
+			const allowedStatusIds = allowedStatusesByIssueTypeId?.[issueTypeId];
+			return (
+				allowedStatusIds === undefined ||
+				allowedStatusIds.length === 0 ||
+				allowedStatusIds.includes(statusId)
+			);
+		},
+		[allowedStatusesByIssueTypeId],
+	);
+
+	const initialStatusCompatibleIssueTypes = initialStatusId
+		? issueTypes?.filter((type) =>
+				isStatusAllowedForIssueType(type.id, initialStatusId),
+			)
+		: issueTypes;
+	const requestedIssueTypeId =
+		initialIssueTypeId ?? issueTypes?.find((t) => t.isDefault)?.id;
+	const defaultIssueTypeId = isStatusAllowedForIssueType(
+		requestedIssueTypeId,
+		initialStatusId,
+	)
+		? requestedIssueTypeId
+		: (initialStatusCompatibleIssueTypes?.find((type) => type.isDefault)?.id ??
+			initialStatusCompatibleIssueTypes?.[0]?.id);
+	const defaultStatusId = isStatusAllowedForIssueType(
+		defaultIssueTypeId,
+		initialStatusId,
+	)
+		? initialStatusId
+		: undefined;
+
 	const defaultValues: z.input<typeof issueCreateSchema> = {
 		title: initialTitle,
 		description: initialDescription ?? [],
 		workspaceId: workspaceId,
 		teamId: teamId,
-		statusId: initialStatusId ?? statuses[0]?.id ?? "",
+		statusId: defaultStatusId,
+		issueTypeId: defaultIssueTypeId,
 		priorityId: undefined,
 		assigneeId: undefined,
 		labelIds: [],
@@ -73,6 +118,47 @@ export function IssueCreateForm({
 			}
 		},
 	});
+
+	const selectedIssueTypeId = useStore(
+		form.store,
+		(state) => state.values.issueTypeId,
+	);
+	const selectedStatusId = useStore(
+		form.store,
+		(state) => state.values.statusId,
+	);
+	const allowedStatuses = useMemo(
+		() =>
+			selectedIssueTypeId
+				? statuses.filter((status) =>
+						isStatusAllowedForIssueType(selectedIssueTypeId, status.id),
+					)
+				: statuses,
+		[statuses, selectedIssueTypeId, isStatusAllowedForIssueType],
+	);
+	const compatibleIssueTypes = useMemo(
+		() =>
+			selectedStatusId
+				? issueTypes?.filter((type) =>
+						isStatusAllowedForIssueType(type.id, selectedStatusId),
+					)
+				: issueTypes,
+		[issueTypes, selectedStatusId, isStatusAllowedForIssueType],
+	);
+
+	useEffect(() => {
+		if (
+			selectedStatusId &&
+			!isStatusAllowedForIssueType(selectedIssueTypeId, selectedStatusId)
+		) {
+			form.setFieldValue("statusId", undefined);
+		}
+	}, [
+		form,
+		selectedIssueTypeId,
+		selectedStatusId,
+		isStatusAllowedForIssueType,
+	]);
 
 	return (
 		<form
@@ -116,12 +202,25 @@ export function IssueCreateForm({
 					<field.Select
 						label="Status"
 						placeholder="Select a status"
-						items={statuses ?? []}
+						items={allowedStatuses}
 						getItemValue={(status) => status.id}
 						getItemLabel={(status) => status.name}
 					/>
 				)}
 			</form.AppField>
+			{issueTypes && issueTypes.length > 0 ? (
+				<form.AppField name="issueTypeId">
+					{(field) => (
+						<field.Select
+							label="Type"
+							placeholder="Select a type"
+							items={compatibleIssueTypes ?? []}
+							getItemValue={(type) => type.id}
+							getItemLabel={(type) => `${type.icon} ${type.name}`}
+						/>
+					)}
+				</form.AppField>
+			) : null}
 			<form.AppField name="priorityId">
 				{(field) => (
 					<field.Select
