@@ -17,6 +17,8 @@ import type {
 	IssueListItem,
 	IssueNavigation,
 	IssueStatusList,
+	IssueTypeAllowedStatusIdsByType,
+	IssueTypeList,
 	LabelList,
 	PriorityList,
 	SubIssueActions,
@@ -30,6 +32,8 @@ type Props = {
 	teamId: string;
 	statuses: IssueStatusList;
 	priorities: PriorityList;
+	issueTypes?: IssueTypeList;
+	allowedStatusesByIssueTypeId?: IssueTypeAllowedStatusIdsByType;
 	labels: LabelList;
 	teamMembers: TeamMemberList;
 	parentIssue?: IssueListItem | null;
@@ -45,6 +49,8 @@ export function IssueSubIssuesSection({
 	teamId,
 	statuses,
 	priorities,
+	issueTypes,
+	allowedStatusesByIssueTypeId,
 	labels,
 	teamMembers,
 	parentIssue,
@@ -75,6 +81,8 @@ export function IssueSubIssuesSection({
 						teamId={teamId}
 						statuses={statuses}
 						priorities={priorities}
+						issueTypes={issueTypes}
+						allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 						labels={labels}
 						teamMembers={teamMembers}
 						search={subIssueManager.search}
@@ -179,6 +187,8 @@ export function IssueSubIssuesSection({
 							teamId={teamId}
 							statuses={statuses}
 							priorities={priorities}
+							issueTypes={issueTypes}
+							allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 							labels={labels}
 							teamMembers={teamMembers}
 							search={subIssueManager.search}

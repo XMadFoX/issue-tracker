@@ -8,6 +8,8 @@ import type {
 	IssueListItem,
 	IssueNavigation,
 	IssueStatusList,
+	IssueTypeAllowedStatusIdsByType,
+	IssueTypeList,
 	LabelActions,
 	LabelList,
 	PriorityList,
@@ -26,6 +28,8 @@ type Props = {
 	activity?: IssueActivityList;
 	statuses: IssueStatusList;
 	priorities: PriorityList;
+	issueTypes: IssueTypeList;
+	allowedStatusesByIssueTypeId?: IssueTypeAllowedStatusIdsByType;
 	labels: LabelList;
 	cycles: CycleList;
 	teamMembers: TeamMemberList;
@@ -33,7 +37,11 @@ type Props = {
 	teamId: string;
 	issueActions: Pick<
 		IssueActions,
-		"update" | "updatePriority" | "updateAssignee" | "updateCycle"
+		| "update"
+		| "updateIssueType"
+		| "updatePriority"
+		| "updateAssignee"
+		| "updateCycle"
 	>;
 	labelActions: LabelActions;
 	parentIssue?: IssueListItem | null;
@@ -49,6 +57,8 @@ export function IssueDetail({
 	activity = [],
 	statuses,
 	priorities,
+	issueTypes,
+	allowedStatusesByIssueTypeId,
 	labels,
 	cycles,
 	teamMembers,
@@ -75,6 +85,7 @@ export function IssueDetail({
 				issue={issue}
 				statuses={statuses}
 				priorities={priorities}
+				issueTypes={issueTypes}
 				labels={labels}
 				cycles={cycles}
 				teamMembers={teamMembers}
@@ -95,6 +106,8 @@ export function IssueDetail({
 				teamId={teamId}
 				statuses={statuses}
 				priorities={priorities}
+				issueTypes={issueTypes}
+				allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 				labels={labels}
 				teamMembers={teamMembers}
 				parentIssue={parentIssue}

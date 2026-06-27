@@ -14,6 +14,8 @@ import type {
 	IssueListItem,
 	IssueNavigation,
 	IssueStatusList,
+	IssueTypeAllowedStatusIdsByType,
+	IssueTypeList,
 	LabelActions,
 	LabelList,
 	PriorityList,
@@ -29,6 +31,8 @@ type Props = {
 	onClose: () => void;
 	statuses: IssueStatusList;
 	priorities: PriorityList;
+	issueTypes: IssueTypeList;
+	allowedStatusesByIssueTypeId?: IssueTypeAllowedStatusIdsByType;
 	labels: LabelList;
 	cycles: CycleList;
 	teamMembers: TeamMemberList;
@@ -36,7 +40,11 @@ type Props = {
 	teamId: string;
 	issueActions: Pick<
 		IssueActions,
-		"update" | "updatePriority" | "updateAssignee" | "updateCycle"
+		| "update"
+		| "updateIssueType"
+		| "updatePriority"
+		| "updateAssignee"
+		| "updateCycle"
 	>;
 	labelActions: LabelActions;
 	parentIssue?: IssueListItem | null;
@@ -53,6 +61,8 @@ export function IssueDetailSheet({
 	onClose,
 	statuses,
 	priorities,
+	issueTypes,
+	allowedStatusesByIssueTypeId,
 	labels,
 	cycles,
 	teamMembers,
@@ -92,6 +102,8 @@ export function IssueDetailSheet({
 					activity={activity}
 					statuses={statuses}
 					priorities={priorities}
+					issueTypes={issueTypes}
+					allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 					labels={labels}
 					cycles={cycles}
 					teamMembers={teamMembers}
