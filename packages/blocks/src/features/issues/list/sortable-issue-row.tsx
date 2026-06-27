@@ -9,12 +9,15 @@ import { IssueCycleSelect } from "../components/issue-cycle-select";
 import { IssueEstimateSelect } from "../components/issue-estimate-select";
 import { IssueLabelSelect } from "../components/issue-label-select";
 import { IssuePrioritySelect } from "../components/issue-priority-select";
+import { IssueTypeCell } from "../components/issue-type-cell";
 import { SubIssuesPopover } from "../components/sub-issues-popover";
 import type {
 	CycleList,
 	IssueActions,
 	IssueListItem,
 	IssueNavigation,
+	IssueStatusList,
+	IssueTypeList,
 	LabelActions,
 	LabelList,
 	PriorityList,
@@ -25,12 +28,18 @@ type Props = {
 	issue: IssueListItem;
 	labels: LabelList;
 	priorities: PriorityList;
+	issueTypes: IssueTypeList;
+	statuses: IssueStatusList;
 	teamMembers: TeamMemberList;
 	cycles: CycleList;
 	workspaceId: string;
 	issueActions: Pick<
 		IssueActions,
-		"update" | "updatePriority" | "updateAssignee" | "updateCycle"
+		| "update"
+		| "updateIssueType"
+		| "updatePriority"
+		| "updateAssignee"
+		| "updateCycle"
 	>;
 	labelActions: LabelActions;
 	navigation?: IssueNavigation;
@@ -41,6 +50,8 @@ export function SortableIssueRow({
 	issue,
 	labels,
 	priorities,
+	issueTypes = [],
+	statuses = [],
 	teamMembers,
 	cycles,
 	workspaceId,
@@ -129,6 +140,21 @@ export function SortableIssueRow({
 						})
 					}
 				/>
+			</TableCell>
+			<TableCell>
+				{issueTypes.length > 0 ? (
+					<IssueTypeCell
+						issueId={issue.id}
+						workspaceId={workspaceId}
+						issueTypeId={issue.issueTypeId}
+						issueTypes={issueTypes}
+						statuses={statuses}
+						issueActions={issueActions}
+						triggerClassName="h-fit w-full cursor-pointer border bg-transparent px-2 py-1 text-sm shadow-none"
+					/>
+				) : (
+					<span className="text-muted-foreground">-</span>
+				)}
 			</TableCell>
 			<TableCell>
 				<IssuePrioritySelect

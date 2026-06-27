@@ -10,6 +10,8 @@ import type {
 	IssueListItem,
 	IssueNavigation,
 	IssueStatusList,
+	IssueTypeAllowedStatusIdsByType,
+	IssueTypeList,
 	LabelActions,
 	LabelList,
 	PriorityList,
@@ -45,19 +47,29 @@ type EmptyStatusDropZoneProps = Pick<
 	| "workspaceId"
 	| "priorities"
 	| "statuses"
+	| "issueTypes"
+	| "allowedStatusesByIssueTypeId"
+	| "initialIssueTypeId"
 	| "teamMembers"
 	| "labels"
 > & {
 	statusId: string;
+	/** Pre-selected status for the create form; may differ from statusId when
+	 *  the column's status is incompatible with the active type filter. */
+	initialStatusId: string | undefined;
 	onCreate: IssueActions["create"];
 };
 
 function EmptyStatusDropZone({
 	statusId,
+	initialStatusId,
 	workspaceId,
 	teamId,
 	priorities,
 	statuses,
+	issueTypes,
+	allowedStatusesByIssueTypeId,
+	initialIssueTypeId,
 	teamMembers,
 	labels,
 	onCreate,
@@ -86,11 +98,14 @@ function EmptyStatusDropZone({
 								teamId={teamId}
 								priorities={priorities}
 								statuses={statuses}
+								issueTypes={issueTypes}
+								allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 								assignees={teamMembers}
 								labels={labels}
 								trigger={AddIssueInlineButton()}
 								onSubmit={onCreate}
-								initialStatusId={statusId}
+								initialStatusId={initialStatusId}
+								initialIssueTypeId={initialIssueTypeId}
 							/>
 						</p>
 					</>
@@ -107,17 +122,42 @@ type Props = {
 	workspaceId: string;
 	teamId: string;
 	priorities: PriorityList;
+	issueTypes: IssueTypeList;
+	allowedStatusesByIssueTypeId?: IssueTypeAllowedStatusIdsByType;
+	initialIssueTypeId?: string;
 	labels: LabelList;
 	teamMembers: TeamMemberList;
 	cycles: CycleList;
 	issueActions: Pick<
 		IssueActions,
-		"create" | "update" | "updatePriority" | "updateAssignee" | "updateCycle"
+		| "create"
+		| "update"
+		| "updateIssueType"
+		| "updatePriority"
+		| "updateAssignee"
+		| "updateCycle"
 	>;
 	labelActions: LabelActions;
 	navigation?: IssueNavigation;
 	subIssuesByParentId: Map<string, Array<IssueListItem>>;
 };
+
+/**
+ * Returns false only when we have explicit allowed-status data showing this
+ * status is NOT in the allowed set for the given issue type.  When the map is
+ * absent or the type has an empty list (meaning "all allowed"), returns true.
+ */
+function isStatusCompatibleWithType(
+	statusId: string,
+	issueTypeId: string | undefined,
+	allowedStatusesByIssueTypeId: IssueTypeAllowedStatusIdsByType | undefined,
+): boolean {
+	if (!issueTypeId) return true;
+	const allowed = allowedStatusesByIssueTypeId?.[issueTypeId];
+	return (
+		allowed === undefined || allowed.length === 0 || allowed.includes(statusId)
+	);
+}
 
 export function IssueStatusSection({
 	status,
@@ -126,6 +166,9 @@ export function IssueStatusSection({
 	workspaceId,
 	teamId,
 	priorities,
+	issueTypes,
+	allowedStatusesByIssueTypeId,
+	initialIssueTypeId,
 	labels,
 	teamMembers,
 	cycles,
@@ -134,6 +177,17 @@ export function IssueStatusSection({
 	navigation,
 	subIssuesByParentId,
 }: Props) {
+	// When a type filter is active and this column's status is incompatible with
+	// that type, omit the status pre-fill so the form keeps the filtered type
+	// rather than silently switching to a different, compatible type.
+	const effectiveInitialStatusId = isStatusCompatibleWithType(
+		status.id,
+		initialIssueTypeId,
+		allowedStatusesByIssueTypeId,
+	)
+		? status.id
+		: undefined;
+
 	return (
 		<div className="space-y-4">
 			<div className="flex items-center gap-2 px-1">
@@ -152,11 +206,14 @@ export function IssueStatusSection({
 					teamId={teamId}
 					priorities={priorities}
 					statuses={statuses}
+					issueTypes={issueTypes}
+					allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 					assignees={teamMembers}
 					labels={labels}
 					trigger={CreateIssueButton()}
 					onSubmit={issueActions.create}
-					initialStatusId={status.id}
+					initialStatusId={effectiveInitialStatusId}
+					initialIssueTypeId={initialIssueTypeId}
 				/>
 			</div>
 
@@ -165,6 +222,8 @@ export function IssueStatusSection({
 					statusIssues={statusIssues}
 					labels={labels}
 					priorities={priorities}
+					issueTypes={issueTypes}
+					statuses={statuses}
 					teamMembers={teamMembers}
 					cycles={cycles}
 					workspaceId={workspaceId}
@@ -176,10 +235,14 @@ export function IssueStatusSection({
 			) : (
 				<EmptyStatusDropZone
 					statusId={status.id}
+					initialStatusId={effectiveInitialStatusId}
 					workspaceId={workspaceId}
 					teamId={teamId}
 					priorities={priorities}
 					statuses={statuses}
+					issueTypes={issueTypes}
+					allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
+					initialIssueTypeId={initialIssueTypeId}
 					teamMembers={teamMembers}
 					labels={labels}
 					onCreate={issueActions.create}

@@ -24,6 +24,8 @@ import type {
 	IssueListItem,
 	IssueNavigation,
 	IssueStatusList,
+	IssueTypeAllowedStatusIdsByType,
+	IssueTypeList,
 	LabelActions,
 	LabelList,
 	PriorityList,
@@ -38,6 +40,9 @@ type IssueListProps = {
 	issues: IssueListData;
 	statuses: IssueStatusList;
 	priorities: PriorityList;
+	issueTypes: IssueTypeList;
+	allowedStatusesByIssueTypeId?: IssueTypeAllowedStatusIdsByType;
+	initialIssueTypeId?: string;
 	labels: LabelList;
 	teamMembers: TeamMemberList;
 	cycles: CycleList;
@@ -47,6 +52,7 @@ type IssueListProps = {
 		IssueActions,
 		| "create"
 		| "update"
+		| "updateIssueType"
 		| "updatePriority"
 		| "updateAssignee"
 		| "updateCycle"
@@ -62,6 +68,9 @@ export function IssueList({
 	workspaceId,
 	teamId,
 	priorities,
+	issueTypes,
+	allowedStatusesByIssueTypeId,
+	initialIssueTypeId,
 	labels,
 	teamMembers,
 	cycles,
@@ -174,6 +183,9 @@ export function IssueList({
 						workspaceId={workspaceId}
 						teamId={teamId}
 						priorities={priorities}
+						issueTypes={issueTypes}
+						allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
+						initialIssueTypeId={initialIssueTypeId}
 						labels={labels}
 						teamMembers={teamMembers}
 						cycles={cycles}

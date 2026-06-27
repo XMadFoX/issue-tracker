@@ -16,6 +16,8 @@ import type {
 	IssueListData,
 	IssueListItem,
 	IssueNavigation,
+	IssueStatusList,
+	IssueTypeList,
 	LabelActions,
 	LabelList,
 	PriorityList,
@@ -27,12 +29,18 @@ type Props = {
 	statusIssues: IssueListData;
 	labels: LabelList;
 	priorities: PriorityList;
+	issueTypes: IssueTypeList;
+	statuses: IssueStatusList;
 	teamMembers: TeamMemberList;
 	cycles: CycleList;
 	workspaceId: string;
 	issueActions: Pick<
 		IssueActions,
-		"update" | "updatePriority" | "updateAssignee" | "updateCycle"
+		| "update"
+		| "updateIssueType"
+		| "updatePriority"
+		| "updateAssignee"
+		| "updateCycle"
 	>;
 	labelActions: LabelActions;
 	navigation?: IssueNavigation;
@@ -43,6 +51,8 @@ export function IssuesTable({
 	statusIssues,
 	labels,
 	priorities,
+	issueTypes,
+	statuses,
 	teamMembers,
 	cycles,
 	workspaceId,
@@ -66,6 +76,7 @@ export function IssuesTable({
 						<TableHead>Title</TableHead>
 						<TableHead className="w-[130px]">Sub-tasks</TableHead>
 						<TableHead>Cycle</TableHead>
+						<TableHead>Type</TableHead>
 						<TableHead>Priority</TableHead>
 						<TableHead className="w-[110px]">Estimate</TableHead>
 						<TableHead>Label</TableHead>
@@ -84,6 +95,8 @@ export function IssuesTable({
 								issue={issue}
 								labels={labels}
 								priorities={priorities}
+								issueTypes={issueTypes}
+								statuses={statuses}
 								teamMembers={teamMembers}
 								cycles={cycles}
 								workspaceId={workspaceId}
