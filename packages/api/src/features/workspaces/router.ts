@@ -1,3 +1,4 @@
+import { getLogger } from "@logtape/logtape";
 import { ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
@@ -9,6 +10,7 @@ import {
 } from "db/features/tracker/issue-statuses.schema";
 import {
 	team,
+	teamMembership,
 	workspace,
 	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
@@ -28,6 +30,7 @@ import {
 	workspaceGetBySlugSchema,
 	workspaceUpdateSchema,
 } from "./schema";
+const logger = getLogger(["prism-tracker", "api", "workspace"]);
 
 export const list = authedRouter.handler(async ({ context }) => {
 	const userWorkspaces = await db
@@ -130,7 +133,9 @@ export const create = authedRouter
 					lastSeenAt: new Date(),
 				});
 			} catch (e) {
-				console.error(e);
+				logger.error("Failed to create workspace membership: {error}", {
+					error: e,
+				});
 				throw new ORPCError("Failed to create workspace membership");
 			}
 
@@ -151,12 +156,31 @@ export const create = authedRouter
 				);
 			}
 
-			await ensureTeamBuiltInRoles({
+			const teamRoles = await ensureTeamBuiltInRoles({
 				executor: tx,
 				workspaceId: createdWorkspace.id,
 				teamId: defaultTeam.id,
 				createdBy: context.auth.session.userId,
 			});
+
+			// Add the creator as a member (lead) of the default team so they are
+			// available for issue assignment.
+			try {
+				await tx.insert(teamMembership).values({
+					id: createId(),
+					teamId: defaultTeam.id,
+					userId: context.auth.session.userId,
+					roleId: teamRoles.leadRoleId,
+					status: "active",
+					invitedBy: null,
+					joinedAt: new Date(),
+				});
+			} catch (e) {
+				logger.error("Failed to create default team membership: {error}", {
+					error: e,
+				});
+				throw new ORPCError("Failed to create default team membership");
+			}
 
 			return createdWorkspace;
 		});
