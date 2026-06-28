@@ -11,12 +11,9 @@ import ColorPicker from "@prism/ui/components/color-picker";
 import { EmojiPickerField } from "@prism/ui/components/emoji-picker-field";
 import { InlineEdit } from "@prism/ui/components/inline-edit";
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@prism/ui/components/select";
+	ScopeSelect,
+	type ScopeValue,
+} from "@prism/ui/components/scope-select";
 import {
 	Table,
 	TableBody,
@@ -54,8 +51,6 @@ import type {
 	SubmitResult,
 	Team,
 } from "../types";
-
-const WORKSPACE_SCOPE = "__workspace__";
 
 type Props = {
 	workspaceId: string;
@@ -276,8 +271,10 @@ export function IssueTypesView({
 		}
 	};
 
-	const scopeSelectValue =
-		scope.kind === "workspace" ? WORKSPACE_SCOPE : scope.teamId;
+	const scopeSelectValue: ScopeValue =
+		scope.kind === "workspace"
+			? { kind: "workspace" }
+			: { kind: "team", teamId: scope.teamId };
 
 	return (
 		<div className="w-full p-6">
@@ -297,28 +294,18 @@ export function IssueTypesView({
 								</CardDescription>
 							</div>
 							<div className="flex items-center gap-3">
-								<Select
+								<ScopeSelect
 									value={scopeSelectValue}
 									onValueChange={(value) =>
 										onScopeChange(
-											value && value !== WORKSPACE_SCOPE
-												? { kind: "team", teamId: value }
+											value.kind === "team"
+												? { kind: "team", teamId: value.teamId }
 												: { kind: "workspace" },
 										)
 									}
-								>
-									<SelectTrigger className="w-44">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value={WORKSPACE_SCOPE}>Workspace</SelectItem>
-										{teams.map((team) => (
-											<SelectItem key={team.id} value={team.id}>
-												{team.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+									teams={teams}
+									className="w-44"
+								/>
 								<IssueTypeCreateModal
 									workspaceId={workspaceId}
 									teamId={createTeamId}

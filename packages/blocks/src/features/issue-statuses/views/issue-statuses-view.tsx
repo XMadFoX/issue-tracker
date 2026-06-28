@@ -9,12 +9,9 @@ import {
 } from "@prism/ui/components/card";
 import { ConfirmActionDialog } from "@prism/ui/components/confirm-action-dialog";
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@prism/ui/components/select";
+	ScopeSelect,
+	type ScopeValue,
+} from "@prism/ui/components/scope-select";
 import {
 	ArrowDown,
 	ArrowLeft,
@@ -105,8 +102,10 @@ export function IssueStatusesView({
 		(status) => !knownGroupIds.has(status.statusGroupId),
 	);
 	const groupIds = orderedGroups.map((group) => group.id);
-	const scopeValue =
-		scope.kind === "workspace" ? "workspace" : `team:${scope.teamId}`;
+	const scopeValue: ScopeValue =
+		scope.kind === "workspace"
+			? { kind: "workspace" }
+			: { kind: "team", teamId: scope.teamId };
 	const moveStatus = async (status: IssueStatus, direction: -1 | 1) => {
 		const currentGroup = orderedStatuses.filter(
 			(item) => item.statusGroupId === status.statusGroupId,
@@ -144,29 +143,20 @@ export function IssueStatusesView({
 							</CardDescription>
 						</div>
 						<div className="flex flex-wrap items-center gap-2">
-							<Select
+							<ScopeSelect
 								value={scopeValue}
 								onValueChange={(value) => {
-									if (!value) return;
 									onScopeChange(
-										value === "workspace"
-											? { kind: "workspace" }
-											: { kind: "team", teamId: value.replace("team:", "") },
+										value.kind === "team"
+											? { kind: "team", teamId: value.teamId }
+											: { kind: "workspace" },
 									);
 								}}
-							>
-								<SelectTrigger className="w-56" aria-label="Workflow scope">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="workspace">Workspace default</SelectItem>
-									{teams.map((team) => (
-										<SelectItem key={team.id} value={`team:${team.id}`}>
-											{team.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
+								teams={teams}
+								workspaceLabel="Workspace default"
+								className="w-56"
+								aria-label="Workflow scope"
+							/>
 							<GroupEditorSheet
 								workspaceId={workspaceId}
 								onSubmit={onCreateGroup}

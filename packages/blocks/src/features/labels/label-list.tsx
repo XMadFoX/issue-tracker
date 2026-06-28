@@ -3,12 +3,9 @@ import { Button } from "@prism/ui/components/button";
 import ColorPicker from "@prism/ui/components/color-picker";
 import { InlineEdit } from "@prism/ui/components/inline-edit";
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@prism/ui/components/select";
+	ScopeSelect,
+	type ScopeValue,
+} from "@prism/ui/components/scope-select";
 import {
 	Table,
 	TableBody,
@@ -35,6 +32,16 @@ type UpdateLabel = Inputs["label"]["update"];
 type CreateLabel = Inputs["label"]["create"];
 type SubmitResult = { success: true } | { error: unknown };
 export type ScopeSelectorValue = "workspace" | "all" | TeamId;
+
+function toScopeValue(value: ScopeSelectorValue): ScopeValue {
+	if (value === "workspace") {
+		return { kind: "workspace" };
+	}
+	if (value === "all") {
+		return { kind: "all" };
+	}
+	return { kind: "team", teamId: value };
+}
 
 interface LabelListProps {
 	labels: Label[];
@@ -119,13 +126,8 @@ export function LabelList({
 	workspaceId,
 }: LabelListProps) {
 	const columns = useMemo(() => createColumns(updateLabel), [updateLabel]);
-	const scopeLabelByValue = useMemo(() => {
-		return new Map<string, string>([
-			["workspace", "Workspace"],
-			["all", "Workspace & all teams"],
-			...teams.map((team) => [team.id, team.name] as const),
-		]);
-	}, [teams]);
+
+	const scopeValue = toScopeValue(currentScopeValue);
 
 	const table = useReactTable({
 		data: labels,
@@ -158,25 +160,15 @@ export function LabelList({
 	return (
 		<div className="space-y-4 w-full">
 			<div className="flex items-center justify-between gap-4">
-				<Select
-					value={currentScopeValue}
-					onValueChange={(value) => onScopeChange(value as ScopeSelectorValue)}
-				>
-					<SelectTrigger className="w-[200px]">
-						<SelectValue placeholder="Scope">
-							{(value) => scopeLabelByValue.get(value) ?? value}
-						</SelectValue>
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value="workspace">Workspace</SelectItem>
-						<SelectItem value="all">Workspace & all teams</SelectItem>
-						{teams.map((team) => (
-							<SelectItem key={team.id} value={team.id}>
-								{team.name}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
+				<ScopeSelect
+					value={scopeValue}
+					onValueChange={(value) =>
+						onScopeChange(value.kind === "team" ? value.teamId : value.kind)
+					}
+					teams={teams}
+					includeAllTeams
+					className="w-[200px]"
+				/>
 
 				{createLabel && (
 					<LabelCreateModal
