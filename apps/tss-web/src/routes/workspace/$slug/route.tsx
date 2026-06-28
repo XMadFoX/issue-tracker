@@ -177,6 +177,18 @@ export function WorkspaceSidebar({
 								<SidebarMenuButton
 									render={
 										<Link
+											to="/workspace/$slug/settings/issue-types"
+											params={{ slug: workspace?.slug ?? "" }}
+										/>
+									}
+								>
+									<span>Issue types</span>
+								</SidebarMenuButton>
+							</SidebarMenuItem>
+							<SidebarMenuItem>
+								<SidebarMenuButton
+									render={
+										<Link
 											to="/workspace/$slug/settings/workflow"
 											params={{ slug: workspace?.slug ?? "" }}
 										/>

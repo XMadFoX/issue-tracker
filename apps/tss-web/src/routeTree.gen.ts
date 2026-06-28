@@ -22,6 +22,7 @@ import { Route as WorkspaceSlugSettingsRolesIndexRouteImport } from './routes/wo
 import { Route as WorkspaceSlugSettingsPrioritiesIndexRouteImport } from './routes/workspace/$slug/settings/priorities/index'
 import { Route as WorkspaceSlugSettingsMembersIndexRouteImport } from './routes/workspace/$slug/settings/members/index'
 import { Route as WorkspaceSlugSettingsLabelsIndexRouteImport } from './routes/workspace/$slug/settings/labels/index'
+import { Route as WorkspaceSlugSettingsIssueTypesIndexRouteImport } from './routes/workspace/$slug/settings/issue-types/index'
 import { Route as WorkspaceSlugTeamsTeamSlugIssuesRouteRouteImport } from './routes/workspace/$slug/teams/$teamSlug/issues/route'
 import { Route as WorkspaceSlugTeamsTeamSlugCyclesIndexRouteImport } from './routes/workspace/$slug/teams/$teamSlug/cycles/index'
 import { Route as WorkspaceSlugTeamsTeamSlugIssuesSearchTestRouteImport } from './routes/workspace/$slug/teams/$teamSlug/issues/search-test'
@@ -98,6 +99,12 @@ const WorkspaceSlugSettingsLabelsIndexRoute =
     path: '/settings/labels/',
     getParentRoute: () => WorkspaceSlugRouteRoute,
   } as any)
+const WorkspaceSlugSettingsIssueTypesIndexRoute =
+  WorkspaceSlugSettingsIssueTypesIndexRouteImport.update({
+    id: '/settings/issue-types/',
+    path: '/settings/issue-types/',
+    getParentRoute: () => WorkspaceSlugRouteRoute,
+  } as any)
 const WorkspaceSlugTeamsTeamSlugIssuesRouteRoute =
   WorkspaceSlugTeamsTeamSlugIssuesRouteRouteImport.update({
     id: '/teams/$teamSlug/issues',
@@ -139,6 +146,7 @@ export interface FileRoutesByFullPath {
   '/workspace/$slug/': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams/': typeof WorkspaceSlugTeamsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issues': typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren
+  '/workspace/$slug/settings/issue-types/': typeof WorkspaceSlugSettingsIssueTypesIndexRoute
   '/workspace/$slug/settings/labels/': typeof WorkspaceSlugSettingsLabelsIndexRoute
   '/workspace/$slug/settings/members/': typeof WorkspaceSlugSettingsMembersIndexRoute
   '/workspace/$slug/settings/priorities/': typeof WorkspaceSlugSettingsPrioritiesIndexRoute
@@ -158,6 +166,7 @@ export interface FileRoutesByTo {
   '/workspace/$slug': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams': typeof WorkspaceSlugTeamsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issues': typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren
+  '/workspace/$slug/settings/issue-types': typeof WorkspaceSlugSettingsIssueTypesIndexRoute
   '/workspace/$slug/settings/labels': typeof WorkspaceSlugSettingsLabelsIndexRoute
   '/workspace/$slug/settings/members': typeof WorkspaceSlugSettingsMembersIndexRoute
   '/workspace/$slug/settings/priorities': typeof WorkspaceSlugSettingsPrioritiesIndexRoute
@@ -179,6 +188,7 @@ export interface FileRoutesById {
   '/workspace/$slug/': typeof WorkspaceSlugIndexRoute
   '/workspace/$slug/teams/': typeof WorkspaceSlugTeamsIndexRoute
   '/workspace/$slug/teams/$teamSlug/issues': typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren
+  '/workspace/$slug/settings/issue-types/': typeof WorkspaceSlugSettingsIssueTypesIndexRoute
   '/workspace/$slug/settings/labels/': typeof WorkspaceSlugSettingsLabelsIndexRoute
   '/workspace/$slug/settings/members/': typeof WorkspaceSlugSettingsMembersIndexRoute
   '/workspace/$slug/settings/priorities/': typeof WorkspaceSlugSettingsPrioritiesIndexRoute
@@ -201,6 +211,7 @@ export interface FileRouteTypes {
     | '/workspace/$slug/'
     | '/workspace/$slug/teams/'
     | '/workspace/$slug/teams/$teamSlug/issues'
+    | '/workspace/$slug/settings/issue-types/'
     | '/workspace/$slug/settings/labels/'
     | '/workspace/$slug/settings/members/'
     | '/workspace/$slug/settings/priorities/'
@@ -220,6 +231,7 @@ export interface FileRouteTypes {
     | '/workspace/$slug'
     | '/workspace/$slug/teams'
     | '/workspace/$slug/teams/$teamSlug/issues'
+    | '/workspace/$slug/settings/issue-types'
     | '/workspace/$slug/settings/labels'
     | '/workspace/$slug/settings/members'
     | '/workspace/$slug/settings/priorities'
@@ -240,6 +252,7 @@ export interface FileRouteTypes {
     | '/workspace/$slug/'
     | '/workspace/$slug/teams/'
     | '/workspace/$slug/teams/$teamSlug/issues'
+    | '/workspace/$slug/settings/issue-types/'
     | '/workspace/$slug/settings/labels/'
     | '/workspace/$slug/settings/members/'
     | '/workspace/$slug/settings/priorities/'
@@ -353,6 +366,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceSlugSettingsLabelsIndexRouteImport
       parentRoute: typeof WorkspaceSlugRouteRoute
     }
+    '/workspace/$slug/settings/issue-types/': {
+      id: '/workspace/$slug/settings/issue-types/'
+      path: '/settings/issue-types'
+      fullPath: '/workspace/$slug/settings/issue-types/'
+      preLoaderRoute: typeof WorkspaceSlugSettingsIssueTypesIndexRouteImport
+      parentRoute: typeof WorkspaceSlugRouteRoute
+    }
     '/workspace/$slug/teams/$teamSlug/issues': {
       id: '/workspace/$slug/teams/$teamSlug/issues'
       path: '/teams/$teamSlug/issues'
@@ -413,6 +433,7 @@ interface WorkspaceSlugRouteRouteChildren {
   WorkspaceSlugIndexRoute: typeof WorkspaceSlugIndexRoute
   WorkspaceSlugTeamsIndexRoute: typeof WorkspaceSlugTeamsIndexRoute
   WorkspaceSlugTeamsTeamSlugIssuesRouteRoute: typeof WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren
+  WorkspaceSlugSettingsIssueTypesIndexRoute: typeof WorkspaceSlugSettingsIssueTypesIndexRoute
   WorkspaceSlugSettingsLabelsIndexRoute: typeof WorkspaceSlugSettingsLabelsIndexRoute
   WorkspaceSlugSettingsMembersIndexRoute: typeof WorkspaceSlugSettingsMembersIndexRoute
   WorkspaceSlugSettingsPrioritiesIndexRoute: typeof WorkspaceSlugSettingsPrioritiesIndexRoute
@@ -427,6 +448,8 @@ const WorkspaceSlugRouteRouteChildren: WorkspaceSlugRouteRouteChildren = {
   WorkspaceSlugTeamsIndexRoute: WorkspaceSlugTeamsIndexRoute,
   WorkspaceSlugTeamsTeamSlugIssuesRouteRoute:
     WorkspaceSlugTeamsTeamSlugIssuesRouteRouteWithChildren,
+  WorkspaceSlugSettingsIssueTypesIndexRoute:
+    WorkspaceSlugSettingsIssueTypesIndexRoute,
   WorkspaceSlugSettingsLabelsIndexRoute: WorkspaceSlugSettingsLabelsIndexRoute,
   WorkspaceSlugSettingsMembersIndexRoute:
     WorkspaceSlugSettingsMembersIndexRoute,
