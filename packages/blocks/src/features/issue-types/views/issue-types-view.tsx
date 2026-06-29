@@ -1,3 +1,18 @@
+import {
+	closestCenter,
+	DndContext,
+	type DragEndEvent,
+	KeyboardSensor,
+	PointerSensor,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import {
+	arrayMove,
+	SortableContext,
+	sortableKeyboardCoordinates,
+	verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { Badge } from "@prism/ui/components/badge";
 import { Button } from "@prism/ui/components/button";
 import {
@@ -7,9 +22,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@prism/ui/components/card";
-import ColorPicker from "@prism/ui/components/color-picker";
-import { EmojiPickerField } from "@prism/ui/components/emoji-picker-field";
-import { InlineEdit } from "@prism/ui/components/inline-edit";
 import {
 	ScopeSelect,
 	type ScopeValue,
@@ -22,17 +34,9 @@ import {
 	TableHeader,
 	TableRow,
 } from "@prism/ui/components/table";
-import { getRelativeTime } from "@prism/ui/lib/utils";
-import {
-	ArrowDown,
-	ArrowUp,
-	EyeOff,
-	Plus,
-	Replace,
-	Star,
-	Trash2,
-} from "lucide-react";
+import { Plus } from "lucide-react";
 import { useState } from "react";
+import { SortableIssueTypeRow } from "../lists/sortable-issue-type-row";
 import { IssueTypeArchiveDialog } from "../modals/issue-type-archive-dialog";
 import { IssueTypeCreateModal } from "../modals/issue-type-create-modal";
 import { IssueTypeReplaceDialog } from "../modals/issue-type-replace-dialog";
@@ -72,121 +76,6 @@ type Props = {
 	onRestoreForTeam: (input: IssueTypeRestoreForTeamInput) => Promise<void>;
 };
 
-type RowActionsProps = {
-	type: IssueType;
-	managed: boolean;
-	scope: IssueTypeScopeValue;
-	scopeIndex: number;
-	scopeCount: number;
-	workspaceId: string;
-	onMove: (id: string, direction: -1 | 1) => void;
-	onArchive: (type: IssueType) => void;
-	onHide: (input: IssueTypeHideForTeamInput) => void;
-	onReplaceStart: (type: IssueType) => void;
-};
-
-function RowActions({
-	type,
-	managed,
-	scope,
-	scopeIndex,
-	scopeCount,
-	workspaceId,
-	onMove,
-	onArchive,
-	onHide,
-	onReplaceStart,
-}: RowActionsProps) {
-	if (managed) {
-		return (
-			<>
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon-sm"
-					disabled={scopeIndex === 0}
-					onClick={() => onMove(type.id, -1)}
-					aria-label="Move up"
-				>
-					<ArrowUp className="size-4" />
-				</Button>
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon-sm"
-					disabled={scopeIndex === scopeCount - 1}
-					onClick={() => onMove(type.id, 1)}
-					aria-label="Move down"
-				>
-					<ArrowDown className="size-4" />
-				</Button>
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon-sm"
-					onClick={() => onArchive(type)}
-					aria-label="Archive type"
-				>
-					<Trash2 className="size-4" />
-				</Button>
-			</>
-		);
-	}
-
-	if (scope.kind === "team") {
-		const teamId = scope.teamId;
-		return (
-			<>
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon-sm"
-					onClick={() =>
-						onHide({ workspaceId, teamId, sourceIssueTypeId: type.id })
-					}
-					aria-label="Hide for team"
-					title="Hide for this team"
-				>
-					<EyeOff className="size-4" />
-				</Button>
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon-sm"
-					onClick={() => onReplaceStart(type)}
-					aria-label="Replace for team"
-					title="Replace for this team"
-				>
-					<Replace className="size-4" />
-				</Button>
-			</>
-		);
-	}
-
-	return null;
-}
-
-function moveWithinScope(
-	issueTypes: IssueType[],
-	id: string,
-	direction: -1 | 1,
-): { teamId: string | null; orderedIds: string[] } | null {
-	const row = issueTypes.find((type) => type.id === id);
-	if (!row) {
-		return null;
-	}
-	const scopeRows = issueTypes.filter((type) => type.teamId === row.teamId);
-	const currentIndex = scopeRows.findIndex((type) => type.id === id);
-	const targetIndex = currentIndex + direction;
-	if (targetIndex < 0 || targetIndex >= scopeRows.length) {
-		return null;
-	}
-	const orderedIds = scopeRows.map((type) => type.id);
-	const [moved] = orderedIds.splice(currentIndex, 1);
-	orderedIds.splice(targetIndex, 0, moved);
-	return { teamId: row.teamId, orderedIds };
-}
-
 export function IssueTypesView({
 	workspaceId,
 	teams,
@@ -221,15 +110,38 @@ export function IssueTypesView({
 		(type) => type.teamId === scopeTeamId && type.archivedAt === null,
 	);
 
-	const handleMove = async (id: string, direction: -1 | 1) => {
-		const result = moveWithinScope(issueTypes, id, direction);
-		if (!result) {
+	// Only show per-row scope badges when the list actually mixes scopes
+	// (e.g. team view shows inherited workspace types alongside team types).
+	const hasMixedScopes =
+		issueTypes.some((type) => type.teamId === null) &&
+		issueTypes.some((type) => type.teamId !== null);
+
+	const managedIds = issueTypes
+		.filter((type) => isManagedRow(type))
+		.map((type) => type.id);
+
+	const sensors = useSensors(
+		useSensor(PointerSensor),
+		useSensor(KeyboardSensor, {
+			coordinateGetter: sortableKeyboardCoordinates,
+		}),
+	);
+
+	const handleDragEnd = async (event: DragEndEvent) => {
+		const { active, over } = event;
+		if (!over || active.id === over.id) {
 			return;
 		}
+		const fromIndex = managedIds.indexOf(String(active.id));
+		const toIndex = managedIds.indexOf(String(over.id));
+		if (fromIndex === -1 || toIndex === -1) {
+			return;
+		}
+		const orderedIds = arrayMove(managedIds, fromIndex, toIndex);
 		await onReorderIssueTypes({
 			workspaceId,
-			teamId: result.teamId,
-			orderedIds: result.orderedIds,
+			teamId: scopeTeamId,
+			orderedIds,
 		});
 	};
 
@@ -304,7 +216,7 @@ export function IssueTypesView({
 										)
 									}
 									teams={teams}
-									className="w-44"
+									className="w-48"
 								/>
 								<IssueTypeCreateModal
 									workspaceId={workspaceId}
@@ -321,197 +233,62 @@ export function IssueTypesView({
 						</div>
 					</CardHeader>
 					<CardContent className="p-0">
-						<Table>
-							<TableHeader>
-								<TableRow className="hover:bg-transparent">
-									<TableHead className="w-[340px] px-6 py-3">Type</TableHead>
-									<TableHead className="px-6 py-3">Description</TableHead>
-									<TableHead className="w-24 px-6 py-3">Default</TableHead>
-									<TableHead className="w-30 px-6 text-right">
-										Updated
-									</TableHead>
-									<TableHead className="w-44 px-6 text-right">
-										Actions
-									</TableHead>
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{issueTypes.length > 0 ? (
-									issueTypes.map((type) => {
-										const managed = isManagedRow(type);
-										const scopeRows = issueTypes.filter(
-											(row) => row.teamId === type.teamId,
-										);
-										const scopeIndex = scopeRows.findIndex(
-											(row) => row.id === type.id,
-										);
-										return (
-											<TableRow key={type.id}>
-												<TableCell className="px-6 py-3">
-													<div className="flex items-center gap-3">
-														<EmojiPickerField
-															label=""
-															value={type.icon}
-															onChange={(icon) => {
-																if (!managed) {
-																	return;
-																}
-																void onUpdateIssueType({
-																	id: type.id,
-																	workspaceId,
-																	icon,
-																});
-															}}
-														/>
-														<ColorPicker
-															value={type.color ?? "#000000"}
-															onChange={(color) => {
-																if (!managed) {
-																	return;
-																}
-																void onUpdateIssueType({
-																	id: type.id,
-																	workspaceId,
-																	color,
-																});
-															}}
-															showControls={false}
-															trigger={
-																<div
-																	className="size-3.5 shrink-0 rounded-full border"
-																	style={{
-																		backgroundColor:
-																			type.color ?? "transparent",
-																	}}
-																	title="Edit color"
-																/>
-															}
-														/>
-														<div className="min-w-0 flex-1 space-y-0.5">
-															{managed ? (
-																<InlineEdit
-																	value={type.name}
-																	onSave={(name) =>
-																		void onUpdateIssueType({
-																			id: type.id,
-																			workspaceId,
-																			name,
-																		})
-																	}
-																	placeholder="Unnamed type"
-																/>
-															) : (
-																<span className="font-medium">{type.name}</span>
-															)}
-															<div className="flex items-center gap-2 text-xs text-muted-foreground">
-																{managed && type.isEditable ? (
-																	<InlineEdit
-																		value={type.key}
-																		onSave={(key) =>
-																			void onUpdateIssueType({
-																				id: type.id,
-																				workspaceId,
-																				key: key.trim().toLowerCase(),
-																			})
-																		}
-																		placeholder="key"
-																	/>
-																) : (
-																	<span>{type.key}</span>
-																)}
-																{type.teamId === null ? (
-																	<Badge variant="outline">Workspace</Badge>
-																) : (
-																	<Badge variant="outline">Team</Badge>
-																)}
-															</div>
-														</div>
-													</div>
-												</TableCell>
-												<TableCell className="max-w-lg px-6 py-3">
-													{managed ? (
-														<InlineEdit
-															value={type.description ?? ""}
-															onSave={(description) =>
-																void onUpdateIssueType({
-																	id: type.id,
-																	workspaceId,
-																	description: description.trim()
-																		? description
-																		: null,
-																})
-															}
-															multiline
-															placeholder="Add description..."
-														/>
-													) : (
-														<span className="text-sm text-muted-foreground">
-															{type.description ?? "—"}
-														</span>
-													)}
-												</TableCell>
-												<TableCell className="px-6 py-3">
-													{type.isDefault ? (
-														<Badge variant="secondary">
-															<Star className="size-3 fill-current" />
-															Default
-														</Badge>
-													) : null}
-													{!type.isDefault && managed ? (
-														<Button
-															type="button"
-															variant="ghost"
-															size="sm"
-															onClick={() =>
-																void onSetDefault({ id: type.id, workspaceId })
-															}
-														>
-															Set default
-														</Button>
-													) : null}
-													{!type.isDefault && !managed ? (
-														<span className="text-muted-foreground">—</span>
-													) : null}
-												</TableCell>
-												<TableCell className="px-6 py-3 text-right text-muted-foreground">
-													{getRelativeTime(type.updatedAt)}
-												</TableCell>
-												<TableCell className="px-6 py-3">
-													<div className="flex items-center justify-end gap-1">
-														<RowActions
-															type={type}
-															managed={managed}
-															scope={scope}
-															scopeIndex={scopeIndex}
-															scopeCount={scopeRows.length}
-															workspaceId={workspaceId}
-															onMove={(id, direction) =>
-																void handleMove(id, direction)
-															}
-															onArchive={setPendingArchive}
-															onHide={(input) => void onHideForTeam(input)}
-															onReplaceStart={setPendingReplace}
-														/>
-													</div>
-												</TableCell>
-											</TableRow>
-										);
-									})
-								) : (
-									<TableRow>
-										<TableCell colSpan={5} className="h-24 px-6 text-center">
-											<div className="space-y-2">
-												<p className="font-medium">No issue types yet.</p>
-												<p className="text-sm text-muted-foreground">
-													Create the first issue type to use it in issue forms
-													and detail views.
-												</p>
-											</div>
-										</TableCell>
+						<DndContext
+							sensors={sensors}
+							collisionDetection={closestCenter}
+							onDragEnd={(event) => void handleDragEnd(event)}
+						>
+							<Table>
+								<TableHeader>
+									<TableRow className="hover:bg-transparent">
+										<TableHead className="w-[40px] px-2 py-3" />
+										<TableHead className="w-[300px] px-2 py-3">Type</TableHead>
+										<TableHead className="px-6 py-3">Description</TableHead>
+										<TableHead className="w-24 px-6 py-3">Default</TableHead>
+										<TableHead className="w-30 px-6 text-right">
+											Updated
+										</TableHead>
+										<TableHead className="w-16 px-6 text-right" />
 									</TableRow>
-								)}
-							</TableBody>
-						</Table>
+								</TableHeader>
+								<TableBody>
+									{issueTypes.length > 0 ? (
+										<SortableContext
+											items={managedIds}
+											strategy={verticalListSortingStrategy}
+										>
+											{issueTypes.map((type) => (
+												<SortableIssueTypeRow
+													key={type.id}
+													type={type}
+													managed={isManagedRow(type)}
+													scope={scope}
+													showScopeBadge={hasMixedScopes}
+													workspaceId={workspaceId}
+													onUpdate={(input) => void onUpdateIssueType(input)}
+													onSetDefault={(input) => void onSetDefault(input)}
+													onArchive={setPendingArchive}
+													onHide={(input) => void onHideForTeam(input)}
+													onReplaceStart={setPendingReplace}
+												/>
+											))}
+										</SortableContext>
+									) : (
+										<TableRow>
+											<TableCell colSpan={6} className="h-24 px-6 text-center">
+												<div className="space-y-2">
+													<p className="font-medium">No issue types yet.</p>
+													<p className="text-sm text-muted-foreground">
+														Create the first issue type to use it in issue forms
+														and detail views.
+													</p>
+												</div>
+											</TableCell>
+										</TableRow>
+									)}
+								</TableBody>
+							</Table>
+						</DndContext>
 					</CardContent>
 				</Card>
 
