@@ -30,6 +30,7 @@ import {
 	workspaceGetBySlugSchema,
 	workspaceUpdateSchema,
 } from "./schema";
+
 const logger = getLogger(["prism-tracker", "api", "workspace"]);
 
 export const list = authedRouter.handler(async ({ context }) => {
@@ -186,7 +187,7 @@ export const create = authedRouter
 		});
 	});
 
-const commonErrors = { UNAUTHORIZED: {} };
+const commonErrors = { INVALID_CONFIRMATION: {}, UNAUTHORIZED: {} };
 const unauthorizedMessage = (action: "update" | "delete") =>
 	`You don't have permission to ${action} this workspace or the workspace doesn't exist`;
 
@@ -223,6 +224,19 @@ const deleteWorkspace = authedRouter
 			throw errors.UNAUTHORIZED({
 				message: unauthorizedMessage("delete"),
 			});
+
+		// Require a server-verified typed confirmation so authorized callers cannot
+		// delete a workspace by accidentally sending only a stale or wrong id.
+		const [workspaceToDelete] = await db
+			.select({ slug: workspace.slug })
+			.from(workspace)
+			.where(eq(workspace.id, input.id));
+
+		if (workspaceToDelete?.slug !== input.confirmationSlug) {
+			throw errors.INVALID_CONFIRMATION({
+				message: "Workspace confirmation slug does not match",
+			});
+		}
 
 		return await db.delete(workspace).where(eq(workspace.id, input.id));
 	});

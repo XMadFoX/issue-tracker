@@ -19,4 +19,6 @@ export const workspaceCreateSchema = workspaceInsertSchema.omit({ id: true });
 export const workspaceUpdateSchema = workspaceInsertSchema
 	.partial()
 	.required({ id: true });
-export const workspaceDeleteSchema = workspaceInsertSchema.pick({ id: true });
+export const workspaceDeleteSchema = workspaceInsertSchema
+	.pick({ id: true })
+	.extend({ confirmationSlug: workspaceInsertSchema.shape.slug });
