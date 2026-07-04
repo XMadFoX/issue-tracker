@@ -15,6 +15,8 @@ type Props = {
 	onChange: (issueTypeId: string) => Promise<unknown>;
 	triggerClassName?: string;
 	showBadge?: boolean;
+	disabledIssueTypeIds?: readonly string[];
+	disabledReason?: string;
 };
 
 export function IssueTypeSelect({
@@ -23,8 +25,11 @@ export function IssueTypeSelect({
 	onChange,
 	triggerClassName,
 	showBadge = false,
+	disabledIssueTypeIds = [],
+	disabledReason = "Not compatible with the current status",
 }: Props) {
 	const getType = (value: string) => issueTypes.find((t) => t.id === value);
+	const disabledIds = new Set(disabledIssueTypeIds);
 	const selected = issueTypeId ? getType(issueTypeId) : undefined;
 
 	return (
@@ -58,14 +63,22 @@ export function IssueTypeSelect({
 				</SelectValue>
 			</SelectTrigger>
 			<SelectContent>
-				{issueTypes.map((type) => (
-					<SelectItem key={type.id} value={type.id}>
-						<span className="flex items-center gap-2">
-							<span>{type.icon}</span>
-							{type.name}
-						</span>
-					</SelectItem>
-				))}
+				{issueTypes.map((type) => {
+					const disabled = disabledIds.has(type.id);
+					return (
+						<SelectItem key={type.id} value={type.id} disabled={disabled}>
+							<span className="flex items-center gap-2">
+								<span>{type.icon}</span>
+								<span>{type.name}</span>
+								{disabled ? (
+									<span className="text-muted-foreground text-xs">
+										({disabledReason})
+									</span>
+								) : null}
+							</span>
+						</SelectItem>
+					);
+				})}
 			</SelectContent>
 		</Select>
 	);

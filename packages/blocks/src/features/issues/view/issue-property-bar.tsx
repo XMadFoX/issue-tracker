@@ -28,6 +28,7 @@ import type {
 	IssueActions,
 	IssueDetailData,
 	IssueStatusList,
+	IssueTypeAllowedStatusIdsByType,
 	IssueTypeList,
 	LabelActions,
 	LabelList,
@@ -40,6 +41,7 @@ type Props = {
 	statuses: IssueStatusList;
 	priorities: PriorityList;
 	issueTypes: IssueTypeList;
+	allowedStatusesByIssueTypeId?: IssueTypeAllowedStatusIdsByType;
 	labels: LabelList;
 	cycles: CycleList;
 	teamMembers: TeamMemberList;
@@ -60,6 +62,7 @@ export function IssuePropertyBar({
 	statuses,
 	priorities,
 	issueTypes,
+	allowedStatusesByIssueTypeId,
 	labels,
 	cycles,
 	teamMembers,
@@ -76,6 +79,19 @@ export function IssuePropertyBar({
 	// The subset of statuses valid for the pending type (populated on demand).
 	const [dialogStatuses, setDialogStatuses] =
 		useState<IssueStatusList>(statuses);
+	const incompatibleTypeIds = issue.statusId
+		? issueTypes
+				.filter((type) => {
+					const allowed = allowedStatusesByIssueTypeId?.[type.id];
+					return allowed !== undefined && allowed.length > 0
+						? !allowed.includes(issue.statusId ?? "")
+						: false;
+				})
+				.map((type) => type.id)
+		: [];
+	const compatibleStatusIds = issue.issueTypeId
+		? allowedStatusesByIssueTypeId?.[issue.issueTypeId]
+		: undefined;
 
 	const handleTypeChange = async (newIssueTypeId: string) => {
 		try {
@@ -133,6 +149,8 @@ export function IssuePropertyBar({
 						issueTypes={issueTypes}
 						triggerClassName="h-fit w-fit cursor-pointer border bg-transparent px-2 py-1 text-sm shadow-none"
 						showBadge={true}
+						disabledIssueTypeIds={incompatibleTypeIds}
+						disabledReason="current status not allowed"
 						onChange={handleTypeChange}
 					/>
 				) : null}
@@ -172,11 +190,22 @@ export function IssuePropertyBar({
 						</SelectValue>
 					</SelectTrigger>
 					<SelectContent>
-						{statuses.map((status) => (
-							<SelectItem key={status.id} value={status.id}>
-								{status.name}
-							</SelectItem>
-						))}
+						{statuses.map((status) => {
+							const disabled =
+								compatibleStatusIds !== undefined &&
+								compatibleStatusIds.length > 0 &&
+								!compatibleStatusIds.includes(status.id);
+							return (
+								<SelectItem
+									key={status.id}
+									value={status.id}
+									disabled={disabled}
+								>
+									{status.name}
+									{disabled ? " (not allowed for type)" : ""}
+								</SelectItem>
+							);
+						})}
 					</SelectContent>
 				</Select>
 
@@ -232,8 +261,8 @@ export function IssuePropertyBar({
 					<DialogHeader>
 						<DialogTitle>Select a compatible status</DialogTitle>
 						<DialogDescription>
-							The selected issue type does not allow the current status. Please
-							choose a status to apply alongside the type change.
+							This issue type cannot be used with the issue's current status.
+							Choose one of the compatible statuses below to apply both changes.
 						</DialogDescription>
 					</DialogHeader>
 					<Select

@@ -224,6 +224,7 @@ export function IssueStatusSection({
 					priorities={priorities}
 					issueTypes={issueTypes}
 					statuses={statuses}
+					allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 					teamMembers={teamMembers}
 					cycles={cycles}
 					workspaceId={workspaceId}

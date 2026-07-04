@@ -17,6 +17,7 @@ import type {
 	IssueListItem,
 	IssueNavigation,
 	IssueStatusList,
+	IssueTypeAllowedStatusIdsByType,
 	IssueTypeList,
 	LabelActions,
 	LabelList,
@@ -31,6 +32,7 @@ type Props = {
 	priorities: PriorityList;
 	issueTypes: IssueTypeList;
 	statuses: IssueStatusList;
+	allowedStatusesByIssueTypeId?: IssueTypeAllowedStatusIdsByType;
 	teamMembers: TeamMemberList;
 	cycles: CycleList;
 	workspaceId: string;
@@ -53,6 +55,7 @@ export function IssuesTable({
 	priorities,
 	issueTypes,
 	statuses,
+	allowedStatusesByIssueTypeId,
 	teamMembers,
 	cycles,
 	workspaceId,
@@ -97,6 +100,7 @@ export function IssuesTable({
 								priorities={priorities}
 								issueTypes={issueTypes}
 								statuses={statuses}
+								allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 								teamMembers={teamMembers}
 								cycles={cycles}
 								workspaceId={workspaceId}

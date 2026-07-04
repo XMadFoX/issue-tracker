@@ -17,6 +17,7 @@ import type {
 	IssueListItem,
 	IssueNavigation,
 	IssueStatusList,
+	IssueTypeAllowedStatusIdsByType,
 	IssueTypeList,
 	LabelActions,
 	LabelList,
@@ -30,6 +31,7 @@ type Props = {
 	priorities: PriorityList;
 	issueTypes: IssueTypeList;
 	statuses: IssueStatusList;
+	allowedStatusesByIssueTypeId?: IssueTypeAllowedStatusIdsByType;
 	teamMembers: TeamMemberList;
 	cycles: CycleList;
 	workspaceId: string;
@@ -52,6 +54,7 @@ export function SortableIssueRow({
 	priorities,
 	issueTypes = [],
 	statuses = [],
+	allowedStatusesByIssueTypeId,
 	teamMembers,
 	cycles,
 	workspaceId,
@@ -147,8 +150,10 @@ export function SortableIssueRow({
 						issueId={issue.id}
 						workspaceId={workspaceId}
 						issueTypeId={issue.issueTypeId}
+						statusId={issue.statusId}
 						issueTypes={issueTypes}
 						statuses={statuses}
+						allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 						issueActions={issueActions}
 						triggerClassName="h-fit w-full cursor-pointer border bg-transparent px-2 py-1 text-sm shadow-none"
 					/>

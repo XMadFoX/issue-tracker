@@ -16,15 +16,22 @@ import {
 } from "@prism/ui/components/select";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { IssueActions, IssueStatusList, IssueTypeList } from "../types";
+import type {
+	IssueActions,
+	IssueStatusList,
+	IssueTypeAllowedStatusIdsByType,
+	IssueTypeList,
+} from "../types";
 import { IssueTypeSelect } from "./issue-type-select";
 
 type Props = {
 	issueId: string;
 	workspaceId: string;
 	issueTypeId: string | null | undefined;
+	statusId: string | null | undefined;
 	issueTypes: IssueTypeList;
 	statuses: IssueStatusList;
+	allowedStatusesByIssueTypeId?: IssueTypeAllowedStatusIdsByType;
 	issueActions: Pick<IssueActions, "update" | "updateIssueType">;
 	triggerClassName?: string;
 };
@@ -40,8 +47,10 @@ export function IssueTypeCell({
 	issueId,
 	workspaceId,
 	issueTypeId,
+	statusId,
 	issueTypes,
 	statuses,
+	allowedStatusesByIssueTypeId,
 	issueActions,
 	triggerClassName,
 }: Props) {
@@ -49,6 +58,16 @@ export function IssueTypeCell({
 	const [pendingStatusId, setPendingStatusId] = useState<string>("");
 	const [dialogStatuses, setDialogStatuses] =
 		useState<IssueStatusList>(statuses);
+	const incompatibleTypeIds = statusId
+		? issueTypes
+				.filter((type) => {
+					const allowed = allowedStatusesByIssueTypeId?.[type.id];
+					return allowed !== undefined && allowed.length > 0
+						? !allowed.includes(statusId)
+						: false;
+				})
+				.map((type) => type.id)
+		: [];
 
 	const handleTypeChange = async (newIssueTypeId: string) => {
 		try {
@@ -90,6 +109,8 @@ export function IssueTypeCell({
 				issueTypes={issueTypes}
 				triggerClassName={triggerClassName}
 				showBadge={false}
+				disabledIssueTypeIds={incompatibleTypeIds}
+				disabledReason="current status not allowed"
 				onChange={handleTypeChange}
 			/>
 
@@ -106,8 +127,8 @@ export function IssueTypeCell({
 					<DialogHeader>
 						<DialogTitle>Select a compatible status</DialogTitle>
 						<DialogDescription>
-							The selected issue type does not allow the current status. Please
-							choose a status to apply alongside the type change.
+							This issue type cannot be used with the issue's current status.
+							Choose one of the compatible statuses below to apply both changes.
 						</DialogDescription>
 					</DialogHeader>
 					<Select

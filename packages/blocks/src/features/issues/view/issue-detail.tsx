@@ -86,6 +86,7 @@ export function IssueDetail({
 				statuses={statuses}
 				priorities={priorities}
 				issueTypes={issueTypes}
+				allowedStatusesByIssueTypeId={allowedStatusesByIssueTypeId}
 				labels={labels}
 				cycles={cycles}
 				teamMembers={teamMembers}
