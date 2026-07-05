@@ -78,6 +78,14 @@ function getMinSubIssueQueryLength(query: string) {
 		: TEXT_SUB_ISSUE_QUERY_MIN_LENGTH;
 }
 
+function getIssueTypeArchiveErrorMessage(error: unknown, fallback: string) {
+	return error instanceof ORPCError &&
+		error.defined &&
+		error.code === "DEFAULT_CONFLICT"
+		? "Change default type before archiving."
+		: fallback;
+}
+
 function isIssueVisibleForArchivedFilter(
 	issue: Outputs["issue"]["list"][number],
 	archivedFilter: TeamIssuesInput["archivedFilter"],
@@ -617,8 +625,13 @@ export function createIssuesFeature({
 					invalidateIssueDetailsAndActivity();
 					notify?.success("Issue type archived");
 				},
-				onError: () => {
-					notify?.error("Failed to archive issue type");
+				onError: (error) => {
+					notify?.error(
+						getIssueTypeArchiveErrorMessage(
+							error,
+							"Failed to archive issue type",
+						),
+					);
 				},
 			}),
 		);
@@ -632,8 +645,13 @@ export function createIssuesFeature({
 					invalidateCycleMetrics();
 					notify?.success("Issue type archived and issues reassigned");
 				},
-				onError: () => {
-					notify?.error("Failed to reassign and archive issue type");
+				onError: (error) => {
+					notify?.error(
+						getIssueTypeArchiveErrorMessage(
+							error,
+							"Failed to reassign and archive issue type",
+						),
+					);
 				},
 			}),
 		);
