@@ -6,10 +6,23 @@ export const workspaceInsertSchema = createInsertSchema(workspace)
 	.omit({ createdAt: true, updatedAt: true })
 	.extend({
 		id: z.cuid2(),
-		name: z.string().min(1),
-		slug: z.string().regex(/^[a-z0-9-]+$/),
-		// TODO: enforce timezone validation
-		timezone: z.string().regex(/^[a-zA-Z/]+$/),
+		name: z.string().trim().min(1, "Workspace name is required"),
+		slug: z
+			.string()
+			.trim()
+			.min(1, "Slug is required")
+			.regex(/^[a-z0-9-]+$/, "Use lowercase letters, numbers and hyphens only"),
+		timezone: z
+			.string()
+			.min(1)
+			.refine((timezone) => {
+				try {
+					new Intl.DateTimeFormat("en-US", { timeZone: timezone });
+					return true;
+				} catch {
+					return false;
+				}
+			}, "Invalid timezone"),
 		attributes: z.record(z.string(), z.unknown()).optional(),
 	});
 export const workspaceGetBySlugSchema = z.object({
