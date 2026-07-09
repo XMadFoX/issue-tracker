@@ -1,17 +1,22 @@
-import type { Outputs } from "@prism/api/src/router";
 import { DeleteWorkspaceCard } from "../components/delete-workspace-card";
-
-type Workspace = Outputs["workspace"]["getBySlug"];
+import { WorkspaceGeneralForm } from "../forms/workspace-general-form";
+import type {
+	SubmitHandler,
+	Workspace,
+	WorkspaceGeneralUpdateInput,
+} from "../types";
 
 type WorkspaceSettingsViewProps = {
 	workspace: Workspace;
 	isDeleting?: boolean;
+	onUpdateWorkspace: SubmitHandler<WorkspaceGeneralUpdateInput>;
 	onDeleteWorkspace: (confirmationSlug: string) => void | Promise<void>;
 };
 
 export function WorkspaceSettingsView({
 	workspace,
 	isDeleting = false,
+	onUpdateWorkspace,
 	onDeleteWorkspace,
 }: WorkspaceSettingsViewProps) {
 	return (
@@ -24,6 +29,12 @@ export function WorkspaceSettingsView({
 					Manage general settings for {workspace.name}.
 				</p>
 			</div>
+
+			<WorkspaceGeneralForm
+				key={workspace.id}
+				workspace={workspace}
+				onSubmit={onUpdateWorkspace}
+			/>
 
 			<section className="space-y-3">
 				<div>
