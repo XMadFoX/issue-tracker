@@ -22,6 +22,7 @@ import {
 import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
+import { writeIssueActivity } from "../issues/activity";
 import { omitsSourceType } from "./helpers";
 import {
 	issueTypeAllowedStatusListSchema,
@@ -615,6 +616,20 @@ export const reassignAndArchiveIssueType = authedRouter
 			) {
 				throw errors.INVALID_STATUS();
 			}
+			const affectedIssues = await tx
+				.select({
+					id: issue.id,
+					teamId: issue.teamId,
+					cycleId: issue.cycleId,
+					issueTypeId: issue.issueTypeId,
+				})
+				.from(issue)
+				.where(
+					and(
+						eq(issue.workspaceId, input.workspaceId),
+						eq(issue.issueTypeId, source.id),
+					),
+				);
 			await tx
 				.update(issue)
 				.set({ issueTypeId: replacement.id })
@@ -624,6 +639,20 @@ export const reassignAndArchiveIssueType = authedRouter
 						eq(issue.issueTypeId, source.id),
 					),
 				);
+			for (const affectedIssue of affectedIssues) {
+				await writeIssueActivity(tx, {
+					workspaceId: input.workspaceId,
+					teamId: affectedIssue.teamId,
+					issueId: affectedIssue.id,
+					actorId: context.auth.session.userId,
+					cycleId: affectedIssue.cycleId,
+					actionType: "issue.updated",
+					field: "issueTypeId",
+					fromValue: affectedIssue.issueTypeId,
+					toValue: replacement.id,
+					metadata: { updatedFields: ["issueTypeId"] },
+				});
+			}
 			await tx
 				.update(issueType)
 				.set({ archivedAt: new Date(), isDefault: false })

@@ -951,6 +951,7 @@ const createIssue = authedRouter
 							toValue: newIssue.cycleId,
 							metadata: {
 								estimate: newIssue.estimate,
+								issueTypeId: newIssue.issueTypeId,
 								cycleId: newIssue.cycleId,
 							},
 						});
@@ -1237,6 +1238,7 @@ const updateIssue = authedRouter
 						toValue: null,
 						metadata: {
 							estimate: existingIssue.estimate,
+							issueTypeId: existingIssue.issueTypeId,
 							cycleId: existingIssue.cycleId,
 						},
 					});
@@ -1255,6 +1257,7 @@ const updateIssue = authedRouter
 						toValue: updatedIssue.cycleId,
 						metadata: {
 							estimate: updatedIssue.estimate,
+							issueTypeId: updatedIssue.issueTypeId,
 							cycleId: updatedIssue.cycleId,
 						},
 					});

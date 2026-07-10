@@ -5,14 +5,20 @@ import {
 	issueStatus,
 	issueStatusGroup,
 } from "db/features/tracker/issue-statuses.schema";
+import { issueType } from "db/features/tracker/issue-types.schema";
 import { issue } from "db/features/tracker/issues.schema";
 import { team } from "db/features/tracker/tracker.schema";
 import { and, count, desc, eq, gt, lt, max, ne, sql } from "drizzle-orm";
+import z from "zod";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import { writeIssueActivity } from "../issues/activity";
 import { issuePublisher } from "../issues/publisher";
 import { getIssueWithRelations } from "../issues/queries";
+import {
+	buildIssueTypeScopeChange,
+	normalizeIssueTypeMetrics,
+} from "./metrics";
 import {
 	cycleAssignIssueSchema,
 	cycleCreateSchema,
@@ -23,6 +29,21 @@ import {
 	cycleUnassignIssueSchema,
 	cycleUpdateSchema,
 } from "./schema";
+
+const issueTypeMetricRowsSchema = z.array(
+	z.object({
+		issueTypeId: z.string().nullable(),
+		issueTypeName: z.string().nullable(),
+		issueTypeKey: z.string().nullable(),
+		issueTypeIcon: z.string().nullable(),
+		issueTypeColor: z.string().nullable(),
+		issueTypeArchivedAt: z.coerce.date().nullable(),
+		issueCount: z.number(),
+		completedIssueCount: z.number(),
+		totalPoints: z.number(),
+		completedPoints: z.number(),
+	}),
+);
 
 const commonErrors = {
 	UNAUTHORIZED: {
@@ -138,7 +159,14 @@ function buildPlannedCycleMetricsSql({
 				when baseline.metadata->>'estimate' ~ '^-?[0-9]+$'
 					then (baseline.metadata->>'estimate')::integer
 				else 0
-			end as estimate
+			end as estimate,
+			case
+				when jsonb_typeof(type_at_start.to_value) = 'string'
+					then type_at_start.to_value #>> '{}'
+				when jsonb_typeof(baseline.metadata->'issueTypeId') = 'string'
+					then baseline.metadata->>'issueTypeId'
+				else null
+			end as issue_type_id_at_start
 		from issue_activity baseline
 		left join lateral (
 			select
@@ -155,6 +183,18 @@ function buildPlannedCycleMetricsSql({
 			order by estimate_change.created_at desc, estimate_change.id desc
 			limit 1
 		) estimate_at_start on true
+		left join lateral (
+			select type_change.to_value
+			from issue_activity type_change
+			where type_change.workspace_id = baseline.workspace_id
+				and type_change.team_id = baseline.team_id
+				and type_change.issue_id = baseline.issue_id
+				and type_change.action_type = 'issue.updated'
+				and type_change.field = 'issueTypeId'
+				and type_change.created_at <= ${startDate}
+			order by type_change.created_at desc, type_change.id desc
+			limit 1
+		) type_at_start on true
 		where baseline.workspace_id = ${workspaceId}
 			and baseline.team_id = ${teamId}
 			and baseline.cycle_id = ${cycleId}
@@ -166,7 +206,8 @@ function buildPlannedCycleMetricsSql({
 		select distinct on (status_change.issue_id)
 			status_change.issue_id,
 			status_change.metadata->>'toStatusCategory' as status_category,
-			planned_baseline.estimate
+			planned_baseline.estimate,
+			planned_baseline.issue_type_id_at_start
 		from issue_activity status_change
 		inner join (${plannedBaselineSql}) planned_baseline
 			on planned_baseline.issue_id = status_change.issue_id
@@ -471,6 +512,7 @@ const assignIssue = authedRouter
 					teamId: issue.teamId,
 					cycleId: issue.cycleId,
 					estimate: issue.estimate,
+					issueTypeId: issue.issueTypeId,
 				})
 				.from(issue)
 				.where(
@@ -523,6 +565,7 @@ const assignIssue = authedRouter
 						toValue: null,
 						metadata: {
 							estimate: issueRow.estimate,
+							issueTypeId: issueRow.issueTypeId,
 							cycleId: issueRow.cycleId,
 						},
 					});
@@ -540,6 +583,7 @@ const assignIssue = authedRouter
 					toValue: input.cycleId,
 					metadata: {
 						estimate: row.estimate,
+						issueTypeId: row.issueTypeId,
 						cycleId: input.cycleId,
 					},
 				});
@@ -563,6 +607,7 @@ const unassignIssue = authedRouter
 					teamId: issue.teamId,
 					cycleId: issue.cycleId,
 					estimate: issue.estimate,
+					issueTypeId: issue.issueTypeId,
 				})
 				.from(issue)
 				.where(
@@ -619,6 +664,7 @@ const unassignIssue = authedRouter
 					toValue: null,
 					metadata: {
 						estimate: issueRow.estimate,
+						issueTypeId: issueRow.issueTypeId,
 						cycleId: issueRow.cycleId,
 					},
 				});
@@ -684,6 +730,73 @@ const cycleMetrics = authedRouter
 				startDate: cycleRow.startDate,
 			});
 
+		const [currentIssueTypeRows, plannedIssueTypeRows] = await Promise.all([
+			db
+				.select({
+					issueTypeId: issueType.id,
+					issueTypeName: issueType.name,
+					issueTypeKey: issueType.key,
+					issueTypeIcon: issueType.icon,
+					issueTypeColor: issueType.color,
+					issueTypeArchivedAt: issueType.archivedAt,
+					issueCount: count(issue.id),
+					completedIssueCount: sql<number>`count(${issue.id}) filter (where ${issueStatusGroup.canonicalCategory} = 'completed')::integer`,
+					totalPoints: sql<number>`coalesce(sum(${issue.estimate}), 0)::integer`,
+					completedPoints: sql<number>`coalesce(sum(${issue.estimate}) filter (where ${issueStatusGroup.canonicalCategory} = 'completed'), 0)::integer`,
+				})
+				.from(issue)
+				.leftJoin(issueType, eq(issue.issueTypeId, issueType.id))
+				.leftJoin(issueStatus, eq(issue.statusId, issueStatus.id))
+				.leftJoin(
+					issueStatusGroup,
+					eq(issueStatus.statusGroupId, issueStatusGroup.id),
+				)
+				.where(
+					and(
+						eq(issue.workspaceId, input.workspaceId),
+						eq(issue.teamId, cycleRow.teamId),
+						eq(issue.cycleId, input.cycleId),
+					),
+				)
+				.groupBy(
+					issueType.id,
+					issueType.name,
+					issueType.key,
+					issueType.icon,
+					issueType.color,
+					issueType.archivedAt,
+				),
+			(async () => {
+				const result = await db.execute(sql`
+					select
+						issue_type.id as "issueTypeId",
+						issue_type.name as "issueTypeName",
+						issue_type.key as "issueTypeKey",
+						issue_type.icon as "issueTypeIcon",
+						issue_type.color as "issueTypeColor",
+						issue_type.archived_at as "issueTypeArchivedAt",
+						count(*)::integer as "issueCount",
+						count(*) filter (where planned_latest_status.status_category = 'completed')::integer as "completedIssueCount",
+						coalesce(sum(planned_baseline.estimate), 0)::integer as "totalPoints",
+						coalesce(sum(planned_baseline.estimate) filter (where planned_latest_status.status_category = 'completed'), 0)::integer as "completedPoints"
+					from (${plannedBaselineSql}) planned_baseline
+					left join issue_type
+						on issue_type.id = planned_baseline.issue_type_id_at_start
+					left join (${plannedLatestStatusSql}) planned_latest_status
+						on planned_latest_status.issue_id = planned_baseline.issue_id
+					where planned_baseline.action_type = 'issue.cycle_assigned'
+					group by
+						issue_type.id,
+						issue_type.name,
+						issue_type.key,
+						issue_type.icon,
+						issue_type.color,
+						issue_type.archived_at
+				`);
+				return issueTypeMetricRowsSchema.parse(result.rows);
+			})(),
+		]);
+
 		const [activityRow] = await db
 			.select({
 				issueCount: sql<number>`coalesce((select count(*)::integer from (${plannedBaselineSql}) planned_baseline where planned_baseline.action_type = 'issue.cycle_assigned'), 0)`,
@@ -716,6 +829,8 @@ const cycleMetrics = authedRouter
 			plannedIssueCount === 0
 				? 0
 				: plannedCompletedIssueCount / plannedIssueCount;
+		const currentByIssueType = normalizeIssueTypeMetrics(currentIssueTypeRows);
+		const plannedByIssueType = normalizeIssueTypeMetrics(plannedIssueTypeRows);
 
 		return {
 			cycleId: input.cycleId,
@@ -737,6 +852,14 @@ const cycleMetrics = authedRouter
 			scopeChange: {
 				issueCountDelta: currentIssueCount - plannedIssueCount,
 				pointsDelta: currentTotalPoints - plannedTotalPoints,
+			},
+			byIssueType: {
+				current: currentByIssueType,
+				planned: plannedByIssueType,
+				scopeChange: buildIssueTypeScopeChange(
+					currentByIssueType,
+					plannedByIssueType,
+				),
 			},
 		};
 	});

@@ -144,7 +144,8 @@ function affectsCycleMetrics(input: Parameters<IssueActions["update"]>[0]) {
 	return (
 		input.cycleId !== undefined ||
 		input.statusId !== undefined ||
-		input.estimate !== undefined
+		input.estimate !== undefined ||
+		input.issueTypeId !== undefined
 	);
 }
 
@@ -830,7 +831,8 @@ export function createIssuesFeature({
 							} else if (
 								previousIssue.cycleId !== event.issue.cycleId ||
 								previousIssue.statusId !== event.issue.statusId ||
-								previousIssue.estimate !== event.issue.estimate
+								previousIssue.estimate !== event.issue.estimate ||
+								previousIssue.issueTypeId !== event.issue.issueTypeId
 							) {
 								if (previousIssue.cycleId)
 									cycleMetricIds.add(previousIssue.cycleId);

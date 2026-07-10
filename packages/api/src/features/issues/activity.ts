@@ -111,7 +111,10 @@ type IssueEstimateChangedActivity = ActivityInput<
 		}
 >;
 
-type IssueCycleActivityMetadata = Pick<IssueRecord, "estimate"> & {
+type IssueCycleActivityMetadata = Pick<
+	IssueRecord,
+	"estimate" | "issueTypeId"
+> & {
 	cycleId: ActiveCycleId;
 };
 
