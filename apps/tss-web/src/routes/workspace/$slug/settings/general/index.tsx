@@ -1,4 +1,8 @@
-import { WorkspaceSettingsView } from "@prism/blocks/src/features/workspace-settings";
+import {
+	type SubmitHandler,
+	type WorkspaceGeneralUpdateInput,
+	WorkspaceSettingsView,
+} from "@prism/blocks/src/features/workspace-settings";
 import {
 	useMutation,
 	useQueryClient,
@@ -22,6 +26,47 @@ function RouteComponent() {
 	const deleteWorkspace = useMutation(
 		orpc.workspace.delete.mutationOptions({}),
 	);
+	const updateWorkspace = useMutation(
+		orpc.workspace.update.mutationOptions({}),
+	);
+
+	const handleUpdateWorkspace: SubmitHandler<
+		WorkspaceGeneralUpdateInput
+	> = async (input) => {
+		try {
+			await updateWorkspace.mutateAsync(input);
+			await Promise.all([
+				queryClient.invalidateQueries({
+					queryKey: orpc.workspace.list.queryKey(),
+				}),
+				queryClient.invalidateQueries({
+					queryKey: orpc.workspace.getBySlug.queryKey({ input: { slug } }),
+				}),
+			]);
+
+			if (input.slug !== slug) {
+				await queryClient.invalidateQueries({
+					queryKey: orpc.workspace.getBySlug.queryKey({
+						input: { slug: input.slug },
+					}),
+				});
+				await queryClient.ensureQueryData(
+					orpc.workspace.getBySlug.queryOptions({
+						input: { slug: input.slug },
+					}),
+				);
+				await navigate({
+					to: "/workspace/$slug/settings/general",
+					params: { slug: input.slug },
+				});
+			}
+
+			toast.success("Workspace updated");
+			return { success: true };
+		} catch (error) {
+			return { error };
+		}
+	};
 
 	const handleDeleteWorkspace = async (confirmationSlug: string) => {
 		try {
@@ -44,6 +89,7 @@ function RouteComponent() {
 			<WorkspaceSettingsView
 				workspace={workspace.data}
 				isDeleting={deleteWorkspace.isPending}
+				onUpdateWorkspace={handleUpdateWorkspace}
 				onDeleteWorkspace={handleDeleteWorkspace}
 			/>
 		</div>
