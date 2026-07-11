@@ -21,6 +21,8 @@ export const issueActivityActionTypeEnum = pgEnum(
 		"issue.estimate_changed",
 		"issue.cycle_assigned",
 		"issue.cycle_unassigned",
+		"issue.cycle_rolled_over",
+		"issue.cycle_returned_to_backlog",
 	],
 );
 

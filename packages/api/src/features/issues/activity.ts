@@ -134,6 +134,44 @@ type IssueCycleUnassignedActivity = ActivityInput<
 		}
 >;
 
+type CycleActivityReason = "manual" | "scheduled";
+
+type IssueCycleRolledOverActivityMetadata = Pick<
+	IssueRecord,
+	"estimate" | "issueTypeId"
+> & {
+	fromCycleId: ActiveCycleId;
+	fromCycleName: string;
+	reason: CycleActivityReason;
+	toCycleId: ActiveCycleId;
+	toCycleName: string;
+};
+
+type IssueCycleRolledOverActivity = ActivityInput<
+	"issue.cycle_rolled_over",
+	CurrentCycle<ActiveCycleId> &
+		FieldChange<"cycleId", ActiveCycleId, ActiveCycleId> & {
+			metadata: IssueCycleRolledOverActivityMetadata;
+		}
+>;
+
+type IssueCycleReturnedToBacklogActivityMetadata = Pick<
+	IssueRecord,
+	"estimate" | "issueTypeId"
+> & {
+	fromCycleId: ActiveCycleId;
+	fromCycleName: string;
+	reason: CycleActivityReason;
+};
+
+type IssueCycleReturnedToBacklogActivity = ActivityInput<
+	"issue.cycle_returned_to_backlog",
+	CurrentCycle<ActiveCycleId> &
+		FieldChange<"cycleId", ActiveCycleId, null> & {
+			metadata: IssueCycleReturnedToBacklogActivityMetadata;
+		}
+>;
+
 type CompleteActivityUnion<
 	ActivityUnion extends { actionType: IssueActivityActionType },
 > =
@@ -149,6 +187,8 @@ type WriteIssueActivityInput = CompleteActivityUnion<
 	| IssueEstimateChangedActivity
 	| IssueCycleAssignedActivity
 	| IssueCycleUnassignedActivity
+	| IssueCycleRolledOverActivity
+	| IssueCycleReturnedToBacklogActivity
 >;
 
 const DESCRIPTION_ACTIVITY_ROLLING_COALESCE_WINDOW_MS = 10 * 60 * 1000;

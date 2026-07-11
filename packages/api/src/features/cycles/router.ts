@@ -17,6 +17,8 @@ import { issuePublisher } from "../issues/publisher";
 import { getIssueWithRelations } from "../issues/queries";
 import {
 	buildIssueTypeScopeChange,
+	cycleBaselineActionTypes,
+	cycleBaselineAssignmentActionTypes,
 	normalizeIssueTypeMetrics,
 } from "./metrics";
 import {
@@ -198,7 +200,10 @@ function buildPlannedCycleMetricsSql({
 		where baseline.workspace_id = ${workspaceId}
 			and baseline.team_id = ${teamId}
 			and baseline.cycle_id = ${cycleId}
-			and baseline.action_type in ('issue.cycle_assigned', 'issue.cycle_unassigned')
+			and baseline.action_type in (${sql.join(
+				cycleBaselineActionTypes.map((actionType) => sql`${actionType}`),
+				sql`, `,
+			)})
 			and baseline.created_at <= ${startDate}
 		order by baseline.issue_id, baseline.created_at desc, baseline.id desc
 	`;
@@ -211,7 +216,12 @@ function buildPlannedCycleMetricsSql({
 		from issue_activity status_change
 		inner join (${plannedBaselineSql}) planned_baseline
 			on planned_baseline.issue_id = status_change.issue_id
-			and planned_baseline.action_type = 'issue.cycle_assigned'
+			and planned_baseline.action_type in (${sql.join(
+				cycleBaselineAssignmentActionTypes.map(
+					(actionType) => sql`${actionType}`,
+				),
+				sql`, `,
+			)})
 		where status_change.workspace_id = ${workspaceId}
 			and status_change.team_id = ${teamId}
 			and status_change.cycle_id = ${cycleId}
@@ -784,7 +794,12 @@ const cycleMetrics = authedRouter
 						on issue_type.id = planned_baseline.issue_type_id_at_start
 					left join (${plannedLatestStatusSql}) planned_latest_status
 						on planned_latest_status.issue_id = planned_baseline.issue_id
-					where planned_baseline.action_type = 'issue.cycle_assigned'
+					where planned_baseline.action_type in (${sql.join(
+						cycleBaselineAssignmentActionTypes.map(
+							(actionType) => sql`${actionType}`,
+						),
+						sql`, `,
+					)})
 					group by
 						issue_type.id,
 						issue_type.name,
@@ -799,8 +814,18 @@ const cycleMetrics = authedRouter
 
 		const [activityRow] = await db
 			.select({
-				issueCount: sql<number>`coalesce((select count(*)::integer from (${plannedBaselineSql}) planned_baseline where planned_baseline.action_type = 'issue.cycle_assigned'), 0)`,
-				totalPoints: sql<number>`coalesce((select sum(planned_baseline.estimate)::integer from (${plannedBaselineSql}) planned_baseline where planned_baseline.action_type = 'issue.cycle_assigned'), 0)`,
+				issueCount: sql<number>`coalesce((select count(*)::integer from (${plannedBaselineSql}) planned_baseline where planned_baseline.action_type in (${sql.join(
+					cycleBaselineAssignmentActionTypes.map(
+						(actionType) => sql`${actionType}`,
+					),
+					sql`, `,
+				)})), 0)`,
+				totalPoints: sql<number>`coalesce((select sum(planned_baseline.estimate)::integer from (${plannedBaselineSql}) planned_baseline where planned_baseline.action_type in (${sql.join(
+					cycleBaselineAssignmentActionTypes.map(
+						(actionType) => sql`${actionType}`,
+					),
+					sql`, `,
+				)})), 0)`,
 				completedPoints: sql<number>`coalesce((select sum(planned_latest_status.estimate)::integer from (${plannedLatestStatusSql}) planned_latest_status where planned_latest_status.status_category = 'completed'), 0)`,
 				completedIssueCount: sql<number>`coalesce((select count(*)::integer from (${plannedLatestStatusSql}) planned_latest_status where planned_latest_status.status_category = 'completed'), 0)`,
 			})

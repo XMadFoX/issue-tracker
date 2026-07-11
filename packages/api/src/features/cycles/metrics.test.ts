@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
 	buildIssueTypeScopeChange,
+	type CycleBaselineActivity,
 	completionRate,
+	getCyclePlannedBaseline,
 	type IssueTypeMetricRow,
+	isCycleBaselineAssignment,
 	normalizeIssueTypeMetrics,
 } from "./metrics";
 
@@ -18,6 +21,105 @@ const task: IssueTypeMetricRow = {
 	totalPoints: 5,
 	completedPoints: 3,
 };
+
+const cycleStartDate = new Date("2026-07-01T00:00:00.000Z");
+
+function plannedIssueIds(activities: CycleBaselineActivity[]) {
+	return getCyclePlannedBaseline(activities, cycleStartDate)
+		.filter((activity) => isCycleBaselineAssignment(activity.actionType))
+		.map((activity) => activity.issueId)
+		.sort();
+}
+
+describe("cycle planned baseline", () => {
+	test("counts original assignments as planned scope", () => {
+		expect(
+			plannedIssueIds([
+				{
+					issueId: "issue-1",
+					actionType: "issue.cycle_assigned",
+					createdAt: new Date("2026-06-30T12:00:00.000Z"),
+					id: "activity-1",
+				},
+			]),
+		).toEqual(["issue-1"]);
+	});
+
+	test("removes unassigned and returned-to-backlog issues from source scope", () => {
+		expect(
+			plannedIssueIds([
+				{
+					issueId: "unassigned-issue",
+					actionType: "issue.cycle_assigned",
+					createdAt: new Date("2026-06-29T12:00:00.000Z"),
+					id: "activity-1",
+				},
+				{
+					issueId: "unassigned-issue",
+					actionType: "issue.cycle_unassigned",
+					createdAt: new Date("2026-06-30T12:00:00.000Z"),
+					id: "activity-2",
+				},
+				{
+					issueId: "backlog-issue",
+					actionType: "issue.cycle_assigned",
+					createdAt: new Date("2026-06-29T12:00:00.000Z"),
+					id: "activity-3",
+				},
+				{
+					issueId: "backlog-issue",
+					actionType: "issue.cycle_returned_to_backlog",
+					createdAt: new Date("2026-06-30T12:00:00.000Z"),
+					id: "activity-4",
+				},
+			]),
+		).toEqual([]);
+	});
+
+	test("counts a rollover as assignment in the destination cycle", () => {
+		expect(
+			plannedIssueIds([
+				{
+					issueId: "rolled-over-issue",
+					actionType: "issue.cycle_rolled_over",
+					createdAt: new Date("2026-06-30T12:00:00.000Z"),
+					id: "activity-1",
+				},
+			]),
+		).toEqual(["rolled-over-issue"]);
+	});
+
+	test("uses activity ID to break same-timestamp baseline ties", () => {
+		expect(
+			plannedIssueIds([
+				{
+					issueId: "issue-1",
+					actionType: "issue.cycle_assigned",
+					createdAt: new Date("2026-06-30T12:00:00.000Z"),
+					id: "activity-a",
+				},
+				{
+					issueId: "issue-1",
+					actionType: "issue.cycle_unassigned",
+					createdAt: new Date("2026-06-30T12:00:00.000Z"),
+					id: "activity-b",
+				},
+				{
+					issueId: "issue-2",
+					actionType: "issue.cycle_unassigned",
+					createdAt: new Date("2026-06-30T12:00:00.000Z"),
+					id: "activity-a",
+				},
+				{
+					issueId: "issue-2",
+					actionType: "issue.cycle_assigned",
+					createdAt: new Date("2026-06-30T12:00:00.000Z"),
+					id: "activity-b",
+				},
+			]),
+		).toEqual(["issue-2"]);
+	});
+});
 
 describe("issue type metrics", () => {
 	test("merges identities, retains one-sided rows, and sorts Unclassified last", () => {

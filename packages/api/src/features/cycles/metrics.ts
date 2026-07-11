@@ -1,3 +1,57 @@
+export const cycleBaselineAssignmentActionTypes = [
+	"issue.cycle_assigned",
+	"issue.cycle_rolled_over",
+] as const;
+
+export const cycleBaselineRemovalActionTypes = [
+	"issue.cycle_unassigned",
+	"issue.cycle_returned_to_backlog",
+] as const;
+
+export const cycleBaselineActionTypes = [
+	...cycleBaselineAssignmentActionTypes,
+	...cycleBaselineRemovalActionTypes,
+] as const;
+
+export type CycleBaselineActionType = (typeof cycleBaselineActionTypes)[number];
+
+export type CycleBaselineActivity = {
+	issueId: string;
+	actionType: CycleBaselineActionType;
+	createdAt: Date;
+	id: string;
+};
+
+export function isCycleBaselineAssignment(actionType: CycleBaselineActionType) {
+	return (
+		actionType === "issue.cycle_assigned" ||
+		actionType === "issue.cycle_rolled_over"
+	);
+}
+
+export function getCyclePlannedBaseline(
+	activities: CycleBaselineActivity[],
+	startDate: Date,
+) {
+	const latestActivityByIssueId = new Map<string, CycleBaselineActivity>();
+
+	for (const activity of activities) {
+		if (activity.createdAt > startDate) continue;
+
+		const previousActivity = latestActivityByIssueId.get(activity.issueId);
+		if (
+			previousActivity === undefined ||
+			activity.createdAt > previousActivity.createdAt ||
+			(activity.createdAt.getTime() === previousActivity.createdAt.getTime() &&
+				activity.id > previousActivity.id)
+		) {
+			latestActivityByIssueId.set(activity.issueId, activity);
+		}
+	}
+
+	return [...latestActivityByIssueId.values()];
+}
+
 export type IssueTypeIdentity = {
 	id: string;
 	name: string;
