@@ -75,6 +75,30 @@ describe("issue type metrics", () => {
 		]);
 	});
 
+	test("calculates non-zero rates and orders named types deterministically", () => {
+		const bug: IssueTypeMetricRow = {
+			...task,
+			issueTypeId: "bug",
+			issueTypeName: "Bug",
+			issueTypeKey: "bug",
+		};
+		const feature: IssueTypeMetricRow = {
+			...task,
+			issueTypeId: "feature",
+			issueTypeName: "Feature",
+			issueTypeKey: "feature",
+		};
+
+		const metrics = normalizeIssueTypeMetrics([task, feature, bug]);
+
+		expect(metrics.map((metric) => metric.issueType?.id)).toEqual([
+			"bug",
+			"feature",
+			"task",
+		]);
+		expect(metrics[2]?.completionRate).toBe(0.5);
+	});
+
 	test("uses a zero completion rate for an empty group", () => {
 		expect(completionRate(0, 0)).toBe(0);
 	});
