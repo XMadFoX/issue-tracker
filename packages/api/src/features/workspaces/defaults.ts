@@ -51,6 +51,8 @@ export const TEAM_LEAD_PERMISSION_KEYS = [
 	"issue:delete",
 	"cycle:create",
 	"cycle:update",
+	"cycle:complete",
+	"cycle:manage_settings",
 	"cycle:delete",
 	"issue_priority:create",
 	"issue_priority:update",

@@ -184,6 +184,18 @@ export const cyclePerms = [
 		description: "Update cycles",
 	},
 	{
+		key: "cycle:complete",
+		resourceType: "cycle",
+		action: "complete",
+		description: "Complete or cancel cycles and choose rollover dispositions",
+	},
+	{
+		key: "cycle:manage_settings",
+		resourceType: "cycle",
+		action: "manage_settings",
+		description: "Manage cycle scheduling and rollover settings",
+	},
+	{
 		key: "cycle:delete",
 		resourceType: "cycle",
 		action: "delete",
