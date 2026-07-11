@@ -851,6 +851,19 @@ const createIssue = authedRouter
 			try {
 				const created = await db.transaction(async (tx) => {
 					await acquireIssueHierarchyLock(tx, { workspaceId, teamId });
+					if (input.cycleId !== null && input.cycleId !== undefined) {
+						await tx.execute(
+							sql`select pg_advisory_xact_lock(hashtext(${`cycle:${workspaceId}:${teamId}`}))`,
+						);
+						const validCycle = await validateIssueCycleAssignment(tx, {
+							cycleId: input.cycleId,
+							workspaceId,
+							teamId,
+						});
+						if (!validCycle.ok) {
+							throwCycleAssignmentError(errors, validCycle.code);
+						}
+					}
 
 					const resolvedType = await resolveIssueTypeForCreate(tx, {
 						workspaceId,
@@ -1100,6 +1113,18 @@ const updateIssue = authedRouter
 		}
 
 		const updated = await db.transaction(async (tx) => {
+			if (assigningCycle) {
+				await tx.execute(
+					sql`select pg_advisory_xact_lock(hashtext(${`cycle:${input.workspaceId}:${existingIssue.teamId}`}))`,
+				);
+				const validCycle = await validateIssueCycleAssignment(tx, {
+					cycleId: input.cycleId,
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+				});
+				if (!validCycle.ok) throwCycleAssignmentError(errors, validCycle.code);
+			}
+
 			if (typeChanging && input.issueTypeId !== undefined) {
 				const selectable = await isSelectableIssueType(tx, {
 					workspaceId: input.workspaceId,

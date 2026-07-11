@@ -65,6 +65,18 @@ export const cycleUpdateSchema = cycleInsertSchema
 
 export const cycleDeleteSchema = cycleGetSchema;
 
+export const cycleCompleteSchema = z.object({
+	workspaceId: cycleInsertSchema.shape.workspaceId,
+	cycleId: cycleInsertSchema.shape.id,
+	disposition: z.discriminatedUnion("type", [
+		z.object({
+			type: z.literal("carryOver"),
+			targetCycleId: cycleInsertSchema.shape.id,
+		}),
+		z.object({ type: z.literal("moveToBacklog") }),
+	]),
+});
+
 export const cycleAssignIssueSchema = z.object({
 	workspaceId: cycleInsertSchema.shape.workspaceId,
 	cycleId: cycleInsertSchema.shape.id,

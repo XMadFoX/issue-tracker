@@ -15,6 +15,7 @@ import { isAllowed } from "../../lib/abac";
 import { writeIssueActivity } from "../issues/activity";
 import { issuePublisher } from "../issues/publisher";
 import { getIssueWithRelations } from "../issues/queries";
+import { completeCycle } from "./completion";
 import {
 	buildIssueTypeScopeChange,
 	cycleBaselineActionTypes,
@@ -23,6 +24,7 @@ import {
 } from "./metrics";
 import {
 	cycleAssignIssueSchema,
+	cycleCompleteSchema,
 	cycleCreateSchema,
 	cycleDeleteSchema,
 	cycleGetSchema,
@@ -74,6 +76,31 @@ const writeErrors = {
 	},
 };
 
+const completionErrors = {
+	...commonErrors,
+	CYCLE_ALREADY_COMPLETED: {
+		status: 409,
+		message: "Cycle has already been completed.",
+	},
+	CYCLE_CLOSED: {
+		status: 400,
+		message: "Cycle must be active to complete.",
+	},
+	INVALID_ROLLOVER_TARGET: {
+		status: 400,
+		message:
+			"Rollover target must be a different planned or active team cycle.",
+	},
+	NO_ELIGIBLE_TARGET_CYCLE: {
+		status: 400,
+		message: "No eligible rollover target cycle is available.",
+	},
+	TEAM_MISMATCH: {
+		status: 400,
+		message: "Cycle and rollover target must belong to the same team.",
+	},
+};
+
 const assignErrors = {
 	...commonErrors,
 	TEAM_MISMATCH: {
@@ -109,7 +136,7 @@ function canTransitionCycleState(from: CycleState, to: CycleState) {
 		case "planned":
 			return to === "active" || to === "canceled";
 		case "active":
-			return to === "completed" || to === "canceled";
+			return to === "canceled";
 		case "completed":
 		case "canceled":
 			return false;
@@ -403,11 +430,13 @@ const updateCycle = authedRouter
 			.limit(1);
 		if (!existing) throw errors.NOT_FOUND();
 
+		const permissionKey =
+			input.state === "canceled" ? "cycle:complete" : "cycle:update";
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
 			teamId: existing.teamId,
-			permissionKey: "cycle:update",
+			permissionKey,
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
@@ -425,6 +454,21 @@ const updateCycle = authedRouter
 			await tx.execute(
 				sql`select pg_advisory_xact_lock(hashtext(${`cycle:${input.workspaceId}:${existing.teamId}`}))`,
 			);
+			const [lockedExisting] = await tx
+				.select({ state: cycle.state })
+				.from(cycle)
+				.where(
+					and(eq(cycle.id, input.id), eq(cycle.workspaceId, input.workspaceId)),
+				)
+				.limit(1)
+				.for("update");
+			if (!lockedExisting) throw errors.NOT_FOUND();
+			if (
+				input.state &&
+				!canTransitionCycleState(lockedExisting.state, input.state)
+			) {
+				throw errors.INVALID_STATE_TRANSITION();
+			}
 
 			const [overlap] = await tx
 				.select({ id: cycle.id })
@@ -461,6 +505,73 @@ const updateCycle = authedRouter
 
 			return updated;
 		});
+	});
+
+const completeCycleRoute = authedRouter
+	.input(cycleCompleteSchema)
+	.errors(completionErrors)
+	.handler(async ({ context, input, errors }) => {
+		const [source] = await db
+			.select({ teamId: cycle.teamId })
+			.from(cycle)
+			.where(
+				and(
+					eq(cycle.id, input.cycleId),
+					eq(cycle.workspaceId, input.workspaceId),
+				),
+			)
+			.limit(1);
+		if (!source) throw errors.NOT_FOUND();
+
+		const [canComplete, canUpdateIssue] = await Promise.all([
+			isAllowed({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+				teamId: source.teamId,
+				permissionKey: "cycle:complete",
+			}),
+			isAllowed({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+				teamId: source.teamId,
+				permissionKey: "issue:update",
+			}),
+		]);
+		if (!canComplete || !canUpdateIssue) throw errors.UNAUTHORIZED();
+
+		const result = await completeCycle({
+			actorId: context.auth.session.userId,
+			cycleId: input.cycleId,
+			disposition: input.disposition,
+			reason: "manual",
+			teamId: source.teamId,
+			workspaceId: input.workspaceId,
+		});
+		if (!result.ok) {
+			switch (result.code) {
+				case "CYCLE_ALREADY_COMPLETED":
+					throw errors.CYCLE_ALREADY_COMPLETED();
+				case "CYCLE_CLOSED":
+					throw errors.CYCLE_CLOSED();
+				case "INVALID_ROLLOVER_TARGET":
+					throw errors.INVALID_ROLLOVER_TARGET();
+				case "TEAM_MISMATCH":
+					throw errors.TEAM_MISMATCH();
+				case "NOT_FOUND":
+					throw errors.NOT_FOUND();
+			}
+		}
+
+		for (const issueId of result.affectedIssueIds) {
+			await publishIssueUpdate(issueId, input.workspaceId);
+		}
+		return {
+			...result,
+			affectedCycleIds: [
+				result.source.id,
+				...(result.destinationCycleId ? [result.destinationCycleId] : []),
+			],
+		};
 	});
 
 const deleteCycle = authedRouter
@@ -894,6 +1005,7 @@ export const cycleRouter = {
 	get: getCycle,
 	create: createCycle,
 	update: updateCycle,
+	complete: completeCycleRoute,
 	delete: deleteCycle,
 	assignIssue,
 	unassignIssue,
