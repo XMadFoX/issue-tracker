@@ -29,6 +29,12 @@ function getMetadata(activity: Activity) {
 	return activity.metadata;
 }
 
+function getMetadataCycleName(activity: Activity, key: string) {
+	const metadata = getMetadata(activity);
+	const value = metadata?.[key];
+	return typeof value === "string" ? value : null;
+}
+
 function getUpdatedFields(activity: Activity) {
 	const metadata = getMetadata(activity);
 	const updatedFields = metadata?.updatedFields;
@@ -116,6 +122,36 @@ function formatActivitySummary(activity: Activity, statuses: IssueStatusList) {
 		}
 		case "issue.cycle_unassigned": {
 			return { action: "unassigned cycle", details: formatCycleName(activity) };
+		}
+		case "issue.cycle_rolled_over": {
+			// The activity's cycleId is the rollover destination, so the origin cycle
+			// name only survives in metadata captured at mutation time.
+			const fromCycleName =
+				getMetadataCycleName(activity, "fromCycleName") ?? "a previous cycle";
+			const toCycleName =
+				activity.cycle?.name ??
+				getMetadataCycleName(activity, "toCycleName") ??
+				"the new cycle";
+			return {
+				action: "rolled over cycle",
+				details: `${fromCycleName} → ${toCycleName}`,
+			};
+		}
+		case "issue.cycle_returned_to_backlog": {
+			// The activity's cycleId is the source cycle that completed, so it can be
+			// used directly with a metadata fallback for safety.
+			const fromCycleName =
+				activity.cycle?.name ??
+				getMetadataCycleName(activity, "fromCycleName") ??
+				"the cycle";
+			return {
+				action: "returned to backlog",
+				details: `${fromCycleName} completed`,
+			};
+		}
+		default: {
+			activity.actionType satisfies never;
+			return { action: "updated this issue", details: "" };
 		}
 	}
 }

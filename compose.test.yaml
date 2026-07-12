@@ -1,6 +1,6 @@
 services:
   pg_test:
-    image: postgres:17.5
+    image: pgvector/pgvector:pg17
     ports:
       - "6432:5432"
     environment:

@@ -8,6 +8,7 @@ import {
 	type CycleMetrics,
 	formatCycleDateRange,
 } from "./cycle-card";
+import { CycleCompleteDialog } from "./cycle-complete-dialog";
 import { CycleCreateModal } from "./cycle-create-modal";
 import { CycleFormDialog } from "./cycle-form-dialog";
 
@@ -15,6 +16,7 @@ type CycleListProps = {
 	cycles: Cycle[];
 	metricsByCycleId: Map<string, CycleMetrics>;
 	cycleDuration?: number | null;
+	isCompleting?: boolean;
 	onCreate: (
 		value: Pick<
 			Inputs["cycle"]["create"],
@@ -24,6 +26,9 @@ type CycleListProps = {
 	onUpdate: (
 		value: Omit<Inputs["cycle"]["update"], "workspaceId">,
 	) => Promise<void>;
+	onComplete: (
+		value: Omit<Inputs["cycle"]["complete"], "workspaceId">,
+	) => Promise<void>;
 	onDelete: (cycle: Cycle) => Promise<void>;
 };
 
@@ -31,11 +36,18 @@ export function CycleList({
 	cycles,
 	metricsByCycleId,
 	cycleDuration,
+	isCompleting = false,
 	onCreate,
 	onUpdate,
+	onComplete,
 	onDelete,
 }: CycleListProps) {
 	const [editingCycle, setEditingCycle] = useState<Cycle | null>(null);
+	// Retains the cycle being completed independent of the derived active
+	// cycle, so a stale-completion error (source no longer active after a
+	// concurrent completion) keeps the dialog open with its selection instead
+	// of unmounting when `activeCycle` disappears from refreshed data.
+	const [completionSource, setCompletionSource] = useState<Cycle | null>(null);
 	const activeCycle = cycles.find((cycle) => cycle.state === "active");
 	const plannedCycles = cycles.filter((cycle) => cycle.state === "planned");
 	const completedCycles = cycles.filter((cycle) => cycle.state === "completed");
@@ -51,7 +63,7 @@ export function CycleList({
 				<CycleCard
 					cycle={activeCycle}
 					metrics={metricsByCycleId.get(activeCycle.id)}
-					onComplete={(cycle) => onUpdate({ id: cycle.id, state: "completed" })}
+					onComplete={() => setCompletionSource(activeCycle)}
 					onCancel={(cycle) => onUpdate({ id: cycle.id, state: "canceled" })}
 					onEdit={setEditingCycle}
 				/>
@@ -156,6 +168,24 @@ export function CycleList({
 					await onUpdate({ id: editingCycle.id, ...value });
 				}}
 			/>
+
+			{completionSource ? (
+				<CycleCompleteDialog
+					source={completionSource}
+					cycles={cycles}
+					open={completionSource !== null}
+					onOpenChange={(open) => {
+						if (!open) setCompletionSource(null);
+					}}
+					isCompleting={isCompleting}
+					onSubmit={async (disposition) => {
+						await onComplete({
+							cycleId: completionSource.id,
+							disposition,
+						});
+					}}
+				/>
+			) : null}
 		</div>
 	);
 }
