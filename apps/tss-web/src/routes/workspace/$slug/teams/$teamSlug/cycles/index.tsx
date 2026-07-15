@@ -69,7 +69,7 @@ function buildCompletionToastMessage(result: Outputs["cycle"]["complete"]) {
 	return `${result.source.name} completed — ${parts.join(", ")}`;
 }
 
-function RouteComponent() {
+export function RouteComponent() {
 	const { slug, teamSlug } = Route.useParams();
 	const queryClient = useQueryClient();
 
