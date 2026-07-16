@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-
 import { CycleCompleteDialog } from "@prism/blocks/src/features/cycles/cycle-complete-dialog";
 import type { Cycle } from "@prism/blocks/src/features/cycles/cycle-card";
 import {
@@ -9,7 +7,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 
 afterEach(cleanup);
 

@@ -6,7 +6,7 @@
 		"dev": "vite dev --port 3000",
 		"build": "NODE_OPTIONS=\"--max-old-space-size=4096\" vite build",
 		"serve": "vite preview",
-		"test": "vitest run --config vitest.config.ts",
+		"test": "bun test",
 		"format": "biome format",
 		"lint": "biome lint",
 		"check": "biome check",
@@ -72,6 +72,7 @@
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {
+		"@happy-dom/global-registrator": "^20.10.6",
 		"@tanstack/devtools-vite": "^0.5.1",
 		"@testing-library/dom": "^10.4.0",
 		"@testing-library/react": "^16.2.0",
@@ -81,10 +82,8 @@
 		"@vitejs/plugin-react": "^5.1.4",
 		"babel-plugin-react-compiler": "^1.0.0",
 		"baseline-browser-mapping": "^2.10.0",
-		"jsdom": "^28.1.0",
 		"typescript": "^5.9.3",
 		"vite": "^7.3.1",
-		"vitest": "^4.0.18",
 		"web-vitals": "^5.1.0"
 	}
 }

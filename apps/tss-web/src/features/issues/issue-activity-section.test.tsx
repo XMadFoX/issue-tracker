@@ -1,12 +1,10 @@
-// @vitest-environment jsdom
-
 import type {
 	IssueActivityList,
 	IssueStatusList,
 } from "@prism/blocks/src/features/issues/types";
 import { IssueActivitySection } from "@prism/blocks/src/features/issues/view/issue-activity-section";
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
 
 afterEach(cleanup);
 
