@@ -1,0 +1,6692 @@
+{
+  "version": "8",
+  "dialect": "postgres",
+  "id": "af178cc7-3ddb-4b06-8522-b10dc7626d07",
+  "prevIds": [
+    "c4fa137e-c1e8-43ac-b0be-ed5323d2f70d"
+  ],
+  "ddl": [
+    {
+      "values": [
+        "user",
+        "workspace",
+        "team",
+        "resource"
+      ],
+      "name": "attribute_entity",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "allow",
+        "deny"
+      ],
+      "name": "policy_effect",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "workspace",
+        "team"
+      ],
+      "name": "role_scope_level",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "planned",
+        "active",
+        "completed",
+        "canceled"
+      ],
+      "name": "cycle_state",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "issue.created",
+        "issue.updated",
+        "issue.status_changed",
+        "issue.estimate_changed",
+        "issue.cycle_assigned",
+        "issue.cycle_unassigned",
+        "issue.cycle_rolled_over",
+        "issue.cycle_returned_to_backlog"
+      ],
+      "name": "issue_activity_action_type",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "backlog",
+        "planned",
+        "in_progress",
+        "completed",
+        "canceled"
+      ],
+      "name": "canonical_category",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "carry_over",
+        "move_to_backlog"
+      ],
+      "name": "cycle_rollover_policy",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "automatic",
+        "confirmation_required",
+        "reminder_only"
+      ],
+      "name": "team_cycle_end_behavior",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "entity_attributes",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "permissions_catalog",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "policy_constraints",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "role_assignments",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "role_definitions",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "role_permissions",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "account",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "session",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "user",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "verification",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "cycle",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "issue_activity",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "issue_priority",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "issue_status",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "issue_status_group",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "issue_type",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "issue_type_allowed_status",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "issue_type_team_override",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "team_cycle_settings",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "issue",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "issue_label",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "label",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "team",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "team_membership",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "workspace",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "workspace_invitation",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "workspace_invitation_team",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "workspace_membership",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "entity_attributes"
+    },
+    {
+      "type": "attribute_entity",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "entity_type",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "entity_attributes"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "entity_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "entity_attributes"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "entity_attributes"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "value",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "entity_attributes"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "entity_attributes"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "entity_attributes"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "entity_attributes"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "permissions_catalog"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "permissions_catalog"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "resource_type",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "permissions_catalog"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "action",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "permissions_catalog"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "permissions_catalog"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "policy_constraints"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "policy_constraints"
+    },
+    {
+      "type": "role_scope_level",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "scope_level",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "policy_constraints"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "policy_constraints"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "predicate_json",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "policy_constraints"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "policy_constraints"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "role_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "assigned_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "assigned_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "name": "attributes",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_definitions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_definitions"
+    },
+    {
+      "type": "role_scope_level",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "scope_level",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_definitions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_definitions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_definitions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_definitions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_definitions"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_definitions"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "name": "attributes",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_definitions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "role_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_permissions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "permission_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_permissions"
+    },
+    {
+      "type": "policy_effect",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'allow'",
+      "generated": null,
+      "identity": null,
+      "name": "effect",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_permissions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "constraint_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_permissions"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "name": "attributes",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "role_permissions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "account_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "provider_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "access_token",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "refresh_token",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id_token",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "access_token_expires_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "refresh_token_expires_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "scope",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "password",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "session"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "expires_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "session"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "token",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "session"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "session"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "session"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "ip_address",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "session"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_agent",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "session"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "session"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "email",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "email_verified",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "image",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "verification"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "identifier",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "verification"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "value",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "verification"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "expires_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "verification"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "verification"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "verification"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "sequence",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "start_date",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "end_date",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "type": "cycle_state",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'planned'",
+      "generated": null,
+      "identity": null,
+      "name": "state",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "capacity",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "velocity",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "issue_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "actor_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "cycle_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "type": "issue_activity_action_type",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "action_type",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "field",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "from_value",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "to_value",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "metadata",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_priority"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_priority"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_priority"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "rank",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_priority"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "color",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_priority"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_priority"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_priority"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_priority"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "status_group_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "color",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "order_index",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status_group"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status_group"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status_group"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status_group"
+    },
+    {
+      "type": "canonical_category",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "canonical_category",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status_group"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status_group"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "order_index",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status_group"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "true",
+      "generated": null,
+      "identity": null,
+      "name": "is_editable",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status_group"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status_group"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_status_group"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "icon",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "color",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "order_index",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "is_default",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "true",
+      "generated": null,
+      "identity": null,
+      "name": "is_editable",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "archived_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "issue_type_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "status_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "is_initial",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "order_index",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "source_issue_type_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "replacement_issue_type_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "hidden_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "cadence_enabled",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "cadence_days",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "anchor_date",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "2",
+      "generated": null,
+      "identity": null,
+      "name": "planning_horizon",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "type": "team_cycle_end_behavior",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'automatic'",
+      "generated": null,
+      "identity": null,
+      "name": "end_behavior",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1440",
+      "generated": null,
+      "identity": null,
+      "name": "grace_period_minutes",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "type": "cycle_rollover_policy",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'carry_over'",
+      "generated": null,
+      "identity": null,
+      "name": "default_rollover_policy",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1440",
+      "generated": null,
+      "identity": null,
+      "name": "reminder_lead_minutes",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "number",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "title",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "search_text",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "tsvector",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "search_vector",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "vector(1536)",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "embedding",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "status_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "issue_type_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "priority_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "cycle_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "estimate",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "due_date",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'a00'",
+      "generated": null,
+      "identity": null,
+      "name": "sort_order",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "assignee_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "reporter_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "creator_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "parent_issue_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "archived_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "issue_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_label"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "label_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "issue_label"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "label"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "label"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "label"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "label"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "color",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "label"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "label"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "label"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "label"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "color",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "lead_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "cycle_duration",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "triage_mode",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "privacy",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "role_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'active'",
+      "generated": null,
+      "identity": null,
+      "name": "status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "invited_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "name": "attributes",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "joined_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "last_seen_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "slug",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "timezone",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "email",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "normalized_email",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "role_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "invited_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "token_hash",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "expires_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "accepted_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "accepted_by_user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "invitation_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation_team"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "team_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_invitation_team"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "role_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "name": "attributes",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "invited_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "joined_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "last_seen_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "entity_type",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "entity_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "key",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "entity_attributes_type_id_key_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "entity_attributes"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "resource_type",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "action",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "permissions_catalog_resource_action_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "permissions_catalog"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "role_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "role_assignments_user_role_team_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "scope_level",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "name",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "role_definitions_workspace_scope_team_name_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "role_definitions"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "role_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "permission_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "constraint_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "role_permissions_pk",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "role_permissions"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "sequence",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "cycle_team_sequence_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "cycle_id_workspace_team_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "cycle_workspace_team_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "state",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "cycle_team_state_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "issue_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_activity_workspace_issue_created_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_activity_workspace_team_created_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "action_type",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_activity_workspace_action_created_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "cycle_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_activity_workspace_cycle_created_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_priority_workspace_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_priority"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "rank",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_priority_ws_rank_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_priority"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "name",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_status_workspace_name_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "key",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_status_group_workspace_key_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_status_group"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "key",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "team_id is null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_workspace_key_when_global",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "key",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "team_id is not null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_workspace_team_key_when_scoped",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "team_id is null and is_default = true",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_workspace_default_when_global",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "team_id is not null and is_default = true",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_workspace_team_default_when_scoped",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "order_index",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_workspace_scope_order_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "archived_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_archived_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "issue_type_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "status_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "team_id is null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_allowed_status_type_status_when_global",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "issue_type_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "status_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "team_id is not null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_allowed_status_type_team_status_when_scoped",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "issue_type_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "team_id is null and is_initial = true",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_allowed_status_initial_when_global",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "issue_type_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "team_id is not null and is_initial = true",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_allowed_status_initial_when_scoped",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "status_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_allowed_status_status_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_allowed_status_workspace_team_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "source_issue_type_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_team_override_team_source_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "source_issue_type_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_team_override_source_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "replacement_issue_type_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_team_override_replacement_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_type_team_override_workspace_team_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "number",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_team_number_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_id_workspace_team_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "status_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "archived_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_team_status_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "issue_type_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "archived_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_team_issue_type_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "cycle_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_cycle_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "title",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": {
+            "name": "gin_trgm_ops",
+            "default": false
+          }
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "gin",
+      "concurrently": false,
+      "name": "issue_title_trgm_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "search_text",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": {
+            "name": "gin_trgm_ops",
+            "default": false
+          }
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "gin",
+      "concurrently": false,
+      "name": "issue_search_text_trgm_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "search_vector",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "gin",
+      "concurrently": false,
+      "name": "issue_search_vector_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "embedding",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": {
+            "name": "vector_cosine_ops",
+            "default": false
+          }
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "hnsw",
+      "concurrently": false,
+      "name": "issue_embedding_hnsw_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "parent_issue_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_parent_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "issue_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_label_issue_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_label"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "label_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_label_label_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_label"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "issue_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "label_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "issue_label_pk",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "issue_label"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "name",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "team_id is null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "label_workspace_name_when_global",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "label"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "name",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "team_id is not null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "label_workspace_team_name_when_scoped",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "label"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "key",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "team_workspace_key_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "team_id_workspace_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "team_membership_team_user_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "slug",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "workspace_slug_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "workspace"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "invitation_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "team_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "workspace_invitation_team_invitation_team_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "workspace_invitation_team"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspace_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "workspace_membership_workspace_user_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "entity_attributes_user_id_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "entity_attributes"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "entity_attributes_workspace_id_workspace_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "entity_attributes"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "entity_attributes_team_id_team_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "entity_attributes"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "policy_constraints_workspace_id_workspace_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "policy_constraints"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "role_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "role_definitions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "role_assignments_role_id_role_definitions_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "role_assignments_user_id_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "role_assignments_workspace_id_workspace_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "role_assignments_team_id_team_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "assigned_by"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "role_assignments_assigned_by_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "role_assignments"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "role_definitions_workspace_id_workspace_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "role_definitions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "role_definitions_team_id_team_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "role_definitions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "created_by"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "role_definitions_created_by_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "role_definitions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "role_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "role_definitions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "role_permissions_role_id_role_definitions_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "role_permissions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "permission_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "permissions_catalog",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "role_permissions_permission_id_permissions_catalog_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "role_permissions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "constraint_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "policy_constraints",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "role_permissions_constraint_id_policy_constraints_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "role_permissions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "account_user_id_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "session_user_id_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "session"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "cycle_workspace_id_workspace_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "cycle_team_id_team_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_activity_workspace_id_workspace_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "actor_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "issue_activity_actor_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "cycle_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "cycle",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "issue_activity_cycle_id_cycle_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "team_id",
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id",
+        "workspace_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_activity_team_workspace_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "issue_id",
+        "workspace_id",
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "issue",
+      "columnsTo": [
+        "id",
+        "workspace_id",
+        "team_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_activity_issue_workspace_team_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "cycle_id",
+        "workspace_id",
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "cycle",
+      "columnsTo": [
+        "id",
+        "workspace_id",
+        "team_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "issue_activity_cycle_workspace_team_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_activity"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_priority_workspace_id_workspace_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_priority"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_status_workspace_id_workspace_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "issue_status_team_id_team_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "status_group_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "issue_status_group",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_status_status_group_id_issue_status_group_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_status"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_status_group_workspace_id_workspace_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_status_group"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_type_workspace_id_workspace_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_type_team_id_team_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_type"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_type_allowed_status_workspace_id_workspace_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_type_allowed_status_team_id_team_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "issue_type_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "issue_type",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_type_allowed_status_issue_type_id_issue_type_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "status_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "issue_status",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_type_allowed_status_status_id_issue_status_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_type_allowed_status"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_type_team_override_workspace_id_workspace_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_type_team_override_team_id_team_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "source_issue_type_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "issue_type",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_type_team_override_gaxH5wp3GkzN_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "replacement_issue_type_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "issue_type",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "issue_type_team_override_B4efHt7d9K9k_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_type_team_override"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "team_cycle_settings_team_id_team_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "updated_by"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "team_cycle_settings_updated_by_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_workspace_id_workspace_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_team_id_team_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "status_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "issue_status",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "issue_status_id_issue_status_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "issue_type_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "issue_type",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "issue_issue_type_id_issue_type_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "priority_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "issue_priority",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "issue_priority_id_issue_priority_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "cycle_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "cycle",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "issue_cycle_id_cycle_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "assignee_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "issue_assignee_id_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "reporter_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "issue_reporter_id_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "creator_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "issue_creator_id_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "parent_issue_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "issue",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "issue_parent_issue_id_issue_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "issue_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "issue",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_label_issue_id_issue_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_label"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "label_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "label",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "issue_label_label_id_label_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "issue_label"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "label_workspace_id_workspace_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "label"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "label_team_id_team_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "label"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "team_workspace_id_workspace_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "lead_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "team_lead_id_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "team"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "team_membership_team_id_team_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "team_membership_user_id_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "role_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "role_definitions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "team_membership_role_id_role_definitions_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "invited_by"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "team_membership_invited_by_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "team_membership"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "workspace_invitation_workspace_id_workspace_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "role_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "role_definitions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "workspace_invitation_role_id_role_definitions_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "invited_by"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "workspace_invitation_invited_by_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "accepted_by_user_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "workspace_invitation_accepted_by_user_id_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_invitation"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "invitation_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace_invitation",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "workspace_invitation_team_invitation_id_workspace_invitation_id",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_invitation_team"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "team_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "team",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "workspace_invitation_team_team_id_team_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_invitation_team"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspace_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "workspace_membership_workspace_id_workspace_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "workspace_membership_user_id_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "role_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "role_definitions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "workspace_membership_role_id_role_definitions_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "invited_by"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "workspace_membership_invited_by_user_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_membership"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "entity_attributes_pkey",
+      "schema": "public",
+      "table": "entity_attributes",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "permissions_catalog_pkey",
+      "schema": "public",
+      "table": "permissions_catalog",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "policy_constraints_pkey",
+      "schema": "public",
+      "table": "policy_constraints",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "role_assignments_pkey",
+      "schema": "public",
+      "table": "role_assignments",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "role_definitions_pkey",
+      "schema": "public",
+      "table": "role_definitions",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "account_pkey",
+      "schema": "public",
+      "table": "account",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "session_pkey",
+      "schema": "public",
+      "table": "session",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "user_pkey",
+      "schema": "public",
+      "table": "user",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "verification_pkey",
+      "schema": "public",
+      "table": "verification",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "cycle_pkey",
+      "schema": "public",
+      "table": "cycle",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "issue_activity_pkey",
+      "schema": "public",
+      "table": "issue_activity",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "issue_priority_pkey",
+      "schema": "public",
+      "table": "issue_priority",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "issue_status_pkey",
+      "schema": "public",
+      "table": "issue_status",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "issue_status_group_pkey",
+      "schema": "public",
+      "table": "issue_status_group",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "issue_type_pkey",
+      "schema": "public",
+      "table": "issue_type",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "issue_type_allowed_status_pkey",
+      "schema": "public",
+      "table": "issue_type_allowed_status",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "issue_type_team_override_pkey",
+      "schema": "public",
+      "table": "issue_type_team_override",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "team_id"
+      ],
+      "nameExplicit": false,
+      "name": "team_cycle_settings_pkey",
+      "schema": "public",
+      "table": "team_cycle_settings",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "issue_pkey",
+      "schema": "public",
+      "table": "issue",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "label_pkey",
+      "schema": "public",
+      "table": "label",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "team_pkey",
+      "schema": "public",
+      "table": "team",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "team_membership_pkey",
+      "schema": "public",
+      "table": "team_membership",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "workspace_pkey",
+      "schema": "public",
+      "table": "workspace",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "workspace_invitation_pkey",
+      "schema": "public",
+      "table": "workspace_invitation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "workspace_membership_pkey",
+      "schema": "public",
+      "table": "workspace_membership",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "key"
+      ],
+      "nullsNotDistinct": false,
+      "name": "permissions_catalog_key_unique",
+      "schema": "public",
+      "table": "permissions_catalog",
+      "entityType": "uniques"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "token"
+      ],
+      "nullsNotDistinct": false,
+      "name": "session_token_unique",
+      "schema": "public",
+      "table": "session",
+      "entityType": "uniques"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "email"
+      ],
+      "nullsNotDistinct": false,
+      "name": "user_email_unique",
+      "schema": "public",
+      "table": "user",
+      "entityType": "uniques"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "token_hash"
+      ],
+      "nullsNotDistinct": false,
+      "name": "workspace_invitation_token_hash_unique",
+      "schema": "public",
+      "table": "workspace_invitation",
+      "entityType": "uniques"
+    },
+    {
+      "value": "num_nonnulls(\"user_id\", \"workspace_id\", \"team_id\") <= 1",
+      "name": "entity_attributes_polymorphic_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "entity_attributes"
+    },
+    {
+      "value": "\"end_date\" > \"start_date\"",
+      "name": "cycle_date_range_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "value": "\"capacity\" is null or \"capacity\" >= 0",
+      "name": "cycle_capacity_non_negative_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "value": "\"velocity\" is null or \"velocity\" >= 0",
+      "name": "cycle_velocity_non_negative_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "cycle"
+    },
+    {
+      "value": "\"cadence_days\" > 0",
+      "name": "team_cycle_settings_cadence_days_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "value": "\"planning_horizon\" between 1 and 12",
+      "name": "team_cycle_settings_planning_horizon_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "value": "\"grace_period_minutes\" >= 0",
+      "name": "team_cycle_settings_grace_period_minutes_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    },
+    {
+      "value": "\"reminder_lead_minutes\" >= 0",
+      "name": "team_cycle_settings_reminder_lead_minutes_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "team_cycle_settings"
+    }
+  ],
+  "renames": []
+}

@@ -9,4 +9,5 @@ export * from "./features/tracker/issue-statuses.schema";
 export * from "./features/tracker/issue-types.schema";
 export * from "./features/tracker/issues.schema";
 export * from "./features/tracker/labels.schema";
+export * from "./features/tracker/team-cycle-settings.schema";
 export * from "./features/tracker/tracker.schema";
