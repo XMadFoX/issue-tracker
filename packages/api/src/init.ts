@@ -1,4 +1,5 @@
 import { db } from "db";
+import { backfillTeamCycleSettings } from "./features/cycles/settings";
 import { ensurePermissionCatalog } from "./features/workspaces/defaults";
 
 let initCompleted = false;
@@ -17,6 +18,7 @@ export function ensureApiInit(): Promise<void> {
 		try {
 			await db.transaction(async (tx) => {
 				await ensurePermissionCatalog(tx);
+				await backfillTeamCycleSettings(tx);
 			});
 			initCompleted = true;
 		} catch (error) {

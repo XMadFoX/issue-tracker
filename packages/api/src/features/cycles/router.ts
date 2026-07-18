@@ -12,6 +12,7 @@ import { and, count, desc, eq, gt, lt, max, ne, sql } from "drizzle-orm";
 import z from "zod";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
+import { isValidIanaTimezone } from "../../lib/timezone";
 import { writeIssueActivity } from "../issues/activity";
 import { issuePublisher } from "../issues/publisher";
 import { getIssueWithRelations } from "../issues/queries";
@@ -28,11 +29,17 @@ import {
 	cycleCreateSchema,
 	cycleDeleteSchema,
 	cycleGetSchema,
+	cycleGetSettingsSchema,
 	cycleListSchema,
 	cycleMetricsSchema,
 	cycleUnassignIssueSchema,
 	cycleUpdateSchema,
+	cycleUpdateSettingsSchema,
 } from "./schema";
+import {
+	getScopedTeamCycleSettings,
+	updateScopedTeamCycleSettings,
+} from "./settings";
 
 const issueTypeMetricRowsSchema = z.array(
 	z.object({
@@ -98,6 +105,22 @@ const completionErrors = {
 	TEAM_MISMATCH: {
 		status: 400,
 		message: "Cycle and rollover target must belong to the same team.",
+	},
+};
+
+const settingsErrors = {
+	...commonErrors,
+	SETTINGS_NOT_INITIALIZED: {
+		status: 409,
+		message: "Cycle settings are not initialized for this team.",
+	},
+	INVALID_WORKSPACE_TIMEZONE: {
+		status: 400,
+		message: "Workspace timezone is invalid.",
+	},
+	AUTOMATION_UNAVAILABLE: {
+		status: 409,
+		message: "Cycle automation is not available yet.",
 	},
 };
 
@@ -798,6 +821,82 @@ const unassignIssue = authedRouter
 		return updated;
 	});
 
+const getSettings = authedRouter
+	.input(cycleGetSettingsSchema)
+	.errors(settingsErrors)
+	.handler(async ({ context, input, errors }) => {
+		const scoped = await getScopedTeamCycleSettings({
+			executor: db,
+			workspaceId: input.workspaceId,
+			teamId: input.teamId,
+		});
+		if (!scoped) throw errors.NOT_FOUND();
+
+		const [canRead, canManageSettings] = await Promise.all([
+			isAllowed({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+				teamId: scoped.team.id,
+				permissionKey: "cycle:read",
+			}),
+			isAllowed({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+				teamId: scoped.team.id,
+				permissionKey: "cycle:manage_settings",
+			}),
+		]);
+		if (!canRead) throw errors.UNAUTHORIZED();
+		if (!scoped.settings) throw errors.SETTINGS_NOT_INITIALIZED();
+
+		return {
+			settings: scoped.settings,
+			workspaceTimezone: scoped.workspaceTimezone,
+			canManageSettings,
+		};
+	});
+
+const updateSettings = authedRouter
+	.input(cycleUpdateSettingsSchema)
+	.errors(settingsErrors)
+	.handler(async ({ context, input, errors }) => {
+		const scoped = await getScopedTeamCycleSettings({
+			executor: db,
+			workspaceId: input.workspaceId,
+			teamId: input.teamId,
+		});
+		if (!scoped) throw errors.NOT_FOUND();
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId: scoped.team.id,
+			permissionKey: "cycle:manage_settings",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED();
+		if (!scoped.settings) throw errors.SETTINGS_NOT_INITIALIZED();
+		if (!isValidIanaTimezone(scoped.workspaceTimezone)) {
+			throw errors.INVALID_WORKSPACE_TIMEZONE();
+		}
+		if (input.cadenceEnabled) throw errors.AUTOMATION_UNAVAILABLE();
+
+		const { teamId, workspaceId, ...settings } = input;
+		const updated = await updateScopedTeamCycleSettings({
+			executor: db,
+			workspaceId,
+			teamId,
+			updatedBy: context.auth.session.userId,
+			settings,
+		});
+		if (!updated) throw errors.SETTINGS_NOT_INITIALIZED();
+
+		return {
+			settings: updated,
+			workspaceTimezone: scoped.workspaceTimezone,
+			canManageSettings: true,
+		};
+	});
+
 const cycleMetrics = authedRouter
 	.input(cycleMetricsSchema)
 	.errors(commonErrors)
@@ -1009,5 +1108,7 @@ export const cycleRouter = {
 	delete: deleteCycle,
 	assignIssue,
 	unassignIssue,
+	getSettings,
+	updateSettings,
 	metrics: cycleMetrics,
 };

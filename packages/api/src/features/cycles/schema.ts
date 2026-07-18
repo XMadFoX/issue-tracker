@@ -1,4 +1,8 @@
 import { cycle, cycleStateEnum } from "db/features/tracker/cycles.schema";
+import {
+	cycleRolloverPolicyEnum,
+	teamCycleEndBehaviorEnum,
+} from "db/features/tracker/team-cycle-settings.schema";
 import { createInsertSchema, createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 
@@ -93,3 +97,50 @@ export const cycleMetricsSchema = z.object({
 	workspaceId: cycleInsertSchema.shape.workspaceId,
 	cycleId: cycleInsertSchema.shape.id,
 });
+
+const settingsValueShape = {
+	cadenceEnabled: z.boolean(),
+	cadenceDays: z.number().int().positive(),
+	anchorDate: z.iso.datetime().nullable(),
+	planningHorizon: z.number().int().min(1).max(12),
+	endBehavior: createSelectSchema(teamCycleEndBehaviorEnum),
+	gracePeriodMinutes: z.number().int().nonnegative(),
+	defaultRolloverPolicy: createSelectSchema(cycleRolloverPolicyEnum),
+	reminderLeadMinutes: z.number().int().nonnegative(),
+};
+
+function validateEnabledCadence(
+	value: { cadenceEnabled: boolean; anchorDate: string | null },
+	context: z.RefinementCtx,
+) {
+	if (value.cadenceEnabled && value.anchorDate === null) {
+		context.addIssue({
+			code: "custom",
+			message: "An anchor date is required when cadence is enabled",
+			path: ["anchorDate"],
+		});
+	}
+}
+
+export const cycleSettingsValueSchema = z
+	.object(settingsValueShape)
+	.strict()
+	.superRefine(validateEnabledCadence);
+
+export const cycleGetSettingsSchema = z
+	.object({
+		workspaceId: cycleInsertSchema.shape.workspaceId,
+		teamId: cycleInsertSchema.shape.teamId,
+	})
+	.strict();
+
+export const cycleUpdateSettingsSchema = z
+	.object({
+		workspaceId: cycleInsertSchema.shape.workspaceId,
+		teamId: cycleInsertSchema.shape.teamId,
+		...settingsValueShape,
+	})
+	.strict()
+	.superRefine(validateEnabledCadence);
+
+export type CycleSettingsValue = z.infer<typeof cycleSettingsValueSchema>;
