@@ -1,6 +1,7 @@
 import { workspace } from "db/features/tracker/tracker.schema";
 import { createInsertSchema } from "drizzle-orm/zod";
 import z from "zod";
+import { ianaTimezoneSchema } from "../../lib/timezone";
 
 export const workspaceInsertSchema = createInsertSchema(workspace)
 	.omit({ createdAt: true, updatedAt: true })
@@ -12,17 +13,7 @@ export const workspaceInsertSchema = createInsertSchema(workspace)
 			.trim()
 			.min(1, "Slug is required")
 			.regex(/^[a-z0-9-]+$/, "Use lowercase letters, numbers and hyphens only"),
-		timezone: z
-			.string()
-			.min(1)
-			.refine((timezone) => {
-				try {
-					new Intl.DateTimeFormat("en-US", { timeZone: timezone });
-					return true;
-				} catch {
-					return false;
-				}
-			}, "Invalid timezone"),
+		timezone: ianaTimezoneSchema,
 		attributes: z.record(z.string(), z.unknown()).optional(),
 	});
 export const workspaceGetBySlugSchema = z.object({
