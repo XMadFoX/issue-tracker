@@ -23,11 +23,13 @@ import {
 	cycleBaselineAssignmentActionTypes,
 	normalizeIssueTypeMetrics,
 } from "./metrics";
+import { deriveSchedulePreview } from "./schedule";
 import {
 	cycleAssignIssueSchema,
 	cycleCompleteSchema,
 	cycleCreateSchema,
 	cycleDeleteSchema,
+	cycleGetSchedulePreviewSchema,
 	cycleGetSchema,
 	cycleGetSettingsSchema,
 	cycleListSchema,
@@ -856,6 +858,36 @@ const getSettings = authedRouter
 		};
 	});
 
+const getSchedulePreview = authedRouter
+	.input(cycleGetSchedulePreviewSchema)
+	.errors(settingsErrors)
+	.handler(async ({ context, input, errors }) => {
+		const scoped = await getScopedTeamCycleSettings({
+			executor: db,
+			workspaceId: input.workspaceId,
+			teamId: input.teamId,
+		});
+		if (!scoped) throw errors.NOT_FOUND();
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId: scoped.team.id,
+			permissionKey: "cycle:read",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED();
+		if (!scoped.settings) throw errors.SETTINGS_NOT_INITIALIZED();
+		if (!isValidIanaTimezone(scoped.workspaceTimezone)) {
+			throw errors.INVALID_WORKSPACE_TIMEZONE();
+		}
+
+		return deriveSchedulePreview({
+			workspaceTimezone: scoped.workspaceTimezone,
+			settings: scoped.settings,
+			now: new Date(),
+		});
+	});
+
 const updateSettings = authedRouter
 	.input(cycleUpdateSettingsSchema)
 	.errors(settingsErrors)
@@ -1109,6 +1141,7 @@ export const cycleRouter = {
 	assignIssue,
 	unassignIssue,
 	getSettings,
+	getSchedulePreview,
 	updateSettings,
 	metrics: cycleMetrics,
 };

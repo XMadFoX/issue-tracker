@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	cycleCompleteSchema,
+	cycleGetSchedulePreviewSchema,
 	cycleGetSettingsSchema,
 	cycleSettingsValueSchema,
 	cycleUpdateSettingsSchema,
@@ -127,6 +128,13 @@ describe("cycle settings schemas", () => {
 				workspaceId,
 				teamId,
 				updatedAt: "2026-01-01T00:00:00.000Z",
+			}).success,
+		).toBeFalse();
+		expect(
+			cycleGetSchedulePreviewSchema.safeParse({
+				workspaceId,
+				teamId,
+				now: "2026-01-01T00:00:00.000Z",
 			}).success,
 		).toBeFalse();
 	});

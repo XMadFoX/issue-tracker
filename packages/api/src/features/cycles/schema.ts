@@ -134,6 +134,8 @@ export const cycleGetSettingsSchema = z
 	})
 	.strict();
 
+export const cycleGetSchedulePreviewSchema = cycleGetSettingsSchema;
+
 export const cycleUpdateSettingsSchema = z
 	.object({
 		workspaceId: cycleInsertSchema.shape.workspaceId,

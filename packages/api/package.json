@@ -16,6 +16,7 @@
 		"@ai-sdk/provider": "3.0.7",
 		"@elysiajs/cors": "^1.4.0",
 		"@elysiajs/opentelemetry": "^1.4.10",
+		"@js-temporal/polyfill": "^0.5.1",
 		"@logtape/logtape": "^2.0.4",
 		"@logtape/otel": "^2.0.4",
 		"@logtape/pretty": "^2.0.4",

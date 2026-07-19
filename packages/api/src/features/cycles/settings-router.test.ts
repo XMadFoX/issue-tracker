@@ -14,6 +14,7 @@ import setupDb from "../../utils/prepare-tests";
 
 let db: typeof import("db").db;
 let router: typeof import("../../router").router;
+let cycle: typeof import("db/features/tracker/cycles.schema").cycle;
 let permissionsCatalog: typeof import("db/features/abac/abac.schema").permissionsCatalog;
 let roleAssignments: typeof import("db/features/abac/abac.schema").roleAssignments;
 let roleDefinitions: typeof import("db/features/abac/abac.schema").roleDefinitions;
@@ -27,6 +28,7 @@ let teardown: Awaited<ReturnType<typeof setupDb>>;
 const ids = {
 	manager: createId(),
 	reader: createId(),
+	noAccess: createId(),
 	team: createId(),
 	workspace: createId(),
 	wrongWorkspace: createId(),
@@ -134,6 +136,7 @@ beforeAll(async () => {
 	({ teamCycleSettings } = await import(
 		"db/features/tracker/team-cycle-settings.schema"
 	));
+	({ cycle } = await import("db/features/tracker/cycles.schema"));
 	({ team, workspace } = await import("db/features/tracker/tracker.schema"));
 	({ user } = await import("db/features/auth/auth.schema"));
 	({ router } = await import("../../router"));
@@ -152,6 +155,11 @@ beforeEach(async () => {
 			email: "settings-manager@example.test",
 		},
 		{ id: ids.reader, name: "Reader", email: "settings-reader@example.test" },
+		{
+			id: ids.noAccess,
+			name: "No Access",
+			email: "settings-no-access@example.test",
+		},
 	]);
 	await db.insert(workspace).values([
 		{
@@ -272,6 +280,83 @@ describe("cycle settings routes", () => {
 			.from(team)
 			.where(eq(team.id, ids.team));
 		expect(teamAfterRejectedUpdate?.cycleDuration).toBe(28);
+	});
+
+	test("returns a read-only schedule preview for a cycle reader", async () => {
+		await db
+			.update(teamCycleSettings)
+			.set({
+				cadenceEnabled: true,
+				anchorDate: new Date("2026-07-01T10:00:00.000Z"),
+			})
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		const [settingsBefore, cyclesBefore] = await Promise.all([
+			db
+				.select()
+				.from(teamCycleSettings)
+				.where(eq(teamCycleSettings.teamId, ids.team)),
+			db.select().from(cycle),
+		]);
+
+		const result = await client(ids.reader).cycle.getSchedulePreview(
+			{ workspaceId: ids.workspace, teamId: ids.team },
+			options(ids.reader),
+		);
+		expect(result).toMatchObject({
+			status: "ready",
+			automationAvailable: false,
+			workspaceTimezone: "America/New_York",
+		});
+		const [settingsAfter, cyclesAfter] = await Promise.all([
+			db
+				.select()
+				.from(teamCycleSettings)
+				.where(eq(teamCycleSettings.teamId, ids.team)),
+			db.select().from(cycle),
+		]);
+		expect(settingsAfter).toEqual(settingsBefore);
+		expect(cyclesAfter).toEqual(cyclesBefore);
+	});
+
+	test("enforces preview authorization, scoping, and persisted timezone safety", async () => {
+		await expectCode(
+			client(ids.noAccess).cycle.getSchedulePreview(
+				{ workspaceId: ids.workspace, teamId: ids.team },
+				options(ids.noAccess),
+			),
+			"UNAUTHORIZED",
+		);
+		await expectCode(
+			client(ids.reader).cycle.getSchedulePreview(
+				{ workspaceId: ids.wrongWorkspace, teamId: ids.team },
+				options(ids.reader),
+			),
+			"NOT_FOUND",
+		);
+		await db
+			.update(workspace)
+			.set({ timezone: "Invalid/Timezone" })
+			.where(eq(workspace.id, ids.workspace));
+		await expectCode(
+			client(ids.reader).cycle.getSchedulePreview(
+				{ workspaceId: ids.workspace, teamId: ids.team },
+				options(ids.reader),
+			),
+			"INVALID_WORKSPACE_TIMEZONE",
+		);
+	});
+
+	test("reports an uninitialized schedule as an invariant error", async () => {
+		await db
+			.delete(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		await expectCode(
+			client(ids.reader).cycle.getSchedulePreview(
+				{ workspaceId: ids.workspace, teamId: ids.team },
+				options(ids.reader),
+			),
+			"SETTINGS_NOT_INITIALIZED",
+		);
 	});
 
 	test("rejects enabling automation and workspace/team mismatches", async () => {
