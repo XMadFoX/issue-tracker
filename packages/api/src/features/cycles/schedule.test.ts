@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	deriveSchedulePreview,
+	enumerateScheduledCycleOccurrences,
 	InvalidWorkspaceTimezoneError,
 	type ScheduleSettings,
 } from "./schedule";
@@ -120,6 +121,32 @@ describe("deriveSchedulePreview", () => {
 			localDateTime: "2026-01-08T10:00:00",
 			offset: "-05:00",
 		});
+	});
+
+	test("enumerates cycle boundaries with the same DST-compatible calendar rules", () => {
+		const spring = enumerateScheduledCycleOccurrences({
+			workspaceTimezone: "America/New_York",
+			settings: settings({
+				cadenceDays: 1,
+				anchorDate: new Date("2026-03-07T07:30:00.000Z"),
+			}),
+			now: new Date("2026-03-08T08:00:00.000Z"),
+			count: 2,
+		});
+		expect(
+			spring.map((occurrence) => occurrence.boundary.toISOString()),
+		).toEqual(["2026-03-08T07:30:00.000Z", "2026-03-09T06:30:00.000Z"]);
+
+		const fall = enumerateScheduledCycleOccurrences({
+			workspaceTimezone: "America/New_York",
+			settings: settings({
+				cadenceDays: 1,
+				anchorDate: new Date("2026-10-31T05:30:00.000Z"),
+			}),
+			now: new Date("2026-11-01T06:00:00.000Z"),
+			count: 1,
+		});
+		expect(fall[0]?.boundary.toISOString()).toBe("2026-11-01T05:30:00.000Z");
 	});
 
 	test("derives cycle ends and action timing from the anchor after a DST gap", () => {

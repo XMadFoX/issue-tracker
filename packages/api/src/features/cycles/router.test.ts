@@ -21,6 +21,7 @@ let issueStatusGroup: typeof import("db/features/tracker/issue-statuses.schema")
 let issueType: typeof import("db/features/tracker/issue-types.schema").issueType;
 let team: typeof import("db/features/tracker/tracker.schema").team;
 let workspace: typeof import("db/features/tracker/tracker.schema").workspace;
+let teamCycleSettings: typeof import("db/features/tracker/team-cycle-settings.schema").teamCycleSettings;
 let user: typeof import("db/features/auth/auth.schema").user;
 let permissionsCatalog: typeof import("db/features/abac/abac.schema").permissionsCatalog;
 let roleDefinitions: typeof import("db/features/abac/abac.schema").roleDefinitions;
@@ -40,6 +41,7 @@ const ids = {
 
 type Permission =
 	| "cycle:complete"
+	| "cycle:create"
 	| "cycle:read"
 	| "cycle:update"
 	| "issue:create"
@@ -234,6 +236,9 @@ beforeAll(async () => {
 	));
 	({ issueType } = await import("db/features/tracker/issue-types.schema"));
 	({ team, workspace } = await import("db/features/tracker/tracker.schema"));
+	({ teamCycleSettings } = await import(
+		"db/features/tracker/team-cycle-settings.schema"
+	));
 	({ user } = await import("db/features/auth/auth.schema"));
 	({ permissionsCatalog, roleDefinitions, rolePermissions, roleAssignments } =
 		await import("db/features/abac/abac.schema"));
@@ -355,6 +360,93 @@ describe("cycle router authorization and transitions", () => {
 			options(),
 		);
 		expect(updated.state).toBe("canceled");
+	});
+});
+
+describe("planned-cycle generation races", () => {
+	test("serializes the real cycle.create route with horizon maintenance", async () => {
+		await seed(["cycle:create"]);
+		await db.insert(teamCycleSettings).values({
+			teamId: ids.team,
+			cadenceEnabled: true,
+			cadenceDays: 7,
+			anchorDate: new Date("2026-07-15T10:00:00.000Z"),
+			planningHorizon: 2,
+			endBehavior: "automatic",
+			gracePeriodMinutes: 0,
+			defaultRolloverPolicy: "carry_over",
+			reminderLeadMinutes: 60,
+			updatedBy: null,
+		});
+		const { maintainPlannedCycleHorizon } = await import("./generation");
+		const generation = maintainPlannedCycleHorizon({
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			now: new Date("2026-07-15T10:00:00.000Z"),
+		});
+		const creation = client().cycle.create(
+			{
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				startDate: "2026-07-15T10:00:00.000Z",
+				endDate: "2026-07-22T10:00:00.000Z",
+			},
+			options(),
+		);
+		const [generated, created] = await Promise.allSettled([
+			generation,
+			creation,
+		]);
+		const rows = await db
+			.select()
+			.from(cycle)
+			.where(eq(cycle.teamId, ids.team));
+		expect(new Set(rows.map((row) => row.sequence)).size).toBe(rows.length);
+		if (
+			generated.status === "fulfilled" &&
+			generated.value.status === "created"
+		) {
+			expect(created.status).toBe("rejected");
+			if (created.status !== "rejected")
+				throw new Error("route unexpectedly fulfilled");
+			expect(created.reason).toBeInstanceOf(ORPCError);
+			if (!(created.reason instanceof ORPCError)) {
+				throw new Error("route rejected with an untyped error");
+			}
+			expect(created.reason.code).toBe("CYCLE_OVERLAP");
+			const horizonRows = rows.filter(
+				(row) => row.startDate >= new Date("2026-07-15T10:00:00.000Z"),
+			);
+			expect(horizonRows).toHaveLength(2);
+			expect(horizonRows.map((row) => row.origin)).toEqual([
+				"scheduled",
+				"scheduled",
+			]);
+			expect(
+				horizonRows.map((row) => row.scheduledBoundary?.toISOString()),
+			).toEqual(["2026-07-15T10:00:00.000Z", "2026-07-22T10:00:00.000Z"]);
+			expect(generated.value.created).toHaveLength(2);
+		} else {
+			expect(generated.status).toBe("fulfilled");
+			if (generated.status !== "fulfilled") {
+				throw new Error(
+					"generation rejected before conflicting with the route",
+				);
+			}
+			expect(generated.value.status).toBe("manual_cycle_conflict");
+			expect(created.status).toBe("fulfilled");
+			const horizonRows = rows.filter(
+				(row) => row.startDate >= new Date("2026-07-15T10:00:00.000Z"),
+			);
+			expect(horizonRows).toHaveLength(1);
+			expect(horizonRows[0]?.origin).toBe("manual");
+			expect(horizonRows[0]?.startDate.toISOString()).toBe(
+				"2026-07-15T10:00:00.000Z",
+			);
+			expect(horizonRows[0]?.endDate.toISOString()).toBe(
+				"2026-07-22T10:00:00.000Z",
+			);
+		}
 	});
 });
 

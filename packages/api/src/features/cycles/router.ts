@@ -8,7 +8,7 @@ import {
 import { issueType } from "db/features/tracker/issue-types.schema";
 import { issue } from "db/features/tracker/issues.schema";
 import { team } from "db/features/tracker/tracker.schema";
-import { and, count, desc, eq, gt, lt, max, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import z from "zod";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
@@ -23,6 +23,11 @@ import {
 	cycleBaselineAssignmentActionTypes,
 	normalizeIssueTypeMetrics,
 } from "./metrics";
+import {
+	getNextCycleSequence,
+	getOverlappingCycle,
+	lockCycleTeam,
+} from "./mutation";
 import { deriveSchedulePreview } from "./schedule";
 import {
 	cycleAssignIssueSchema,
@@ -392,36 +397,26 @@ const createCycle = authedRouter
 			throw errors.INVALID_DATE_RANGE();
 
 		return await db.transaction(async (tx) => {
-			await tx.execute(
-				sql`select pg_advisory_xact_lock(hashtext(${`cycle:${input.workspaceId}:${input.teamId}`}))`,
-			);
+			await lockCycleTeam({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+			});
 
-			const [overlap] = await tx
-				.select({ id: cycle.id })
-				.from(cycle)
-				.where(
-					and(
-						eq(cycle.workspaceId, input.workspaceId),
-						eq(cycle.teamId, input.teamId),
-						ne(cycle.state, "canceled"),
-						lt(cycle.startDate, endDate),
-						gt(cycle.endDate, startDate),
-					),
-				)
-				.limit(1)
-				.for("update");
+			const overlap = await getOverlappingCycle({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+				startDate,
+				endDate,
+			});
 			if (overlap) throw errors.CYCLE_OVERLAP();
 
-			const [maxRow] = await tx
-				.select({ sequence: max(cycle.sequence) })
-				.from(cycle)
-				.where(
-					and(
-						eq(cycle.workspaceId, input.workspaceId),
-						eq(cycle.teamId, input.teamId),
-					),
-				);
-			const sequence = (maxRow?.sequence ?? 0) + 1;
+			const sequence = await getNextCycleSequence({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+			});
 
 			const [created] = await tx
 				.insert(cycle)
@@ -476,9 +471,11 @@ const updateCycle = authedRouter
 		}
 
 		return await db.transaction(async (tx) => {
-			await tx.execute(
-				sql`select pg_advisory_xact_lock(hashtext(${`cycle:${input.workspaceId}:${existing.teamId}`}))`,
-			);
+			await lockCycleTeam({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: existing.teamId,
+			});
 			const [lockedExisting] = await tx
 				.select({ state: cycle.state })
 				.from(cycle)
@@ -495,21 +492,14 @@ const updateCycle = authedRouter
 				throw errors.INVALID_STATE_TRANSITION();
 			}
 
-			const [overlap] = await tx
-				.select({ id: cycle.id })
-				.from(cycle)
-				.where(
-					and(
-						eq(cycle.workspaceId, input.workspaceId),
-						eq(cycle.teamId, existing.teamId),
-						ne(cycle.id, input.id),
-						ne(cycle.state, "canceled"),
-						lt(cycle.startDate, endDate),
-						gt(cycle.endDate, startDate),
-					),
-				)
-				.limit(1)
-				.for("update");
+			const overlap = await getOverlappingCycle({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: existing.teamId,
+				startDate,
+				endDate,
+				excludeCycleId: input.id,
+			});
 			if (overlap) throw errors.CYCLE_OVERLAP();
 
 			const [updated] = await tx

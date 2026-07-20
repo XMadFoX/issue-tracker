@@ -25,6 +25,11 @@ export type ScheduleActionTiming = {
 	reminderCandidateAt: ScheduleBoundary;
 };
 
+export type ScheduledCycleOccurrence = {
+	boundary: Date;
+	endDate: Date;
+};
+
 export type SchedulePreview = {
 	status: ScheduleStatus;
 	automationAvailable: false;
@@ -141,6 +146,50 @@ function getActionTiming({
 			: null,
 		reminderCandidateAt: toBoundary(reminderCandidateAt),
 	};
+}
+
+export function enumerateScheduledCycleOccurrences({
+	workspaceTimezone,
+	settings,
+	now,
+	count,
+}: {
+	workspaceTimezone: string;
+	settings: ScheduleSettings;
+	now: Date;
+	count: number;
+}): ScheduledCycleOccurrence[] {
+	if (!isValidIanaTimezone(workspaceTimezone)) {
+		throw new InvalidWorkspaceTimezoneError(workspaceTimezone);
+	}
+	if (!settings.cadenceEnabled || !settings.anchorDate || count <= 0) {
+		return [];
+	}
+
+	const anchor = Temporal.Instant.from(
+		settings.anchorDate.toISOString(),
+	).toZonedDateTimeISO(workspaceTimezone);
+	const currentNow = Temporal.Instant.from(
+		now.toISOString(),
+	).toZonedDateTimeISO(workspaceTimezone);
+	const currentBoundaryIndex = getCurrentBoundaryIndex({
+		anchor,
+		now: currentNow,
+		cadenceDays: settings.cadenceDays,
+	});
+	const firstBoundaryIndex = currentBoundaryIndex ?? 0;
+
+	return Array.from({ length: count }, (_, offset) => {
+		const boundary = addCalendarDays(
+			anchor,
+			(firstBoundaryIndex + offset) * settings.cadenceDays,
+		);
+		const end = addCalendarDays(boundary, settings.cadenceDays);
+		return {
+			boundary: new Date(boundary.toInstant().epochMilliseconds),
+			endDate: new Date(end.toInstant().epochMilliseconds),
+		};
+	});
 }
 
 export function deriveSchedulePreview({
