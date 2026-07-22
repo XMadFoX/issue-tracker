@@ -2,6 +2,7 @@
 
 export * from "./features/abac/abac.schema";
 export * from "./features/auth/auth.schema";
+export * from "./features/tracker/cycle-schedule-jobs.schema";
 export * from "./features/tracker/cycles.schema";
 export * from "./features/tracker/issue-activities.schema";
 export * from "./features/tracker/issue-priorities.schema";
