@@ -247,10 +247,10 @@ beforeAll(async () => {
 		issuePublisher: { publish: async () => {} },
 	}));
 	({ router } = await import("../../router"));
-}, 30_000);
+}, 300_000);
 afterAll(async () => {
 	if (teardown) await teardown();
-});
+}, 60_000);
 beforeEach(async () => {
 	await db.execute(
 		sql`truncate table issue_activity, issue, cycle, issue_status, issue_status_group, issue_type, role_assignments, role_permissions, role_definitions, permissions_catalog, team, workspace, "user" cascade`,

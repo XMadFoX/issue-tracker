@@ -6,6 +6,8 @@
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"dev": "bun run --watch src/index.ts",
+		"worker": "bun run src/cycles-worker.ts",
+		"worker:once": "bun run src/cycles-worker.ts --once",
 		"typecheck": "tsgo --noEmit -p tsconfig.json"
 	},
 	"keywords": [],

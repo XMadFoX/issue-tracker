@@ -11,6 +11,7 @@ import { team } from "db/features/tracker/tracker.schema";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import z from "zod";
 import { authedRouter } from "../../context";
+import { env } from "../../env";
 import { isAllowed } from "../../lib/abac";
 import { isValidIanaTimezone } from "../../lib/timezone";
 import { writeIssueActivity } from "../issues/activity";
@@ -900,7 +901,9 @@ const updateSettings = authedRouter
 		if (!isValidIanaTimezone(scoped.workspaceTimezone)) {
 			throw errors.INVALID_WORKSPACE_TIMEZONE();
 		}
-		if (input.cadenceEnabled) throw errors.AUTOMATION_UNAVAILABLE();
+		if (input.cadenceEnabled && !env.CYCLES_AUTOMATION_ENABLED) {
+			throw errors.AUTOMATION_UNAVAILABLE();
+		}
 
 		const { teamId, workspaceId, ...settings } = input;
 		const updated = await updateScopedTeamCycleSettings({

@@ -140,11 +140,11 @@ beforeAll(async () => {
 	({ team, workspace } = await import("db/features/tracker/tracker.schema"));
 	({ user } = await import("db/features/auth/auth.schema"));
 	({ router } = await import("../../router"));
-}, 30_000);
+}, 300_000);
 
 afterAll(async () => {
 	if (teardown) await teardown();
-}, 30_000);
+}, 60_000);
 
 beforeEach(async () => {
 	await db.execute(sql`truncate table team, workspace, "user" cascade`);

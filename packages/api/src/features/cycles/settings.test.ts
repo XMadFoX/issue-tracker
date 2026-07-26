@@ -33,11 +33,11 @@ beforeAll(async () => {
 		"db/features/tracker/team-cycle-settings.schema"
 	));
 	({ user } = await import("db/features/auth/auth.schema"));
-}, 30_000);
+}, 300_000);
 
 afterAll(async () => {
 	if (teardown) await teardown();
-}, 30_000);
+}, 60_000);
 
 beforeEach(async () => {
 	await db.execute(sql`truncate table team, workspace, "user" cascade`);
