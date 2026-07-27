@@ -23,6 +23,12 @@ export const env = createEnv({
 		OPENAI_API_KEY: z.string().default(""),
 		EMBEDDING_MODEL: z.string().default("qwen3-embedding:4b"),
 		ENABLE_EMBEDDINGS: z.stringbool().default(false),
+		CYCLES_AUTOMATION_ENABLED: z.stringbool().default(false),
+		CYCLES_WORKER_HEALTH_PORT: z.coerce.number().optional().default(4010),
+		CYCLES_WORKER_POLL_INTERVAL_MS: z.coerce
+			.number()
+			.optional()
+			.default(30_000),
 		OTEL_EXPORTER_OTLP_PROTOCOL: z.string().default("grpc"),
 		OTEL_EXPORTER_OTLP_ENDPOINT: z.string().default("http://localhost:4317"),
 		LOG_LEVEL: z

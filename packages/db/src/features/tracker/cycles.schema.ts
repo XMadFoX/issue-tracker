@@ -18,6 +18,8 @@ export const cycleStateEnum = pgEnum("cycle_state", [
 	"canceled",
 ]);
 
+export const cycleOriginEnum = pgEnum("cycle_origin", ["manual", "scheduled"]);
+
 export const cycle = pgTable(
 	"cycle",
 	{
@@ -33,6 +35,8 @@ export const cycle = pgTable(
 		startDate: timestamp("start_date", { withTimezone: true }).notNull(),
 		endDate: timestamp("end_date", { withTimezone: true }).notNull(),
 		state: cycleStateEnum("state").default("planned").notNull(),
+		origin: cycleOriginEnum("origin").default("manual").notNull(),
+		scheduledBoundary: timestamp("scheduled_boundary", { withTimezone: true }),
 		capacity: integer("capacity"),
 		velocity: integer("velocity"),
 		createdAt: timestamp("created_at", { withTimezone: true })
@@ -45,6 +49,9 @@ export const cycle = pgTable(
 	},
 	(table) => [
 		uniqueIndex("cycle_team_sequence_key").on(table.teamId, table.sequence),
+		uniqueIndex("cycle_team_scheduled_boundary_key")
+			.on(table.teamId, table.scheduledBoundary)
+			.where(sql`${table.scheduledBoundary} is not null`),
 		uniqueIndex("cycle_id_workspace_team_key").on(
 			table.id,
 			table.workspaceId,
@@ -53,6 +60,10 @@ export const cycle = pgTable(
 		index("cycle_workspace_team_idx").on(table.workspaceId, table.teamId),
 		index("cycle_team_state_idx").on(table.teamId, table.state),
 		check("cycle_date_range_check", sql`${table.endDate} > ${table.startDate}`),
+		check(
+			"cycle_origin_scheduled_boundary_check",
+			sql`(${table.origin} = 'manual' and ${table.scheduledBoundary} is null) or (${table.origin} = 'scheduled' and ${table.scheduledBoundary} is not null)`,
+		),
 		check(
 			"cycle_capacity_non_negative_check",
 			sql`${table.capacity} is null or ${table.capacity} >= 0`,

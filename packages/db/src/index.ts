@@ -28,6 +28,7 @@ function getProxyResponseRows(body: unknown) {
 }
 
 const logger = getLogger(["prism-tracker", "db"]);
+let statefulPool: Pool | null = null;
 
 function createDb() {
 	if (env.ENV_TYPE === "serverless") {
@@ -93,6 +94,7 @@ function createDb() {
 	} else {
 		logger.info("Initializing stateful database connection");
 		const pool = new Pool({ connectionString: env.DATABASE_URL });
+		statefulPool = pool;
 		observeDbPool(pool);
 
 		return drizzle({
@@ -109,6 +111,14 @@ export async function checkDbReachable(): Promise<void> {
 	await db.execute(sql`select 1`);
 }
 
+export async function closeDb(): Promise<void> {
+	if (!statefulPool) return;
+	const pool = statefulPool;
+	statefulPool = null;
+	await pool.end();
+}
+
 export { db };
 export type DB = typeof db;
+export { env } from "./env";
 export { schema };

@@ -7,6 +7,7 @@ import {
 	issueTypeTeamOverride,
 } from "db/features/tracker/issue-types.schema";
 import { issue } from "db/features/tracker/issues.schema";
+import { teamCycleSettings } from "db/features/tracker/team-cycle-settings.schema";
 import {
 	team,
 	teamMembership,
@@ -17,6 +18,10 @@ import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import { getReadableTeamIdsForPermission } from "../../lib/permissions-helpers";
+import {
+	buildInitialTeamCycleSettings,
+	normalizeCadenceDays,
+} from "../cycles/settings";
 import { ensureTeamBuiltInRoles } from "../workspaces/defaults";
 import {
 	teamCreateSchema,
@@ -156,17 +161,28 @@ export const create = authedRouter
 
 		try {
 			const createdTeam = await db.transaction(async (tx) => {
+				const cycleDuration = normalizeCadenceDays(input.cycleDuration ?? null);
 				const [insertedTeam] = await tx
 					.insert(team)
 					.values({
 						id: createId(),
 						...input,
+						cycleDuration,
 					})
-					.returning({ id: team.id });
+					.returning({ id: team.id, cycleDuration: team.cycleDuration });
 
 				if (!insertedTeam) {
 					throw new ORPCError("Failed to create team");
 				}
+
+				await tx
+					.insert(teamCycleSettings)
+					.values(
+						buildInitialTeamCycleSettings(
+							insertedTeam,
+							context.auth.session.userId,
+						),
+					);
 
 				await ensureTeamBuiltInRoles({
 					executor: tx,
@@ -223,8 +239,42 @@ const update = authedRouter
 			throw new ORPCError("Team not found");
 		}
 
-		const values = omit(input, ["id", "workspaceId"]);
-		return await db.update(team).set(values).where(eq(team.id, input.id));
+		const legacyCycleDuration = input.cycleDuration;
+		const values = {
+			...omit(input, ["id", "workspaceId"]),
+			...(legacyCycleDuration === undefined
+				? {}
+				: { cycleDuration: normalizeCadenceDays(legacyCycleDuration) }),
+		};
+		return await db.transaction(async (tx) => {
+			const [updatedTeam] = await tx
+				.update(team)
+				.set(values)
+				.where(
+					and(eq(team.id, input.id), eq(team.workspaceId, input.workspaceId)),
+				)
+				.returning({ id: team.id, cycleDuration: team.cycleDuration });
+			if (!updatedTeam) throw new ORPCError("Team not found");
+
+			if (legacyCycleDuration !== undefined) {
+				const [updatedSettings] = await tx
+					.update(teamCycleSettings)
+					.set({
+						cadenceDays: updatedTeam.cycleDuration ?? 14,
+						updatedBy: context.auth.session.userId,
+						updatedAt: new Date(),
+					})
+					.where(eq(teamCycleSettings.teamId, updatedTeam.id))
+					.returning({ teamId: teamCycleSettings.teamId });
+				if (!updatedSettings) {
+					throw new ORPCError(
+						"Cycle settings are not initialized for this team",
+					);
+				}
+			}
+
+			return updatedTeam;
+		});
 	});
 
 const deleteTeam = authedRouter

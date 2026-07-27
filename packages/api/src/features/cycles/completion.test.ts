@@ -96,11 +96,11 @@ beforeAll(async () => {
 	({ issue } = await import("db/features/tracker/issues.schema"));
 	({ team, workspace } = await import("db/features/tracker/tracker.schema"));
 	({ user } = await import("db/features/auth/auth.schema"));
-}, 30_000);
+}, 300_000);
 
 afterAll(async () => {
 	if (teardown) await teardown();
-});
+}, 60_000);
 
 beforeEach(async () => {
 	await db.execute(

@@ -8,10 +8,12 @@ import {
 import { issueType } from "db/features/tracker/issue-types.schema";
 import { issue } from "db/features/tracker/issues.schema";
 import { team } from "db/features/tracker/tracker.schema";
-import { and, count, desc, eq, gt, lt, max, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import z from "zod";
 import { authedRouter } from "../../context";
+import { env } from "../../env";
 import { isAllowed } from "../../lib/abac";
+import { isValidIanaTimezone } from "../../lib/timezone";
 import { writeIssueActivity } from "../issues/activity";
 import { issuePublisher } from "../issues/publisher";
 import { getIssueWithRelations } from "../issues/queries";
@@ -23,16 +25,29 @@ import {
 	normalizeIssueTypeMetrics,
 } from "./metrics";
 import {
+	getNextCycleSequence,
+	getOverlappingCycle,
+	lockCycleTeam,
+} from "./mutation";
+import { deriveSchedulePreview } from "./schedule";
+import {
 	cycleAssignIssueSchema,
 	cycleCompleteSchema,
 	cycleCreateSchema,
 	cycleDeleteSchema,
+	cycleGetSchedulePreviewSchema,
 	cycleGetSchema,
+	cycleGetSettingsSchema,
 	cycleListSchema,
 	cycleMetricsSchema,
 	cycleUnassignIssueSchema,
 	cycleUpdateSchema,
+	cycleUpdateSettingsSchema,
 } from "./schema";
+import {
+	getScopedTeamCycleSettings,
+	updateScopedTeamCycleSettings,
+} from "./settings";
 
 const issueTypeMetricRowsSchema = z.array(
 	z.object({
@@ -98,6 +113,22 @@ const completionErrors = {
 	TEAM_MISMATCH: {
 		status: 400,
 		message: "Cycle and rollover target must belong to the same team.",
+	},
+};
+
+const settingsErrors = {
+	...commonErrors,
+	SETTINGS_NOT_INITIALIZED: {
+		status: 409,
+		message: "Cycle settings are not initialized for this team.",
+	},
+	INVALID_WORKSPACE_TIMEZONE: {
+		status: 400,
+		message: "Workspace timezone is invalid.",
+	},
+	AUTOMATION_UNAVAILABLE: {
+		status: 409,
+		message: "Cycle automation is not available yet.",
 	},
 };
 
@@ -367,36 +398,26 @@ const createCycle = authedRouter
 			throw errors.INVALID_DATE_RANGE();
 
 		return await db.transaction(async (tx) => {
-			await tx.execute(
-				sql`select pg_advisory_xact_lock(hashtext(${`cycle:${input.workspaceId}:${input.teamId}`}))`,
-			);
+			await lockCycleTeam({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+			});
 
-			const [overlap] = await tx
-				.select({ id: cycle.id })
-				.from(cycle)
-				.where(
-					and(
-						eq(cycle.workspaceId, input.workspaceId),
-						eq(cycle.teamId, input.teamId),
-						ne(cycle.state, "canceled"),
-						lt(cycle.startDate, endDate),
-						gt(cycle.endDate, startDate),
-					),
-				)
-				.limit(1)
-				.for("update");
+			const overlap = await getOverlappingCycle({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+				startDate,
+				endDate,
+			});
 			if (overlap) throw errors.CYCLE_OVERLAP();
 
-			const [maxRow] = await tx
-				.select({ sequence: max(cycle.sequence) })
-				.from(cycle)
-				.where(
-					and(
-						eq(cycle.workspaceId, input.workspaceId),
-						eq(cycle.teamId, input.teamId),
-					),
-				);
-			const sequence = (maxRow?.sequence ?? 0) + 1;
+			const sequence = await getNextCycleSequence({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+			});
 
 			const [created] = await tx
 				.insert(cycle)
@@ -451,9 +472,11 @@ const updateCycle = authedRouter
 		}
 
 		return await db.transaction(async (tx) => {
-			await tx.execute(
-				sql`select pg_advisory_xact_lock(hashtext(${`cycle:${input.workspaceId}:${existing.teamId}`}))`,
-			);
+			await lockCycleTeam({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: existing.teamId,
+			});
 			const [lockedExisting] = await tx
 				.select({ state: cycle.state })
 				.from(cycle)
@@ -470,21 +493,14 @@ const updateCycle = authedRouter
 				throw errors.INVALID_STATE_TRANSITION();
 			}
 
-			const [overlap] = await tx
-				.select({ id: cycle.id })
-				.from(cycle)
-				.where(
-					and(
-						eq(cycle.workspaceId, input.workspaceId),
-						eq(cycle.teamId, existing.teamId),
-						ne(cycle.id, input.id),
-						ne(cycle.state, "canceled"),
-						lt(cycle.startDate, endDate),
-						gt(cycle.endDate, startDate),
-					),
-				)
-				.limit(1)
-				.for("update");
+			const overlap = await getOverlappingCycle({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: existing.teamId,
+				startDate,
+				endDate,
+				excludeCycleId: input.id,
+			});
 			if (overlap) throw errors.CYCLE_OVERLAP();
 
 			const [updated] = await tx
@@ -798,6 +814,114 @@ const unassignIssue = authedRouter
 		return updated;
 	});
 
+const getSettings = authedRouter
+	.input(cycleGetSettingsSchema)
+	.errors(settingsErrors)
+	.handler(async ({ context, input, errors }) => {
+		const scoped = await getScopedTeamCycleSettings({
+			executor: db,
+			workspaceId: input.workspaceId,
+			teamId: input.teamId,
+		});
+		if (!scoped) throw errors.NOT_FOUND();
+
+		const [canRead, canManageSettings] = await Promise.all([
+			isAllowed({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+				teamId: scoped.team.id,
+				permissionKey: "cycle:read",
+			}),
+			isAllowed({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+				teamId: scoped.team.id,
+				permissionKey: "cycle:manage_settings",
+			}),
+		]);
+		if (!canRead) throw errors.UNAUTHORIZED();
+		if (!scoped.settings) throw errors.SETTINGS_NOT_INITIALIZED();
+
+		return {
+			settings: scoped.settings,
+			workspaceTimezone: scoped.workspaceTimezone,
+			canManageSettings,
+		};
+	});
+
+const getSchedulePreview = authedRouter
+	.input(cycleGetSchedulePreviewSchema)
+	.errors(settingsErrors)
+	.handler(async ({ context, input, errors }) => {
+		const scoped = await getScopedTeamCycleSettings({
+			executor: db,
+			workspaceId: input.workspaceId,
+			teamId: input.teamId,
+		});
+		if (!scoped) throw errors.NOT_FOUND();
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId: scoped.team.id,
+			permissionKey: "cycle:read",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED();
+		if (!scoped.settings) throw errors.SETTINGS_NOT_INITIALIZED();
+		if (!isValidIanaTimezone(scoped.workspaceTimezone)) {
+			throw errors.INVALID_WORKSPACE_TIMEZONE();
+		}
+
+		return deriveSchedulePreview({
+			workspaceTimezone: scoped.workspaceTimezone,
+			settings: scoped.settings,
+			now: new Date(),
+		});
+	});
+
+const updateSettings = authedRouter
+	.input(cycleUpdateSettingsSchema)
+	.errors(settingsErrors)
+	.handler(async ({ context, input, errors }) => {
+		const scoped = await getScopedTeamCycleSettings({
+			executor: db,
+			workspaceId: input.workspaceId,
+			teamId: input.teamId,
+		});
+		if (!scoped) throw errors.NOT_FOUND();
+
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId: scoped.team.id,
+			permissionKey: "cycle:manage_settings",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED();
+		if (!scoped.settings) throw errors.SETTINGS_NOT_INITIALIZED();
+		if (!isValidIanaTimezone(scoped.workspaceTimezone)) {
+			throw errors.INVALID_WORKSPACE_TIMEZONE();
+		}
+		if (input.cadenceEnabled && !env.CYCLES_AUTOMATION_ENABLED) {
+			throw errors.AUTOMATION_UNAVAILABLE();
+		}
+
+		const { teamId, workspaceId, ...settings } = input;
+		const updated = await updateScopedTeamCycleSettings({
+			executor: db,
+			workspaceId,
+			teamId,
+			updatedBy: context.auth.session.userId,
+			settings,
+		});
+		if (!updated) throw errors.SETTINGS_NOT_INITIALIZED();
+
+		return {
+			settings: updated,
+			workspaceTimezone: scoped.workspaceTimezone,
+			canManageSettings: true,
+		};
+	});
+
 const cycleMetrics = authedRouter
 	.input(cycleMetricsSchema)
 	.errors(commonErrors)
@@ -1009,5 +1133,8 @@ export const cycleRouter = {
 	delete: deleteCycle,
 	assignIssue,
 	unassignIssue,
+	getSettings,
+	getSchedulePreview,
+	updateSettings,
 	metrics: cycleMetrics,
 };

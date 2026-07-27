@@ -6,6 +6,8 @@
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"dev": "bun run --watch src/index.ts",
+		"worker": "bun run src/cycles-worker.ts",
+		"worker:once": "bun run src/cycles-worker.ts --once",
 		"typecheck": "tsgo --noEmit -p tsconfig.json"
 	},
 	"keywords": [],
@@ -16,6 +18,7 @@
 		"@ai-sdk/provider": "3.0.7",
 		"@elysiajs/cors": "^1.4.0",
 		"@elysiajs/opentelemetry": "^1.4.10",
+		"@js-temporal/polyfill": "^0.5.1",
 		"@logtape/logtape": "^2.0.4",
 		"@logtape/otel": "^2.0.4",
 		"@logtape/pretty": "^2.0.4",
