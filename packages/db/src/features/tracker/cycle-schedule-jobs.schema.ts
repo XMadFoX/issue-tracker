@@ -11,10 +11,13 @@ import {
 	uniqueIndex,
 	varchar,
 } from "drizzle-orm/pg-core";
+import { cycle } from "./cycles.schema";
 import { team, workspace } from "./tracker.schema";
 
 export const cycleScheduleJobTypeEnum = pgEnum("cycle_schedule_job_type", [
 	"generate_planned_cycles",
+	"send_cycle_reminder",
+	"create_cycle_confirmation_required",
 ]);
 
 export const cycleScheduleJobStatusEnum = pgEnum("cycle_schedule_job_status", [
@@ -34,10 +37,16 @@ export const cycleScheduleJob = pgTable(
 		teamId: text("team_id")
 			.notNull()
 			.references(() => team.id, { onDelete: "cascade" }),
+		cycleId: text("cycle_id").references(() => cycle.id, {
+			onDelete: "cascade",
+		}),
 		jobType: cycleScheduleJobTypeEnum("job_type").notNull(),
 		scheduledBoundary: timestamp("scheduled_boundary", {
 			withTimezone: true,
 		}).notNull(),
+		// Generation rows predate M2-E and intentionally keep this null. Event
+		// rows capture the settings revision that made the event valid.
+		eventRevisionAt: timestamp("event_revision_at", { withTimezone: true }),
 		status: cycleScheduleJobStatusEnum("status").default("queued").notNull(),
 		attempts: integer("attempts").default(0).notNull(),
 		maxAttempts: integer("max_attempts").default(8).notNull(),
@@ -66,16 +75,32 @@ export const cycleScheduleJob = pgTable(
 			foreignColumns: [team.id, team.workspaceId],
 			name: "cycle_schedule_job_team_workspace_fkey",
 		}).onDelete("cascade"),
-		uniqueIndex("cycle_schedule_job_team_type_boundary_key").on(
-			table.teamId,
-			table.jobType,
-			table.scheduledBoundary,
-		),
+		foreignKey({
+			columns: [table.cycleId, table.workspaceId, table.teamId],
+			foreignColumns: [cycle.id, cycle.workspaceId, cycle.teamId],
+			name: "cycle_schedule_job_cycle_scope_fkey",
+		}).onDelete("cascade"),
+		index("cycle_schedule_job_cycle_idx").on(table.cycleId),
+		uniqueIndex("cycle_schedule_job_generation_boundary_key")
+			.on(table.teamId, table.jobType, table.scheduledBoundary)
+			.where(sql`${table.jobType} = 'generate_planned_cycles'`),
+		uniqueIndex("cycle_schedule_job_event_identity_key")
+			.on(
+				table.cycleId,
+				table.jobType,
+				table.scheduledBoundary,
+				table.eventRevisionAt,
+			)
+			.where(sql`${table.jobType} <> 'generate_planned_cycles'`),
 		index("cycle_schedule_job_queue_idx").on(
 			table.status,
 			table.availableAt,
 			table.leaseExpiresAt,
 			table.id,
+		),
+		check(
+			"cycle_schedule_job_type_cycle_check",
+			sql`(${table.jobType} = 'generate_planned_cycles' and ${table.cycleId} is null and ${table.eventRevisionAt} is null) or (${table.jobType} <> 'generate_planned_cycles' and ${table.cycleId} is not null and ${table.eventRevisionAt} is not null)`,
 		),
 		check(
 			"cycle_schedule_job_attempts_check",
