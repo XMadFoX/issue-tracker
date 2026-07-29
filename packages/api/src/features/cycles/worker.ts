@@ -20,9 +20,19 @@ import {
 	maintainPlannedCycleHorizon,
 	type PlannedCycleHorizonResult,
 } from "./generation";
+import {
+	enqueueNotificationJobs,
+	isNotificationJobType,
+	type NotificationJobOutcome,
+	type NotificationJobType,
+	processNotificationJob,
+} from "./notifications";
 import { enumerateScheduledCycleOccurrences } from "./schedule";
 
 export const GENERATION_JOB_TYPE = "generate_planned_cycles" as const;
+export type CycleWorkerJobType =
+	| typeof GENERATION_JOB_TYPE
+	| NotificationJobType;
 export const DEFAULT_MAX_ATTEMPTS = 8;
 export const DEFAULT_LEASE_MS = 5 * 60 * 1000;
 export const DEFAULT_BACKOFF_MS = 60 * 1000;
@@ -42,7 +52,7 @@ export type GeneratePlannedCycles = (input: {
 export type WorkerJobEvent = {
 	phase: "started" | "completed" | "failed";
 	jobId: string;
-	jobType: typeof GENERATION_JOB_TYPE;
+	jobType: CycleWorkerJobType;
 	teamId: string;
 	scheduledBoundary: Date;
 	attempt: number;
@@ -66,6 +76,16 @@ export type CycleWorkerConfig = {
 	) => void;
 	/** Runs before a transient generation failure is finalized. */
 	onBeforeFailureAcknowledgement?: (jobId: string) => void;
+	/** Notification equivalents keep crash/retry tests invocation-controlled. */
+	onBeforeNotificationAcknowledgement?: (
+		jobId: string,
+		outcome: NotificationJobOutcome,
+	) => void;
+	onBeforeNotificationFailureAcknowledgement?: (jobId: string) => void;
+	/** Test/runtime seam for exercising notification retry semantics. */
+	processNotification?: (
+		job: CycleNotificationWorkerJob,
+	) => Promise<NotificationJobOutcome>;
 	generateHorizon?: GeneratePlannedCycles;
 };
 
@@ -95,10 +115,18 @@ type ClaimedJob = Pick<
 	| "teamId"
 	| "jobType"
 	| "scheduledBoundary"
+	| "eventRevisionAt"
+	| "availableAt"
+	| "cycleId"
 	| "attempts"
 	| "maxAttempts"
 	| "claimToken"
 >;
+
+export type CycleNotificationWorkerJob = ClaimedJob & {
+	jobType: NotificationJobType;
+	cycleId: string;
+};
 
 const successfulOutcomes = new Set<PlannedCycleHorizonResult["status"]>([
 	"created",
@@ -173,6 +201,7 @@ export async function enqueueGenerationJobs({
 						cycleScheduleJob.jobType,
 						cycleScheduleJob.scheduledBoundary,
 					],
+					where: sql`${cycleScheduleJob.jobType} = 'generate_planned_cycles'`,
 				})
 				.returning({ id: cycleScheduleJob.id });
 			enqueued += inserted.length;
@@ -260,6 +289,9 @@ export async function claimGenerationJobs({
 					teamId: cycleScheduleJob.teamId,
 					jobType: cycleScheduleJob.jobType,
 					scheduledBoundary: cycleScheduleJob.scheduledBoundary,
+					eventRevisionAt: cycleScheduleJob.eventRevisionAt,
+					availableAt: cycleScheduleJob.availableAt,
+					cycleId: cycleScheduleJob.cycleId,
 					attempts: cycleScheduleJob.attempts,
 					maxAttempts: cycleScheduleJob.maxAttempts,
 					claimToken: cycleScheduleJob.claimToken,
@@ -278,7 +310,7 @@ export async function claimGenerationJobs({
 
 async function acknowledgeSuccess(
 	job: ClaimedJob,
-	result: PlannedCycleHorizonResult,
+	result: { status: string },
 	clock: WorkerClock,
 ): Promise<boolean> {
 	if (!job.claimToken) return false;
@@ -355,7 +387,78 @@ async function processJob(
 		| ((jobId: string, result: PlannedCycleHorizonResult) => void)
 		| undefined,
 	onBeforeFailureAcknowledgement: ((jobId: string) => void) | undefined,
+	onBeforeNotificationAcknowledgement:
+		| ((jobId: string, outcome: NotificationJobOutcome) => void)
+		| undefined,
+	onBeforeNotificationFailureAcknowledgement:
+		| ((jobId: string) => void)
+		| undefined,
+	processNotification:
+		| ((job: CycleNotificationWorkerJob) => Promise<NotificationJobOutcome>)
+		| undefined,
 ): Promise<boolean> {
+	if (job.jobType !== GENERATION_JOB_TYPE) {
+		if (!isNotificationJobType(job.jobType)) return false;
+		const event = {
+			jobId: job.id,
+			jobType: job.jobType,
+			teamId: job.teamId,
+			scheduledBoundary: job.scheduledBoundary,
+			attempt: job.attempts,
+		};
+		onJobEvent?.({ ...event, phase: "started" });
+		let outcome: NotificationJobOutcome;
+		const notificationJob = job;
+		if (!notificationJob.cycleId) {
+			onBeforeNotificationAcknowledgement?.(job.id, "obsolete_settings");
+			return await acknowledgeSuccess(
+				job,
+				{ status: "obsolete_settings" },
+				clock,
+			);
+		}
+		try {
+			outcome = processNotification
+				? await processNotification({
+						...notificationJob,
+						jobType: job.jobType,
+						cycleId: notificationJob.cycleId,
+					})
+				: await processNotificationJob({
+						job: {
+							...notificationJob,
+							jobType: job.jobType,
+							cycleId: notificationJob.cycleId,
+						},
+					});
+		} catch (error: unknown) {
+			onBeforeNotificationFailureAcknowledgement?.(job.id);
+			const acknowledgement = await acknowledgeFailure(
+				job,
+				"TRANSIENT_RUNTIME_ERROR",
+				redactErrorSummary(error),
+				clock,
+				"transient_error",
+				true,
+			);
+			if (acknowledgement === "requeued") recordWorkerJobEvent("retried");
+			if (acknowledgement === "failed") recordWorkerJobEvent("failed");
+			if (acknowledgement === "lost") return false;
+			onJobEvent?.({ ...event, phase: "failed", outcome: "transient_error" });
+			return true;
+		}
+		onBeforeNotificationAcknowledgement?.(job.id, outcome);
+		const acknowledged = await acknowledgeSuccess(
+			job,
+			{ status: outcome },
+			clock,
+		);
+		if (!acknowledged) return false;
+		recordWorkerJobEvent("succeeded");
+		onJobEvent?.({ ...event, phase: "completed", outcome });
+		return true;
+	}
+
 	onBeforeGeneration?.(job.id);
 	const event = {
 		jobId: job.id,
@@ -444,6 +547,11 @@ export class CycleWorker {
 			onBeforeGeneration: config.onBeforeGeneration,
 			onBeforeAcknowledgement: config.onBeforeAcknowledgement,
 			onBeforeFailureAcknowledgement: config.onBeforeFailureAcknowledgement,
+			onBeforeNotificationAcknowledgement:
+				config.onBeforeNotificationAcknowledgement,
+			onBeforeNotificationFailureAcknowledgement:
+				config.onBeforeNotificationFailureAcknowledgement,
+			processNotification: config.processNotification,
 			generateHorizon: config.generateHorizon,
 		};
 	}
@@ -462,7 +570,10 @@ export class CycleWorker {
 			this.dbReady = true;
 			setWorkerDbReady(true);
 			const pollStartedAt = performance.now();
-			const enqueue = await enqueueGenerationJobs({ clock: this.config.clock });
+			const generationEnqueue = await enqueueGenerationJobs({
+				clock: this.config.clock,
+			});
+			let enqueue = generationEnqueue;
 			recordWorkerLatency("poll", performance.now() - pollStartedAt);
 			this.lastSuccessfulPollAt = this.config.clock.now();
 			if (this.stopping) {
@@ -487,10 +598,20 @@ export class CycleWorker {
 							this.config.onBeforeGeneration,
 							this.config.onBeforeAcknowledgement,
 							this.config.onBeforeFailureAcknowledgement,
+							this.config.onBeforeNotificationAcknowledgement,
+							this.config.onBeforeNotificationFailureAcknowledgement,
+							this.config.processNotification,
 						)
 					)
 						acknowledged += 1;
 				}
+				const notificationEnqueue = await enqueueNotificationJobs({
+					clock: this.config.clock,
+				});
+				enqueue = {
+					enqueued: enqueue.enqueued + notificationEnqueue.enqueued,
+					skipped: enqueue.skipped + notificationEnqueue.skipped,
+				};
 				return { enqueue, claimed: jobs.length, acknowledged };
 			} finally {
 				this.activeLeases -= jobs.length;

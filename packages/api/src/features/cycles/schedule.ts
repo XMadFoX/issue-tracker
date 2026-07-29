@@ -121,6 +121,24 @@ function getCurrentBoundaryIndex({
 	return Temporal.ZonedDateTime.compare(boundary, now) <= 0 ? index : null;
 }
 
+export function deriveScheduleActionTiming({
+	workspaceTimezone,
+	endDate,
+	settings,
+}: {
+	workspaceTimezone: string;
+	endDate: Date;
+	settings: ScheduleSettings;
+}): ScheduleActionTiming {
+	if (!isValidIanaTimezone(workspaceTimezone)) {
+		throw new InvalidWorkspaceTimezoneError(workspaceTimezone);
+	}
+	const end = Temporal.Instant.from(endDate.toISOString()).toZonedDateTimeISO(
+		workspaceTimezone,
+	);
+	return getActionTiming({ end, settings });
+}
+
 function getActionTiming({
 	end,
 	settings,
@@ -257,6 +275,10 @@ export function deriveSchedulePreview({
 					),
 		nextFutureBoundary: toBoundary(nextBoundary),
 		nextCycleEnd: toBoundary(nextCycleEnd),
-		actionTiming: getActionTiming({ end: nextCycleEnd, settings }),
+		actionTiming: deriveScheduleActionTiming({
+			workspaceTimezone,
+			endDate: new Date(nextCycleEnd.toInstant().epochMilliseconds),
+			settings,
+		}),
 	};
 }

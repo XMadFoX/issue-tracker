@@ -98,6 +98,23 @@ export const cycleMetricsSchema = z.object({
 	cycleId: cycleInsertSchema.shape.id,
 });
 
+export const cyclePendingActionsSchema = z.object({
+	workspaceId: cycleInsertSchema.shape.workspaceId,
+	teamId: cycleInsertSchema.shape.teamId,
+});
+
+export const cycleNotificationsSchema = z.object({
+	workspaceId: cycleInsertSchema.shape.workspaceId,
+	teamId: cycleInsertSchema.shape.teamId,
+	unreadOnly: z.boolean().default(false),
+	limit: z.number().int().min(1).max(100).default(50),
+});
+
+export const cycleMarkNotificationReadSchema = z.object({
+	workspaceId: cycleInsertSchema.shape.workspaceId,
+	notificationId: z.cuid2(),
+});
+
 const settingsValueShape = {
 	cadenceEnabled: z.boolean(),
 	cadenceDays: z.number().int().positive(),

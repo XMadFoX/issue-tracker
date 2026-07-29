@@ -6,7 +6,7 @@ import {
 	expect,
 	test,
 } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { DrizzleQueryError, eq, sql } from "drizzle-orm";
 import setupDb from "../../utils/prepare-tests";
 import type { IssueActivityActionType } from "../issues/activity";
 import type { CycleBaselineActionType, CycleBaselineActivity } from "./metrics";
@@ -16,6 +16,8 @@ let completeCycle: typeof import("./completion").completeCycle;
 let getCyclePlannedBaseline: typeof import("./metrics").getCyclePlannedBaseline;
 let cycle: typeof import("db/features/tracker/cycles.schema").cycle;
 let issueActivity: typeof import("db/features/tracker/issue-activities.schema").issueActivity;
+let cycleActionRequired: typeof import("db/features/tracker/cycle-actions.schema").cycleActionRequired;
+let cycleNotification: typeof import("db/features/tracker/cycle-notifications.schema").cycleNotification;
 let issueStatus: typeof import("db/features/tracker/issue-statuses.schema").issueStatus;
 let issueStatusGroup: typeof import("db/features/tracker/issue-statuses.schema").issueStatusGroup;
 let issueType: typeof import("db/features/tracker/issue-types.schema").issueType;
@@ -80,12 +82,29 @@ function toBaselineActivities(
 	return baselineActivities;
 }
 
+function findCauseMessage(error: Error, expectedMessage: string) {
+	let current: unknown = error.cause;
+	const seen = new Set<Error>();
+	while (current instanceof Error && !seen.has(current)) {
+		if (current.message.includes(expectedMessage)) return current.message;
+		seen.add(current);
+		current = current.cause;
+	}
+	return undefined;
+}
+
 beforeAll(async () => {
 	teardown = await setupDb();
 	({ db } = await import("db"));
 	({ completeCycle } = await import("./completion"));
 	({ getCyclePlannedBaseline } = await import("./metrics"));
 	({ cycle } = await import("db/features/tracker/cycles.schema"));
+	({ cycleActionRequired } = await import(
+		"db/features/tracker/cycle-actions.schema"
+	));
+	({ cycleNotification } = await import(
+		"db/features/tracker/cycle-notifications.schema"
+	));
 	({ issueActivity } = await import(
 		"db/features/tracker/issue-activities.schema"
 	));
@@ -206,6 +225,163 @@ async function getIssueCycle(category: Category) {
 }
 
 describe("completeCycle", () => {
+	test("resolves the confirmation action and hides every linked notification", async () => {
+		await seedFixture();
+		const actionId = "completion-confirmation-action";
+		await db.insert(cycleActionRequired).values({
+			id: actionId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId: ids.source,
+			kind: "completion_confirmation",
+			scheduledBoundary: new Date("2025-01-24T00:00:00.000Z"),
+			eventRevisionAt: new Date("2025-01-01T00:00:00.000Z"),
+			dueAt: new Date("2025-01-24T00:00:00.000Z"),
+		});
+		await db.insert(cycleNotification).values([
+			{
+				id: "completion-confirmation-notification",
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				cycleId: ids.source,
+				actionRequiredId: actionId,
+				recipientUserId: ids.actor,
+				kind: "completion_confirmation",
+				scheduledBoundary: new Date("2025-01-24T00:00:00.000Z"),
+				eventRevisionAt: new Date("2025-01-01T00:00:00.000Z"),
+				deliverAt: new Date("2025-01-24T00:00:00.000Z"),
+				cycleName: "Source Cycle",
+				teamName: "Completion Team",
+			},
+			{
+				id: "completion-reminder-notification",
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				cycleId: ids.source,
+				recipientUserId: ids.actor,
+				kind: "end_reminder",
+				scheduledBoundary: new Date("2025-01-24T00:00:00.000Z"),
+				eventRevisionAt: new Date("2025-01-01T00:00:00.000Z"),
+				deliverAt: new Date("2025-01-24T00:00:00.000Z"),
+				cycleName: "Source Cycle",
+				teamName: "Completion Team",
+			},
+		]);
+		const result = await completeCycle({
+			actorId: ids.actor,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId: ids.source,
+			disposition: { type: "moveToBacklog" },
+			reason: "manual",
+		});
+		expect(result.ok).toBeTrue();
+		const [action] = await db
+			.select()
+			.from(cycleActionRequired)
+			.where(eq(cycleActionRequired.id, actionId));
+		expect(action).toMatchObject({ status: "resolved", resolvedBy: ids.actor });
+		expect(action?.resolvedAt).toBeInstanceOf(Date);
+		const [notification] = await db
+			.select()
+			.from(cycleNotification)
+			.where(eq(cycleNotification.actionRequiredId, actionId));
+		expect(notification?.canceledAt).toBeInstanceOf(Date);
+		expect(notification?.cancellationReason).toBe("action_resolved");
+		const [remaining] = await db
+			.select()
+			.from(cycleNotification)
+			.where(eq(cycleNotification.id, "completion-reminder-notification"));
+		expect(remaining?.cancellationReason).toBe("cycle_completed");
+	});
+
+	test("rolls back cycle, action, notifications, issues, and activity after notification failure", async () => {
+		await seedFixture();
+		const actionId = "completion-rollback-action";
+		await db.insert(cycleActionRequired).values({
+			id: actionId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId: ids.source,
+			kind: "completion_confirmation",
+			scheduledBoundary: new Date("2025-01-24T00:00:00.000Z"),
+			eventRevisionAt: new Date("2025-01-01T00:00:00.000Z"),
+			dueAt: new Date("2025-01-24T00:00:00.000Z"),
+		});
+		await db.insert(cycleNotification).values({
+			id: "completion-rollback-notification",
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId: ids.source,
+			actionRequiredId: actionId,
+			recipientUserId: ids.actor,
+			kind: "completion_confirmation",
+			scheduledBoundary: new Date("2025-01-24T00:00:00.000Z"),
+			eventRevisionAt: new Date("2025-01-01T00:00:00.000Z"),
+			deliverAt: new Date("2025-01-24T00:00:00.000Z"),
+			cycleName: "Source Cycle",
+			teamName: "Completion Team",
+		});
+		await db.execute(sql`
+			create or replace function completion_test_failure() returns trigger
+			language plpgsql as $$ begin
+				if new.cancellation_reason = 'action_resolved' then
+					raise exception 'completion notification failure';
+				end if;
+				return new;
+			end $$;
+		`);
+		await db.execute(sql`
+			create trigger completion_test_failure_trigger
+			before update on cycle_notification
+			for each row execute function completion_test_failure()
+		`);
+		let completionError: unknown;
+		try {
+			await completeCycle({
+				actorId: ids.actor,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				cycleId: ids.source,
+				disposition: { type: "moveToBacklog" },
+				reason: "manual",
+			});
+		} catch (error) {
+			completionError = error;
+		} finally {
+			await db.execute(
+				sql`drop trigger if exists completion_test_failure_trigger on cycle_notification`,
+			);
+			await db.execute(sql`drop function if exists completion_test_failure()`);
+		}
+		expect(completionError).toBeInstanceOf(DrizzleQueryError);
+		if (completionError instanceof DrizzleQueryError) {
+			expect(completionError.message).toContain(
+				'Failed query: update "cycle_notification"',
+			);
+			expect(
+				findCauseMessage(completionError, "completion notification failure"),
+			).toBe("completion notification failure");
+		}
+		const [source] = await db
+			.select({ state: cycle.state })
+			.from(cycle)
+			.where(eq(cycle.id, ids.source));
+		expect(source?.state).toBe("active");
+		expect(await getIssueCycle("planned")).toBe(ids.source);
+		const [action] = await db
+			.select({ status: cycleActionRequired.status })
+			.from(cycleActionRequired)
+			.where(eq(cycleActionRequired.id, actionId));
+		expect(action?.status).toBe("open");
+		const [notification] = await db
+			.select({ canceledAt: cycleNotification.canceledAt })
+			.from(cycleNotification)
+			.where(eq(cycleNotification.actionRequiredId, actionId));
+		expect(notification?.canceledAt).toBeNull();
+		expect(await db.select().from(issueActivity)).toHaveLength(0);
+	});
+
 	test("carries only planned and in-progress work, writes audited activities, and preserves metric baselines", async () => {
 		const { sourceStart, targetStart } = await seedFixture();
 		await db.insert(issueActivity).values({

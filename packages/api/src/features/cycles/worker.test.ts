@@ -1097,6 +1097,121 @@ describe("durable cycle worker", () => {
 		expect(rows.find((row) => row.id === failedId)?.status).toBe("failed");
 	});
 
+	test("claims notification events only at the exact due instant", async () => {
+		const { claimGenerationJobs } = await import("./worker");
+		const notificationCycleId = createId();
+		const dueAt = new Date(now.getTime() + 60_000);
+		const [settings] = await db
+			.select({ updatedAt: teamCycleSettings.updatedAt })
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		if (!settings) throw new Error("settings missing");
+		await db.insert(cycle).values({
+			id: notificationCycleId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Notification cycle",
+			sequence: 1,
+			state: "active",
+			origin: "scheduled",
+			scheduledBoundary: new Date(now.getTime() + 86_400_000),
+			startDate: now,
+			endDate: new Date(now.getTime() + 86_400_000),
+		});
+		await db.insert(cycleScheduleJob).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId: notificationCycleId,
+			jobType: "send_cycle_reminder",
+			scheduledBoundary: new Date(now.getTime() + 86_400_000),
+			eventRevisionAt: settings.updatedAt,
+			availableAt: dueAt,
+		});
+		const early = await claimGenerationJobs({
+			config: {
+				workerId: "early-notification",
+				clock: { now: () => new Date(dueAt.getTime() - 1) },
+			},
+		});
+		expect(early).toHaveLength(0);
+		const due = await claimGenerationJobs({
+			config: { workerId: "due-notification", clock: { now: () => dueAt } },
+		});
+		expect(due).toHaveLength(1);
+		expect(due[0]?.jobType).toBe("send_cycle_reminder");
+	});
+
+	test("notification workers do not duplicate a claimed poll and preserve retry backoff", async () => {
+		const { CycleWorker, claimGenerationJobs } = await import("./worker");
+		const notificationCycleId = createId();
+		const [settings] = await db
+			.select({ updatedAt: teamCycleSettings.updatedAt })
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		if (!settings) throw new Error("settings missing");
+		const boundary = new Date(now.getTime() + 86_400_000);
+		await db.insert(cycle).values({
+			id: notificationCycleId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Retry notification cycle",
+			sequence: 1,
+			state: "active",
+			origin: "scheduled",
+			scheduledBoundary: boundary,
+			startDate: now,
+			endDate: boundary,
+		});
+		await db.insert(cycleScheduleJob).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId: notificationCycleId,
+			jobType: "send_cycle_reminder",
+			scheduledBoundary: boundary,
+			eventRevisionAt: settings.updatedAt,
+			availableAt: now,
+			maxAttempts: 2,
+		});
+		const [first, second] = await Promise.all([
+			claimGenerationJobs({
+				config: { workerId: "notification-one", clock, batchSize: 1 },
+			}),
+			claimGenerationJobs({
+				config: { workerId: "notification-two", clock, batchSize: 1 },
+			}),
+		]);
+		expect(first.length + second.length).toBe(1);
+		// The existing claim is intentionally still leased; recover it after the
+		// lease expires and prove the persisted summary is redacted and requeued.
+		await db
+			.update(teamCycleSettings)
+			.set({ cadenceEnabled: false })
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		const recovered = new CycleWorker({
+			clock: { now: () => new Date(now.getTime() + 5 * 60_000 + 1) },
+			automationEnabled: true,
+			workerId: "notification-retry-recovery",
+			batchSize: 1,
+			maxAttempts: 2,
+			processNotification: async () => {
+				throw new Error("notification backend secret token");
+			},
+		});
+		await recovered.runOnce();
+		const rows = await db.select().from(cycleScheduleJob);
+		const row = rows.find(
+			(candidate) => candidate.cycleId === notificationCycleId,
+		);
+		if (!row) throw new Error("notification job missing");
+		expect(row.status).toBe("queued");
+		expect(row.lastErrorSummary).not.toContain("secret token");
+		expect(row.availableAt.getTime()).toBe(
+			now.getTime() + 5 * 60_000 + 1 + 60_000,
+		);
+	});
+
 	test("a closed database marks the worker unready without retaining leases", async () => {
 		const { closeDb } = await import("db");
 		const { CycleWorker } = await import("./worker");

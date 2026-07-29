@@ -1,12 +1,14 @@
 import { db } from "db";
+import { cycleNotification } from "db/features/tracker/cycle-notifications.schema";
 import { cycle } from "db/features/tracker/cycles.schema";
 import {
 	issueStatus,
 	issueStatusGroup,
 } from "db/features/tracker/issue-statuses.schema";
 import { issue } from "db/features/tracker/issues.schema";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { type DbExecutor, writeIssueActivity } from "../issues/activity";
+import { resolveCycleConfirmationAction } from "./notifications";
 
 export type CycleCompletionDisposition =
 	| { type: "carryOver"; targetCycleId: string }
@@ -220,6 +222,24 @@ async function completeInTransaction(
 		.where(eq(cycle.id, source.id))
 		.returning();
 	if (!completedSource) return { ok: false, code: "NOT_FOUND" };
+
+	await resolveCycleConfirmationAction(tx, {
+		workspaceId: input.workspaceId,
+		teamId: input.teamId,
+		cycleId: source.id,
+		actorId: input.actorId,
+	});
+	await tx
+		.update(cycleNotification)
+		.set({ canceledAt: new Date(), cancellationReason: "cycle_completed" })
+		.where(
+			and(
+				eq(cycleNotification.workspaceId, input.workspaceId),
+				eq(cycleNotification.teamId, input.teamId),
+				eq(cycleNotification.cycleId, source.id),
+				isNull(cycleNotification.canceledAt),
+			),
+		);
 
 	return {
 		ok: true,

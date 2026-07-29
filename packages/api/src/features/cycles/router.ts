@@ -1,5 +1,7 @@
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
+import { cycleActionRequired } from "db/features/tracker/cycle-actions.schema";
+import { cycleNotification } from "db/features/tracker/cycle-notifications.schema";
 import { cycle } from "db/features/tracker/cycles.schema";
 import {
 	issueStatus,
@@ -7,8 +9,9 @@ import {
 } from "db/features/tracker/issue-statuses.schema";
 import { issueType } from "db/features/tracker/issue-types.schema";
 import { issue } from "db/features/tracker/issues.schema";
-import { team } from "db/features/tracker/tracker.schema";
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { teamCycleSettings } from "db/features/tracker/team-cycle-settings.schema";
+import { team, workspaceMembership } from "db/features/tracker/tracker.schema";
+import { and, count, desc, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
 import z from "zod";
 import { authedRouter } from "../../context";
 import { env } from "../../env";
@@ -29,6 +32,10 @@ import {
 	getOverlappingCycle,
 	lockCycleTeam,
 } from "./mutation";
+import {
+	cancelCycleArtifacts,
+	cancelTeamCycleArtifacts,
+} from "./notifications";
 import { deriveSchedulePreview } from "./schedule";
 import {
 	cycleAssignIssueSchema,
@@ -39,7 +46,10 @@ import {
 	cycleGetSchema,
 	cycleGetSettingsSchema,
 	cycleListSchema,
+	cycleMarkNotificationReadSchema,
 	cycleMetricsSchema,
+	cycleNotificationsSchema,
+	cyclePendingActionsSchema,
 	cycleUnassignIssueSchema,
 	cycleUpdateSchema,
 	cycleUpdateSettingsSchema,
@@ -291,6 +301,27 @@ function buildPlannedCycleMetricsSql({
 	return { plannedBaselineSql, plannedLatestStatusSql };
 }
 
+async function hasActiveWorkspaceMembership({
+	userId,
+	workspaceId,
+}: {
+	userId: string;
+	workspaceId: string;
+}) {
+	const [membership] = await db
+		.select({ id: workspaceMembership.id })
+		.from(workspaceMembership)
+		.where(
+			and(
+				eq(workspaceMembership.userId, userId),
+				eq(workspaceMembership.workspaceId, workspaceId),
+				eq(workspaceMembership.status, "active"),
+			),
+		)
+		.limit(1);
+	return membership !== undefined;
+}
+
 async function canUseCycle({
 	userId,
 	workspaceId,
@@ -518,6 +549,20 @@ const updateCycle = authedRouter
 				)
 				.returning();
 			if (!updated) throw errors.NOT_FOUND();
+			if (
+				updated.state === "canceled" ||
+				existing.endDate.getTime() !== updated.endDate.getTime()
+			) {
+				await cancelCycleArtifacts(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existing.teamId,
+					cycleId: existing.id,
+					reason:
+						updated.state === "canceled"
+							? "cycle_canceled"
+							: "cycle_rescheduled",
+				});
+			}
 
 			return updated;
 		});
@@ -906,12 +951,21 @@ const updateSettings = authedRouter
 		}
 
 		const { teamId, workspaceId, ...settings } = input;
-		const updated = await updateScopedTeamCycleSettings({
-			executor: db,
-			workspaceId,
-			teamId,
-			updatedBy: context.auth.session.userId,
-			settings,
+		const updated = await db.transaction(async (tx) => {
+			const next = await updateScopedTeamCycleSettings({
+				executor: tx,
+				workspaceId,
+				teamId,
+				updatedBy: context.auth.session.userId,
+				settings,
+			});
+			if (!next) return null;
+			await cancelTeamCycleArtifacts(tx, {
+				workspaceId,
+				teamId,
+				reason: "settings_changed",
+			});
+			return next;
 		});
 		if (!updated) throw errors.SETTINGS_NOT_INITIALIZED();
 
@@ -1124,6 +1178,221 @@ const cycleMetrics = authedRouter
 		};
 	});
 
+const listPendingActions = authedRouter
+	.input(cyclePendingActionsSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		if (
+			!(await hasActiveWorkspaceMembership({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+			}))
+		)
+			throw errors.UNAUTHORIZED();
+		const allowed = await Promise.all([
+			isAllowed({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+				permissionKey: "cycle:manage_settings",
+			}),
+			isAllowed({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+				permissionKey: "cycle:read",
+			}),
+		]);
+		if (!allowed[0] || !allowed[1]) throw errors.UNAUTHORIZED();
+		return await db
+			.select({
+				id: cycleActionRequired.id,
+				cycleId: cycleActionRequired.cycleId,
+				kind: cycleActionRequired.kind,
+				dueAt: cycleActionRequired.dueAt,
+				scheduledBoundary: cycleActionRequired.scheduledBoundary,
+				status: cycleActionRequired.status,
+				cycleName: cycle.name,
+			})
+			.from(cycleActionRequired)
+			.innerJoin(cycle, eq(cycleActionRequired.cycleId, cycle.id))
+			.innerJoin(teamCycleSettings, eq(teamCycleSettings.teamId, cycle.teamId))
+			.where(
+				and(
+					eq(cycleActionRequired.workspaceId, input.workspaceId),
+					eq(cycleActionRequired.teamId, input.teamId),
+					eq(cycleActionRequired.status, "open"),
+					eq(cycle.origin, "scheduled"),
+					eq(teamCycleSettings.cadenceEnabled, true),
+					eq(teamCycleSettings.endBehavior, "confirmation_required"),
+					eq(cycleActionRequired.scheduledBoundary, cycle.endDate),
+					eq(
+						cycleActionRequired.eventRevisionAt,
+						sql`date_trunc('milliseconds', ${teamCycleSettings.updatedAt})`,
+					),
+					lte(cycleActionRequired.dueAt, new Date()),
+					ne(cycle.state, "completed"),
+					ne(cycle.state, "canceled"),
+				),
+			)
+			.orderBy(cycleActionRequired.dueAt);
+	});
+
+const listNotifications = authedRouter
+	.input(cycleNotificationsSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		if (
+			!(await hasActiveWorkspaceMembership({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+			}))
+		)
+			throw errors.UNAUTHORIZED();
+		const allowed = await isAllowed({
+			userId: context.auth.session.userId,
+			workspaceId: input.workspaceId,
+			teamId: input.teamId,
+			permissionKey: "cycle:read",
+		});
+		if (!allowed) throw errors.UNAUTHORIZED();
+		const conditions = [
+			eq(cycleNotification.workspaceId, input.workspaceId),
+			eq(cycleNotification.teamId, input.teamId),
+			eq(cycleNotification.recipientUserId, context.auth.session.userId),
+			isNull(cycleNotification.canceledAt),
+			eq(cycleNotification.scheduledBoundary, cycle.endDate),
+			eq(
+				cycleNotification.eventRevisionAt,
+				sql`date_trunc('milliseconds', ${teamCycleSettings.updatedAt})`,
+			),
+			eq(cycle.origin, "scheduled"),
+			eq(teamCycleSettings.cadenceEnabled, true),
+			ne(cycle.state, "completed"),
+			ne(cycle.state, "canceled"),
+			lte(cycleNotification.deliverAt, new Date()),
+		];
+		if (input.unreadOnly) conditions.push(isNull(cycleNotification.readAt));
+		return await db
+			.select({
+				id: cycleNotification.id,
+				cycleId: cycleNotification.cycleId,
+				actionRequiredId: cycleNotification.actionRequiredId,
+				kind: cycleNotification.kind,
+				deliverAt: cycleNotification.deliverAt,
+				createdAt: cycleNotification.createdAt,
+				readAt: cycleNotification.readAt,
+				cycleName: cycleNotification.cycleName,
+				teamName: cycleNotification.teamName,
+			})
+			.from(cycleNotification)
+			.innerJoin(cycle, eq(cycleNotification.cycleId, cycle.id))
+			.innerJoin(teamCycleSettings, eq(teamCycleSettings.teamId, cycle.teamId))
+			.where(and(...conditions))
+			.orderBy(desc(cycleNotification.createdAt), desc(cycleNotification.id))
+			.limit(input.limit);
+	});
+
+const markNotificationRead = authedRouter
+	.input(cycleMarkNotificationReadSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const userId = context.auth.session.userId;
+		if (
+			!(await hasActiveWorkspaceMembership({
+				userId,
+				workspaceId: input.workspaceId,
+			}))
+		)
+			throw errors.NOT_FOUND();
+		const now = new Date();
+		return await db.transaction(async (tx) => {
+			// Resolve only an active, currently deliverable notification. Keeping
+			// this own-recipient filter in the lookup makes foreign, canceled, and
+			// stale IDs indistinguishable from missing IDs.
+			const [notification] = await tx
+				.select({
+					teamId: cycleNotification.teamId,
+					readAt: cycleNotification.readAt,
+				})
+				.from(cycleNotification)
+				.innerJoin(
+					workspaceMembership,
+					and(
+						eq(workspaceMembership.userId, userId),
+						eq(workspaceMembership.workspaceId, input.workspaceId),
+						eq(workspaceMembership.status, "active"),
+					),
+				)
+				.innerJoin(cycle, eq(cycleNotification.cycleId, cycle.id))
+				.innerJoin(
+					teamCycleSettings,
+					eq(teamCycleSettings.teamId, cycle.teamId),
+				)
+				.where(
+					and(
+						eq(cycleNotification.id, input.notificationId),
+						eq(cycleNotification.workspaceId, input.workspaceId),
+						eq(cycleNotification.recipientUserId, userId),
+						isNull(cycleNotification.canceledAt),
+						eq(cycleNotification.scheduledBoundary, cycle.endDate),
+						eq(
+							cycleNotification.eventRevisionAt,
+							sql`date_trunc('milliseconds', ${teamCycleSettings.updatedAt})`,
+						),
+						eq(cycle.origin, "scheduled"),
+						eq(teamCycleSettings.cadenceEnabled, true),
+						ne(cycle.state, "completed"),
+						ne(cycle.state, "canceled"),
+						lte(cycleNotification.deliverAt, now),
+						or(
+							and(
+								eq(cycleNotification.kind, "end_reminder"),
+								or(
+									eq(teamCycleSettings.endBehavior, "automatic"),
+									eq(teamCycleSettings.endBehavior, "reminder_only"),
+									eq(teamCycleSettings.endBehavior, "confirmation_required"),
+								),
+							),
+							and(
+								eq(cycleNotification.kind, "completion_confirmation"),
+								eq(teamCycleSettings.endBehavior, "confirmation_required"),
+							),
+						),
+					),
+				)
+				.limit(1)
+				.for("update");
+			if (!notification) throw errors.NOT_FOUND();
+
+			const allowed = await isAllowed({
+				userId,
+				workspaceId: input.workspaceId,
+				teamId: notification.teamId,
+				permissionKey: "cycle:read",
+			});
+			if (!allowed) throw errors.NOT_FOUND();
+
+			const [updated] = await tx
+				.update(cycleNotification)
+				.set({ readAt: sql`coalesce(${cycleNotification.readAt}, ${now})` })
+				.where(
+					and(
+						eq(cycleNotification.id, input.notificationId),
+						eq(cycleNotification.workspaceId, input.workspaceId),
+						eq(cycleNotification.recipientUserId, userId),
+						isNull(cycleNotification.canceledAt),
+					),
+				)
+				.returning({
+					id: cycleNotification.id,
+					readAt: cycleNotification.readAt,
+				});
+			if (!updated) throw errors.NOT_FOUND();
+			return updated;
+		});
+	});
+
 export const cycleRouter = {
 	list: listCycles,
 	get: getCycle,
@@ -1137,4 +1406,7 @@ export const cycleRouter = {
 	getSchedulePreview,
 	updateSettings,
 	metrics: cycleMetrics,
+	listPendingActions,
+	listNotifications,
+	markNotificationRead,
 };

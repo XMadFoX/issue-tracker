@@ -117,37 +117,35 @@ export async function updateScopedTeamCycleSettings({
 	updatedBy: string;
 	settings: CycleSettingsValue;
 }): Promise<TeamCycleSettings | null> {
-	return await executor.transaction(async (tx) => {
-		const [scopedTeam] = await tx
-			.select({ id: team.id })
-			.from(team)
-			.where(and(eq(team.id, teamId), eq(team.workspaceId, workspaceId)))
-			.limit(1)
-			.for("update");
-		if (!scopedTeam) return null;
+	const [scopedTeam] = await executor
+		.select({ id: team.id })
+		.from(team)
+		.where(and(eq(team.id, teamId), eq(team.workspaceId, workspaceId)))
+		.limit(1)
+		.for("update");
+	if (!scopedTeam) return null;
 
-		const [updated] = await tx
-			.update(teamCycleSettings)
-			.set({
-				cadenceEnabled: settings.cadenceEnabled,
-				cadenceDays: settings.cadenceDays,
-				anchorDate: settings.anchorDate ? new Date(settings.anchorDate) : null,
-				planningHorizon: settings.planningHorizon,
-				endBehavior: settings.endBehavior,
-				gracePeriodMinutes: settings.gracePeriodMinutes,
-				defaultRolloverPolicy: settings.defaultRolloverPolicy,
-				reminderLeadMinutes: settings.reminderLeadMinutes,
-				updatedBy,
-				updatedAt: new Date(),
-			})
-			.where(eq(teamCycleSettings.teamId, teamId))
-			.returning();
-		if (!updated) return null;
+	const [updated] = await executor
+		.update(teamCycleSettings)
+		.set({
+			cadenceEnabled: settings.cadenceEnabled,
+			cadenceDays: settings.cadenceDays,
+			anchorDate: settings.anchorDate ? new Date(settings.anchorDate) : null,
+			planningHorizon: settings.planningHorizon,
+			endBehavior: settings.endBehavior,
+			gracePeriodMinutes: settings.gracePeriodMinutes,
+			defaultRolloverPolicy: settings.defaultRolloverPolicy,
+			reminderLeadMinutes: settings.reminderLeadMinutes,
+			updatedBy,
+			updatedAt: new Date(),
+		})
+		.where(eq(teamCycleSettings.teamId, teamId))
+		.returning();
+	if (!updated) return null;
 
-		await tx
-			.update(team)
-			.set({ cycleDuration: settings.cadenceDays, updatedAt: new Date() })
-			.where(eq(team.id, scopedTeam.id));
-		return updated;
-	});
+	await executor
+		.update(team)
+		.set({ cycleDuration: settings.cadenceDays, updatedAt: new Date() })
+		.where(eq(team.id, scopedTeam.id));
+	return updated;
 }
