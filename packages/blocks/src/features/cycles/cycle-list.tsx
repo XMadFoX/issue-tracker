@@ -11,6 +11,10 @@ import {
 import { CycleCompleteDialog } from "./cycle-complete-dialog";
 import { CycleCreateModal } from "./cycle-create-modal";
 import { CycleFormDialog } from "./cycle-form-dialog";
+import {
+	CycleScheduleAlerts,
+	type ScheduleAlert,
+} from "./cycle-schedule-alerts";
 
 type CycleListProps = {
 	cycles: Cycle[];
@@ -30,6 +34,13 @@ type CycleListProps = {
 		value: Omit<Inputs["cycle"]["complete"], "workspaceId">,
 	) => Promise<void>;
 	onDelete: (cycle: Cycle) => Promise<void>;
+	pendingActions?: ScheduleAlert[];
+	notifications?: ScheduleAlert[];
+	workspaceTimezone?: string;
+	alertsLoading?: boolean;
+	alertsError?: boolean;
+	onMarkNotificationRead?: (notificationId: string) => Promise<void>;
+	markingNotificationId?: string | null;
 };
 
 export function CycleList({
@@ -41,7 +52,19 @@ export function CycleList({
 	onUpdate,
 	onComplete,
 	onDelete,
+	pendingActions = [],
+	notifications = [],
+	workspaceTimezone = "UTC",
+	alertsLoading = false,
+	alertsError = false,
+	onMarkNotificationRead,
+	markingNotificationId = null,
 }: CycleListProps) {
+	const alertsWithCycleState = (alerts: ScheduleAlert[]) =>
+		alerts.map((alert) => ({
+			...alert,
+			cycleState: cycles.find((cycle) => cycle.id === alert.cycleId)?.state,
+		}));
 	const [editingCycle, setEditingCycle] = useState<Cycle | null>(null);
 	// Retains the cycle being completed independent of the derived active
 	// cycle, so a stale-completion error (source no longer active after a
@@ -58,6 +81,20 @@ export function CycleList({
 				<h1 className="text-2xl font-bold">Cycles</h1>
 				<CycleCreateModal cycleDuration={cycleDuration} onSubmit={onCreate} />
 			</div>
+
+			<CycleScheduleAlerts
+				pendingActions={alertsWithCycleState(pendingActions)}
+				notifications={alertsWithCycleState(notifications)}
+				workspaceTimezone={workspaceTimezone}
+				isLoading={alertsLoading}
+				hasError={alertsError}
+				onOpenCompletion={(cycleId) => {
+					const source = cycles.find((cycle) => cycle.id === cycleId);
+					if (source?.state === "active") setCompletionSource(source);
+				}}
+				onMarkRead={onMarkNotificationRead}
+				markingNotificationId={markingNotificationId}
+			/>
 
 			{activeCycle ? (
 				<CycleCard
