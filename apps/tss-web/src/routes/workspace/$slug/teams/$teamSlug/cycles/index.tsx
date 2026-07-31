@@ -6,6 +6,7 @@ import {
 import {
 	useMutation,
 	useQueries,
+	useQuery,
 	useQueryClient,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
@@ -87,6 +88,28 @@ export function RouteComponent() {
 			input: { workspaceId: workspace.data.id, teamId: team.data.id },
 		}),
 	);
+	const settings = useQuery(
+		orpc.cycle.getSettings.queryOptions({
+			input: { workspaceId: workspace.data.id, teamId: team.data.id },
+		}),
+	);
+	const pendingActions = useQuery({
+		...orpc.cycle.listPendingActions.queryOptions({
+			input: { workspaceId: workspace.data.id, teamId: team.data.id },
+		}),
+		enabled: settings.data?.canManageSettings === true,
+		refetchInterval: 30_000,
+	});
+	const notifications = useQuery({
+		...orpc.cycle.listNotifications.queryOptions({
+			input: {
+				workspaceId: workspace.data.id,
+				teamId: team.data.id,
+				unreadOnly: true,
+			},
+		}),
+		refetchInterval: 30_000,
+	});
 	const metrics = useQueries({
 		queries: cycles.data.map((cycle) =>
 			orpc.cycle.metrics.queryOptions({
@@ -103,10 +126,19 @@ export function RouteComponent() {
 	const updateCycle = useMutation(orpc.cycle.update.mutationOptions());
 	const deleteCycle = useMutation(orpc.cycle.delete.mutationOptions());
 	const completeCycle = useMutation(orpc.cycle.complete.mutationOptions());
+	const markNotificationRead = useMutation(
+		orpc.cycle.markNotificationRead.mutationOptions(),
+	);
 
 	const invalidateCycles = async (cycleId?: string) => {
 		await Promise.all([
 			queryClient.invalidateQueries({ queryKey: orpc.cycle.list.key() }),
+			queryClient.invalidateQueries({
+				queryKey: orpc.cycle.listPendingActions.key(),
+			}),
+			queryClient.invalidateQueries({
+				queryKey: orpc.cycle.listNotifications.key(),
+			}),
 			cycleId
 				? queryClient.invalidateQueries({
 						queryKey: orpc.cycle.metrics.queryKey({
@@ -128,6 +160,12 @@ export function RouteComponent() {
 	) => {
 		await Promise.all([
 			queryClient.invalidateQueries({ queryKey: orpc.cycle.list.key() }),
+			queryClient.invalidateQueries({
+				queryKey: orpc.cycle.listPendingActions.key(),
+			}),
+			queryClient.invalidateQueries({
+				queryKey: orpc.cycle.listNotifications.key(),
+			}),
 			...result.affectedCycleIds.map((cycleId) =>
 				queryClient.invalidateQueries({
 					queryKey: orpc.cycle.metrics.queryKey({
@@ -163,6 +201,46 @@ export function RouteComponent() {
 		<div className="w-full p-6">
 			<CycleList
 				cycles={cycles.data}
+				pendingActions={pendingActions.data ?? []}
+				notifications={(notifications.data ?? []).map((notification) => ({
+					id: notification.id,
+					cycleId: notification.cycleId,
+					cycleName: notification.cycleName,
+					dueAt: notification.deliverAt,
+					kind: notification.kind,
+					actionRequiredId: notification.actionRequiredId,
+				}))}
+				workspaceTimezone={workspace.data.timezone ?? "UTC"}
+				alertsLoading={
+					notifications.isPending ||
+					(settings.data?.canManageSettings === true &&
+						pendingActions.isPending)
+				}
+				alertsError={
+					notifications.isError ||
+					(settings.data?.canManageSettings === true && pendingActions.isError)
+				}
+				onMarkNotificationRead={async (notificationId) => {
+					try {
+						await markNotificationRead.mutateAsync({
+							workspaceId: workspace.data.id,
+							notificationId,
+						});
+						await queryClient.invalidateQueries({
+							queryKey: orpc.cycle.listNotifications.key(),
+						});
+					} catch (error) {
+						console.error(error);
+						toast.error(
+							getCycleErrorMessage(error, "Failed to dismiss notification"),
+						);
+					}
+				}}
+				markingNotificationId={
+					markNotificationRead.isPending
+						? markNotificationRead.variables?.notificationId
+						: null
+				}
 				metricsByCycleId={metricsByCycleId}
 				cycleDuration={team.data.cycleDuration}
 				onCreate={async (value) => {

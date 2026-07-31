@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
 	cleanup,
 	fireEvent,
@@ -5,7 +6,6 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 
 type InvalidationRequest = {
 	queryKey?: readonly unknown[];
@@ -35,6 +35,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
 	useMutation: () => ({ mutateAsync: completeMutation, isPending: false }),
+	useQuery: () => ({ data: [] }),
 	useQueries: () => [],
 	useQueryClient: () => ({ invalidateQueries }),
 	useSuspenseQuery: (options: { queryKey: readonly unknown[] }) => {
@@ -69,6 +70,15 @@ vi.mock("src/orpc/client", () => ({
 		team: { getBySlug: { queryOptions } },
 		cycle: {
 			list: { queryOptions, key: () => ["cycle", "list"] },
+			getSettings: { queryOptions },
+			listPendingActions: {
+				queryOptions,
+				key: () => ["cycle", "pending-actions"],
+			},
+			listNotifications: {
+				queryOptions,
+				key: () => ["cycle", "notifications"],
+			},
 			metrics: {
 				queryOptions,
 				queryKey: ({ input }: { input: unknown }) => [
@@ -82,6 +92,7 @@ vi.mock("src/orpc/client", () => ({
 			update: { mutationOptions },
 			delete: { mutationOptions },
 			complete: { mutationOptions },
+			markNotificationRead: { mutationOptions },
 		},
 		issue: { list: { key: () => ["issue", "list"] } },
 	},
@@ -106,23 +117,35 @@ vi.mock("@/features/issues/issues-feature", () => ({
 vi.mock("@prism/blocks/src/features/cycles", () => ({
 	CycleList: ({
 		onComplete,
+		onMarkNotificationRead,
 	}: {
 		onComplete: (input: {
 			cycleId: string;
 			disposition: { type: "moveToBacklog" };
 		}) => Promise<void>;
+		onMarkNotificationRead?: (notificationId: string) => Promise<void>;
 	}) => (
-		<button
-			type="button"
-			onClick={() => {
-				void onComplete({
-					cycleId: "source-cycle",
-					disposition: { type: "moveToBacklog" },
-				}).catch(() => undefined);
-			}}
-		>
-			Complete source
-		</button>
+		<div>
+			<button
+				type="button"
+				onClick={() => {
+					void onComplete({
+						cycleId: "source-cycle",
+						disposition: { type: "moveToBacklog" },
+					}).catch(() => undefined);
+				}}
+			>
+				Complete source
+			</button>
+			{onMarkNotificationRead ? (
+				<button
+					type="button"
+					onClick={() => void onMarkNotificationRead("notification-1")}
+				>
+					Dismiss notification
+				</button>
+			) : null}
+		</div>
 	),
 }));
 
@@ -226,6 +249,22 @@ describe("cycles route completion integration", () => {
 				],
 			}),
 		).toBe(false);
+	});
+
+	it("dismisses a notification and invalidates its list without unhandled rejection", async () => {
+		render(<RouteComponent />);
+		fireEvent.click(
+			screen.getByRole("button", { name: "Dismiss notification" }),
+		);
+		await waitFor(() => {
+			expect(completeMutation).toHaveBeenCalledWith({
+				workspaceId: "workspace-1",
+				notificationId: "notification-1",
+			});
+		});
+		expect(invalidateQueries).toHaveBeenCalledWith({
+			queryKey: ["cycle", "notifications"],
+		});
 	});
 
 	it("reports rejected completion and refreshes stale cycle state without success", async () => {
