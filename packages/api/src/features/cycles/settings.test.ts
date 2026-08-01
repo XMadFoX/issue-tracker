@@ -119,11 +119,18 @@ describe("team cycle settings persistence", () => {
 			executor: db,
 			teamRow: { id: ids.team, cycleDuration: 14 },
 		});
+		const [initial] = await db
+			.select()
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		if (!initial) throw new Error("Expected initialized settings");
 		const updated = await updateScopedTeamCycleSettings({
 			executor: db,
 			workspaceId: ids.workspace,
 			teamId: ids.team,
 			updatedBy: ids.actor,
+			expectedUpdatedAt: initial.updatedAt.toISOString(),
+			automationAvailable: false,
 			settings: {
 				cadenceEnabled: false,
 				cadenceDays: 28,
@@ -135,11 +142,86 @@ describe("team cycle settings persistence", () => {
 				reminderLeadMinutes: 30,
 			},
 		});
-		expect(updated).toMatchObject({ cadenceDays: 28, updatedBy: ids.actor });
+		expect(updated).toMatchObject({
+			status: "updated",
+			settings: { cadenceDays: 28, updatedBy: ids.actor },
+		});
 		const [updatedTeam] = await db
 			.select({ cycleDuration: team.cycleDuration })
 			.from(team)
 			.where(eq(team.id, ids.team));
 		expect(updatedTeam?.cycleDuration).toBe(28);
+	});
+
+	test("treats identical retries as no-op and rejects stale differing saves", async () => {
+		await insertTeam(14);
+		const { ensureTeamCycleSettings, updateScopedTeamCycleSettings } =
+			await import("./settings");
+		await ensureTeamCycleSettings({
+			executor: db,
+			teamRow: { id: ids.team, cycleDuration: 14 },
+		});
+		const [before] = await db
+			.select()
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		if (!before) throw new Error("Expected initialized settings");
+		const requested = {
+			cadenceEnabled: false,
+			cadenceDays: 21,
+			anchorDate: null,
+			planningHorizon: before.planningHorizon,
+			endBehavior: before.endBehavior,
+			gracePeriodMinutes: before.gracePeriodMinutes,
+			defaultRolloverPolicy: before.defaultRolloverPolicy,
+			reminderLeadMinutes: before.reminderLeadMinutes,
+		};
+		const changed = await updateScopedTeamCycleSettings({
+			executor: db,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			updatedBy: ids.actor,
+			settings: requested,
+			expectedUpdatedAt: before.updatedAt.toISOString(),
+			automationAvailable: false,
+		});
+		expect(changed?.status).toBe("updated");
+		if (!changed || changed.status !== "updated")
+			throw new Error("Expected update");
+		const [afterChange] = await db
+			.select()
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		if (!afterChange) throw new Error("Expected changed settings");
+		const unchanged = await updateScopedTeamCycleSettings({
+			executor: db,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			updatedBy: ids.actor,
+			settings: requested,
+			expectedUpdatedAt: before.updatedAt.toISOString(),
+			automationAvailable: false,
+		});
+		expect(unchanged?.status).toBe("unchanged");
+		const [afterRetry] = await db
+			.select()
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		expect(afterRetry?.updatedAt).toEqual(afterChange.updatedAt);
+		const conflict = await updateScopedTeamCycleSettings({
+			executor: db,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			updatedBy: ids.actor,
+			settings: { ...requested, cadenceDays: 28 },
+			expectedUpdatedAt: before.updatedAt.toISOString(),
+			automationAvailable: false,
+		});
+		expect(conflict?.status).toBe("conflict");
+		const [teamAfterConflict] = await db
+			.select({ cycleDuration: team.cycleDuration })
+			.from(team)
+			.where(eq(team.id, ids.team));
+		expect(teamAfterConflict?.cycleDuration).toBe(21);
 	});
 });

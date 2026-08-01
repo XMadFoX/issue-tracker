@@ -157,6 +157,7 @@ export const cycleUpdateSettingsSchema = z
 	.object({
 		workspaceId: cycleInsertSchema.shape.workspaceId,
 		teamId: cycleInsertSchema.shape.teamId,
+		expectedUpdatedAt: z.iso.datetime(),
 		...settingsValueShape,
 	})
 	.strict()

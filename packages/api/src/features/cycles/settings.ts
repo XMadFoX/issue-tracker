@@ -104,26 +104,73 @@ export async function getScopedTeamCycleSettings({
 	};
 }
 
+export type UpdateTeamCycleSettingsResult =
+	| { status: "updated"; settings: TeamCycleSettings }
+	| { status: "unchanged"; settings: TeamCycleSettings }
+	| { status: "conflict"; settings: TeamCycleSettings }
+	| { status: "unavailable"; settings: TeamCycleSettings };
+
+function settingsMatch(
+	current: TeamCycleSettings,
+	requested: CycleSettingsValue,
+): boolean {
+	return (
+		current.cadenceEnabled === requested.cadenceEnabled &&
+		current.cadenceDays === requested.cadenceDays &&
+		(current.anchorDate?.getTime() ?? null) ===
+			(requested.anchorDate
+				? new Date(requested.anchorDate).getTime()
+				: null) &&
+		current.planningHorizon === requested.planningHorizon &&
+		current.endBehavior === requested.endBehavior &&
+		current.gracePeriodMinutes === requested.gracePeriodMinutes &&
+		current.defaultRolloverPolicy === requested.defaultRolloverPolicy &&
+		current.reminderLeadMinutes === requested.reminderLeadMinutes
+	);
+}
+
 export async function updateScopedTeamCycleSettings({
 	executor,
 	workspaceId,
 	teamId,
 	updatedBy,
 	settings,
+	expectedUpdatedAt,
+	automationAvailable,
 }: {
 	executor: DbExecutor;
 	workspaceId: string;
 	teamId: string;
 	updatedBy: string;
 	settings: CycleSettingsValue;
-}): Promise<TeamCycleSettings | null> {
+	expectedUpdatedAt: string;
+	automationAvailable: boolean;
+}): Promise<UpdateTeamCycleSettingsResult | null> {
 	const [scopedTeam] = await executor
-		.select({ id: team.id })
+		.select({ id: team.id, cycleDuration: team.cycleDuration })
 		.from(team)
 		.where(and(eq(team.id, teamId), eq(team.workspaceId, workspaceId)))
 		.limit(1)
 		.for("update");
 	if (!scopedTeam) return null;
+
+	const [current] = await executor
+		.select()
+		.from(teamCycleSettings)
+		.where(eq(teamCycleSettings.teamId, teamId))
+		.limit(1)
+		.for("update");
+	if (!current) return null;
+
+	if (settingsMatch(current, settings)) {
+		return { status: "unchanged", settings: current };
+	}
+	if (current.updatedAt.getTime() !== Date.parse(expectedUpdatedAt)) {
+		return { status: "conflict", settings: current };
+	}
+	if (settings.cadenceEnabled && automationAvailable === false) {
+		return { status: "unavailable", settings: current };
+	}
 
 	const [updated] = await executor
 		.update(teamCycleSettings)
@@ -143,9 +190,11 @@ export async function updateScopedTeamCycleSettings({
 		.returning();
 	if (!updated) return null;
 
-	await executor
-		.update(team)
-		.set({ cycleDuration: settings.cadenceDays, updatedAt: new Date() })
-		.where(eq(team.id, scopedTeam.id));
-	return updated;
+	if (scopedTeam.cycleDuration !== settings.cadenceDays) {
+		await executor
+			.update(team)
+			.set({ cycleDuration: settings.cadenceDays, updatedAt: new Date() })
+			.where(eq(team.id, scopedTeam.id));
+	}
+	return { status: "updated", settings: updated };
 }

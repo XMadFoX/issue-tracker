@@ -32,7 +32,7 @@ export type ScheduledCycleOccurrence = {
 
 export type SchedulePreview = {
 	status: ScheduleStatus;
-	automationAvailable: false;
+	automationAvailable: boolean;
 	workspaceTimezone: string;
 	cadenceDays: number;
 	anchorDate: string | null;
@@ -78,14 +78,16 @@ function buildUnavailablePreview({
 	status,
 	workspaceTimezone,
 	settings,
+	automationAvailable,
 }: {
 	status: Exclude<ScheduleStatus, "ready">;
 	workspaceTimezone: string;
 	settings: ScheduleSettings;
+	automationAvailable: boolean;
 }): SchedulePreview {
 	return {
 		status,
-		automationAvailable: false,
+		automationAvailable,
 		workspaceTimezone,
 		cadenceDays: settings.cadenceDays,
 		anchorDate: settings.anchorDate?.toISOString() ?? null,
@@ -214,10 +216,12 @@ export function deriveSchedulePreview({
 	workspaceTimezone,
 	settings,
 	now,
+	automationAvailable = false,
 }: {
 	workspaceTimezone: string;
 	settings: ScheduleSettings;
 	now: Date;
+	automationAvailable?: boolean;
 }): SchedulePreview {
 	if (!isValidIanaTimezone(workspaceTimezone)) {
 		throw new InvalidWorkspaceTimezoneError(workspaceTimezone);
@@ -227,6 +231,7 @@ export function deriveSchedulePreview({
 			status: "disabled",
 			workspaceTimezone,
 			settings,
+			automationAvailable,
 		});
 	}
 	if (!settings.anchorDate) {
@@ -234,6 +239,7 @@ export function deriveSchedulePreview({
 			status: "anchor_required",
 			workspaceTimezone,
 			settings,
+			automationAvailable,
 		});
 	}
 
@@ -260,7 +266,7 @@ export function deriveSchedulePreview({
 
 	return {
 		status: "ready",
-		automationAvailable: false,
+		automationAvailable,
 		workspaceTimezone,
 		cadenceDays: settings.cadenceDays,
 		anchorDate: settings.anchorDate.toISOString(),

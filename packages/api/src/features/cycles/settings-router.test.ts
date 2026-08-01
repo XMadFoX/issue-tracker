@@ -8,19 +8,24 @@ import {
 } from "bun:test";
 import { createRouterClient, ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AuthedORPCContext } from "../../context";
 import setupDb from "../../utils/prepare-tests";
 
 let db: typeof import("db").db;
 let router: typeof import("../../router").router;
 let cycle: typeof import("db/features/tracker/cycles.schema").cycle;
+let cycleActionRequired: typeof import("db/features/tracker/cycle-actions.schema").cycleActionRequired;
+let cycleNotification: typeof import("db/features/tracker/cycle-notifications.schema").cycleNotification;
+let cycleScheduleJob: typeof import("db/features/tracker/cycle-schedule-jobs.schema").cycleScheduleJob;
 let permissionsCatalog: typeof import("db/features/abac/abac.schema").permissionsCatalog;
 let roleAssignments: typeof import("db/features/abac/abac.schema").roleAssignments;
 let roleDefinitions: typeof import("db/features/abac/abac.schema").roleDefinitions;
 let rolePermissions: typeof import("db/features/abac/abac.schema").rolePermissions;
 let teamCycleSettings: typeof import("db/features/tracker/team-cycle-settings.schema").teamCycleSettings;
 let team: typeof import("db/features/tracker/tracker.schema").team;
+let teamMembership: typeof import("db/features/tracker/tracker.schema").teamMembership;
+let workspaceMembership: typeof import("db/features/tracker/tracker.schema").workspaceMembership;
 let user: typeof import("db/features/auth/auth.schema").user;
 let workspace: typeof import("db/features/tracker/tracker.schema").workspace;
 let teardown: Awaited<ReturnType<typeof setupDb>>;
@@ -80,6 +85,75 @@ const settings = {
 	reminderLeadMinutes: 60,
 };
 
+async function currentRevision() {
+	const [row] = await db
+		.select({ updatedAt: teamCycleSettings.updatedAt })
+		.from(teamCycleSettings)
+		.where(eq(teamCycleSettings.teamId, ids.team));
+	if (!row) throw new Error("settings missing");
+	return row.updatedAt.toISOString();
+}
+
+async function seedScheduledArtifacts() {
+	const cycleId = createId();
+	const actionId = createId();
+	const notificationId = createId();
+	const jobId = createId();
+	const boundary = new Date("2026-08-01T00:00:00.000Z");
+	const [initial] = await db
+		.select()
+		.from(teamCycleSettings)
+		.where(eq(teamCycleSettings.teamId, ids.team));
+	if (!initial) throw new Error("settings missing");
+	await db.insert(cycle).values({
+		id: cycleId,
+		workspaceId: ids.workspace,
+		teamId: ids.team,
+		name: "Concurrent artifact cycle",
+		sequence: 102,
+		startDate: new Date("2026-07-18T00:00:00.000Z"),
+		endDate: boundary,
+		state: "planned",
+		origin: "scheduled",
+		scheduledBoundary: boundary,
+	});
+	await db.insert(cycleActionRequired).values({
+		id: actionId,
+		workspaceId: ids.workspace,
+		teamId: ids.team,
+		cycleId,
+		kind: "completion_confirmation",
+		scheduledBoundary: boundary,
+		eventRevisionAt: initial.updatedAt,
+		dueAt: boundary,
+	});
+	await db.insert(cycleNotification).values({
+		id: notificationId,
+		workspaceId: ids.workspace,
+		teamId: ids.team,
+		cycleId,
+		actionRequiredId: actionId,
+		recipientUserId: ids.manager,
+		kind: "completion_confirmation",
+		scheduledBoundary: boundary,
+		eventRevisionAt: initial.updatedAt,
+		deliverAt: boundary,
+		cycleName: "Concurrent artifact cycle",
+		teamName: "Settings Team",
+	});
+	await db.insert(cycleScheduleJob).values({
+		id: jobId,
+		workspaceId: ids.workspace,
+		teamId: ids.team,
+		cycleId,
+		jobType: "create_cycle_confirmation_required",
+		scheduledBoundary: boundary,
+		eventRevisionAt: initial.updatedAt,
+		status: "queued",
+	});
+	return { actionId, notificationId, jobId };
+}
+
 async function expectCode(operation: Promise<unknown>, code: string) {
 	try {
 		await operation;
@@ -137,7 +211,18 @@ beforeAll(async () => {
 		"db/features/tracker/team-cycle-settings.schema"
 	));
 	({ cycle } = await import("db/features/tracker/cycles.schema"));
-	({ team, workspace } = await import("db/features/tracker/tracker.schema"));
+	({ cycleActionRequired } = await import(
+		"db/features/tracker/cycle-actions.schema"
+	));
+	({ cycleNotification } = await import(
+		"db/features/tracker/cycle-notifications.schema"
+	));
+	({ cycleScheduleJob } = await import(
+		"db/features/tracker/cycle-schedule-jobs.schema"
+	));
+	({ team, teamMembership, workspace, workspaceMembership } = await import(
+		"db/features/tracker/tracker.schema"
+	));
 	({ user } = await import("db/features/auth/auth.schema"));
 	({ router } = await import("../../router"));
 }, 300_000);
@@ -193,6 +278,34 @@ beforeEach(async () => {
 	await grant(ids.reader, ["cycle:read"]);
 	await grant(ids.manager, ["cycle:read", "cycle:manage_settings"]);
 	await grant(ids.manager, ["team:create", "team:update"], null);
+	for (const userId of [ids.manager, ids.reader]) {
+		const [assignment] = await db
+			.select({ roleId: roleAssignments.roleId })
+			.from(roleAssignments)
+			.where(
+				and(
+					eq(roleAssignments.userId, userId),
+					eq(roleAssignments.workspaceId, ids.workspace),
+					eq(roleAssignments.teamId, ids.team),
+				),
+			)
+			.limit(1);
+		if (!assignment) throw new Error("missing team role assignment");
+		await db.insert(workspaceMembership).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			userId,
+			roleId: assignment.roleId,
+			status: "active",
+		});
+		await db.insert(teamMembership).values({
+			id: createId(),
+			teamId: ids.team,
+			userId,
+			roleId: assignment.roleId,
+			status: "active",
+		});
+	}
 });
 
 describe("cycle settings routes", () => {
@@ -205,8 +318,57 @@ describe("cycle settings routes", () => {
 		expect(result.workspaceTimezone).toBe("America/New_York");
 		await expectCode(
 			client(ids.reader).cycle.updateSettings(
-				{ workspaceId: ids.workspace, teamId: ids.team, ...settings },
+				{
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					expectedUpdatedAt: await currentRevision(),
+					...settings,
+				},
 				options(ids.reader),
+			),
+			"UNAUTHORIZED",
+		);
+	});
+
+	test("requires active workspace and team membership even for direct role assignments", async () => {
+		await db
+			.update(workspaceMembership)
+			.set({ status: "inactive" })
+			.where(
+				and(
+					eq(workspaceMembership.userId, ids.manager),
+					eq(workspaceMembership.workspaceId, ids.workspace),
+				),
+			);
+		await expectCode(
+			client(ids.manager).cycle.getSettings(
+				{ workspaceId: ids.workspace, teamId: ids.team },
+				options(ids.manager),
+			),
+			"UNAUTHORIZED",
+		);
+		await db
+			.update(workspaceMembership)
+			.set({ status: "active" })
+			.where(
+				and(
+					eq(workspaceMembership.userId, ids.manager),
+					eq(workspaceMembership.workspaceId, ids.workspace),
+				),
+			);
+		await db
+			.update(teamMembership)
+			.set({ status: "inactive" })
+			.where(
+				and(
+					eq(teamMembership.userId, ids.manager),
+					eq(teamMembership.teamId, ids.team),
+				),
+			);
+		await expectCode(
+			client(ids.manager).cycle.getSchedulePreview(
+				{ workspaceId: ids.workspace, teamId: ids.team },
+				options(ids.manager),
 			),
 			"UNAUTHORIZED",
 		);
@@ -214,7 +376,12 @@ describe("cycle settings routes", () => {
 
 	test("updates full replacement settings, audit actor, and legacy cadence", async () => {
 		const result = await client(ids.manager).cycle.updateSettings(
-			{ workspaceId: ids.workspace, teamId: ids.team, ...settings },
+			{
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				expectedUpdatedAt: await currentRevision(),
+				...settings,
+			},
 			options(ids.manager),
 		);
 		expect(result.canManageSettings).toBeTrue();
@@ -359,12 +526,419 @@ describe("cycle settings routes", () => {
 		);
 	});
 
+	test("cancels scheduled artifacts once and leaves stale no-op retries untouched", async () => {
+		const cycleId = createId();
+		const actionId = createId();
+		const notificationId = createId();
+		const jobId = createId();
+		const boundary = new Date("2026-08-01T00:00:00.000Z");
+		await db.insert(cycle).values({
+			id: cycleId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Scheduled artifact cycle",
+			sequence: 100,
+			startDate: new Date("2026-07-18T00:00:00.000Z"),
+			endDate: boundary,
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: boundary,
+		});
+		const [initial] = await db
+			.select()
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		if (!initial) throw new Error("settings missing");
+		await db.insert(cycleActionRequired).values({
+			id: actionId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId,
+			kind: "completion_confirmation",
+			scheduledBoundary: boundary,
+			eventRevisionAt: initial.updatedAt,
+			dueAt: new Date("2026-07-31T00:00:00.000Z"),
+		});
+		await db.insert(cycleNotification).values({
+			id: notificationId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId,
+			actionRequiredId: actionId,
+			recipientUserId: ids.manager,
+			kind: "completion_confirmation",
+			scheduledBoundary: boundary,
+			eventRevisionAt: initial.updatedAt,
+			deliverAt: new Date("2026-07-31T00:00:00.000Z"),
+			cycleName: "Scheduled artifact cycle",
+			teamName: "Settings Team",
+		});
+		await db.insert(cycleScheduleJob).values({
+			id: jobId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId,
+			jobType: "create_cycle_confirmation_required",
+			scheduledBoundary: boundary,
+			eventRevisionAt: initial.updatedAt,
+			status: "queued",
+		});
+		const staleRevision = initial.updatedAt.toISOString();
+		const changed = await client(ids.manager).cycle.updateSettings(
+			{
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				expectedUpdatedAt: staleRevision,
+				...settings,
+				cadenceDays: 28,
+			},
+			options(ids.manager),
+		);
+		expect(changed.unchanged).toBeFalse();
+		const canceled = await Promise.all([
+			db
+				.select()
+				.from(cycleActionRequired)
+				.where(eq(cycleActionRequired.id, actionId)),
+			db
+				.select()
+				.from(cycleNotification)
+				.where(eq(cycleNotification.id, notificationId)),
+			db.select().from(cycleScheduleJob).where(eq(cycleScheduleJob.id, jobId)),
+		]);
+		expect(canceled[0][0]?.status).toBe("canceled");
+		expect(canceled[0][0]?.cancellationReason).toBe("settings_changed");
+		expect(canceled[1][0]?.cancellationReason).toBe("settings_changed");
+		expect(canceled[2][0]?.outcome).toBe("obsolete_settings");
+		const unchanged = await client(ids.manager).cycle.updateSettings(
+			{
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				expectedUpdatedAt: staleRevision,
+				...settings,
+				cadenceDays: 28,
+			},
+			options(ids.manager),
+		);
+		expect(unchanged.unchanged).toBeTrue();
+		const afterRetry = await Promise.all([
+			db
+				.select()
+				.from(cycleActionRequired)
+				.where(eq(cycleActionRequired.id, actionId)),
+			db
+				.select()
+				.from(cycleNotification)
+				.where(eq(cycleNotification.id, notificationId)),
+			db.select().from(cycleScheduleJob).where(eq(cycleScheduleJob.id, jobId)),
+		]);
+		expect(afterRetry).toEqual(canceled);
+	});
+
+	test("rolls back settings, audit, duration, and every artifact on cancellation failure", async () => {
+		const cycleId = createId();
+		const actionId = createId();
+		const notificationId = createId();
+		const jobId = createId();
+		const boundary = new Date("2026-08-01T00:00:00.000Z");
+		await db.insert(cycle).values({
+			id: cycleId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Rollback cycle",
+			sequence: 101,
+			startDate: new Date("2026-07-18T00:00:00.000Z"),
+			endDate: boundary,
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: boundary,
+		});
+		const [initial] = await db
+			.select()
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		if (!initial) throw new Error("settings missing");
+		await db.insert(cycleActionRequired).values({
+			id: actionId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId,
+			kind: "completion_confirmation",
+			scheduledBoundary: boundary,
+			eventRevisionAt: initial.updatedAt,
+			dueAt: boundary,
+		});
+		await db.insert(cycleNotification).values({
+			id: notificationId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId,
+			actionRequiredId: actionId,
+			recipientUserId: ids.manager,
+			kind: "completion_confirmation",
+			scheduledBoundary: boundary,
+			eventRevisionAt: initial.updatedAt,
+			deliverAt: boundary,
+			cycleName: "Rollback cycle",
+			teamName: "Settings Team",
+		});
+		await db.insert(cycleScheduleJob).values({
+			id: jobId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId,
+			jobType: "create_cycle_confirmation_required",
+			scheduledBoundary: boundary,
+			eventRevisionAt: initial.updatedAt,
+			status: "queued",
+		});
+		const before = {
+			settings: (
+				await db
+					.select()
+					.from(teamCycleSettings)
+					.where(eq(teamCycleSettings.teamId, ids.team))
+			)[0],
+			team: (await db.select().from(team).where(eq(team.id, ids.team)))[0],
+			action: (
+				await db
+					.select()
+					.from(cycleActionRequired)
+					.where(eq(cycleActionRequired.id, actionId))
+			)[0],
+			notification: (
+				await db
+					.select()
+					.from(cycleNotification)
+					.where(eq(cycleNotification.id, notificationId))
+			)[0],
+			job: (
+				await db
+					.select()
+					.from(cycleScheduleJob)
+					.where(eq(cycleScheduleJob.id, jobId))
+			)[0],
+		};
+		await db.execute(sql`
+			create or replace function settings_test_failure() returns trigger
+			language plpgsql as $$ begin
+				if new.cancellation_reason = 'settings_changed' then
+					raise exception 'settings cancellation failure';
+				end if;
+				return new;
+			end $$;
+		`);
+		await db.execute(sql`
+			create trigger settings_test_failure_trigger
+			before update on cycle_notification
+			for each row execute function settings_test_failure()
+		`);
+		let failure: unknown;
+		try {
+			await client(ids.manager).cycle.updateSettings(
+				{
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					expectedUpdatedAt: initial.updatedAt.toISOString(),
+					...settings,
+					cadenceDays: 28,
+				},
+				options(ids.manager),
+			);
+		} catch (error) {
+			failure = error;
+		} finally {
+			await db.execute(
+				sql`drop trigger if exists settings_test_failure_trigger on cycle_notification`,
+			);
+			await db.execute(sql`drop function if exists settings_test_failure()`);
+		}
+		expect(failure).toBeDefined();
+		const after = {
+			settings: (
+				await db
+					.select()
+					.from(teamCycleSettings)
+					.where(eq(teamCycleSettings.teamId, ids.team))
+			)[0],
+			team: (await db.select().from(team).where(eq(team.id, ids.team)))[0],
+			action: (
+				await db
+					.select()
+					.from(cycleActionRequired)
+					.where(eq(cycleActionRequired.id, actionId))
+			)[0],
+			notification: (
+				await db
+					.select()
+					.from(cycleNotification)
+					.where(eq(cycleNotification.id, notificationId))
+			)[0],
+			job: (
+				await db
+					.select()
+					.from(cycleScheduleJob)
+					.where(eq(cycleScheduleJob.id, jobId))
+			)[0],
+		};
+		expect(after).toEqual(before);
+	});
+
+	test("serializes genuinely concurrent differing replacements", async () => {
+		const artifacts = await seedScheduledArtifacts();
+		const revision = await currentRevision();
+		const artifactsBefore = await Promise.all([
+			db
+				.select()
+				.from(cycleActionRequired)
+				.where(eq(cycleActionRequired.id, artifacts.actionId)),
+			db
+				.select()
+				.from(cycleNotification)
+				.where(eq(cycleNotification.id, artifacts.notificationId)),
+			db
+				.select()
+				.from(cycleScheduleJob)
+				.where(eq(cycleScheduleJob.id, artifacts.jobId)),
+		]);
+		const results = await Promise.allSettled([
+			client(ids.manager).cycle.updateSettings(
+				{
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					expectedUpdatedAt: revision,
+					...settings,
+					cadenceDays: 28,
+				},
+				options(ids.manager),
+			),
+			client(ids.manager).cycle.updateSettings(
+				{
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					expectedUpdatedAt: revision,
+					...settings,
+					cadenceDays: 35,
+				},
+				options(ids.manager),
+			),
+		]);
+		expect(
+			results.filter((result) => result.status === "fulfilled"),
+		).toHaveLength(1);
+		expect(
+			results.filter((result) => result.status === "rejected"),
+		).toHaveLength(1);
+		const rejected = results.find((result) => result.status === "rejected");
+		if (rejected?.status === "rejected")
+			expect(rejected.reason.code).toBe("SETTINGS_CHANGED");
+		const [winner] = await db
+			.select()
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		expect(winner).toBeDefined();
+		if (winner) expect([28, 35]).toContain(winner.cadenceDays);
+		const afterArtifacts = await Promise.all([
+			db
+				.select()
+				.from(cycleActionRequired)
+				.where(eq(cycleActionRequired.id, artifacts.actionId)),
+			db
+				.select()
+				.from(cycleNotification)
+				.where(eq(cycleNotification.id, artifacts.notificationId)),
+			db
+				.select()
+				.from(cycleScheduleJob)
+				.where(eq(cycleScheduleJob.id, artifacts.jobId)),
+		]);
+		expect(afterArtifacts).not.toEqual(artifactsBefore);
+		expect(afterArtifacts[0][0]?.status).toBe("canceled");
+		expect(afterArtifacts[0][0]?.cancellationReason).toBe("settings_changed");
+		expect(afterArtifacts[1][0]?.cancellationReason).toBe("settings_changed");
+		expect(afterArtifacts[2][0]?.outcome).toBe("obsolete_settings");
+	});
+
+	test("returns typed conflict before runtime availability and performs no write", async () => {
+		const artifacts = await seedScheduledArtifacts();
+		const revision = await currentRevision();
+		await client(ids.manager).cycle.updateSettings(
+			{
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				expectedUpdatedAt: revision,
+				...settings,
+				cadenceDays: 28,
+			},
+			options(ids.manager),
+		);
+		const [afterWinner] = await db
+			.select()
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		if (!afterWinner) throw new Error("settings missing");
+		const artifactsAfterWinner = await Promise.all([
+			db
+				.select()
+				.from(cycleActionRequired)
+				.where(eq(cycleActionRequired.id, artifacts.actionId)),
+			db
+				.select()
+				.from(cycleNotification)
+				.where(eq(cycleNotification.id, artifacts.notificationId)),
+			db
+				.select()
+				.from(cycleScheduleJob)
+				.where(eq(cycleScheduleJob.id, artifacts.jobId)),
+		]);
+		await expectCode(
+			client(ids.manager).cycle.updateSettings(
+				{
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					expectedUpdatedAt: revision,
+					...settings,
+					cadenceDays: 35,
+					cadenceEnabled: true,
+					anchorDate: "2026-01-01T00:00:00.000Z",
+				},
+				options(ids.manager),
+			),
+			"SETTINGS_CHANGED",
+		);
+		const [afterConflict] = await db
+			.select()
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		expect(afterConflict?.updatedAt).toEqual(afterWinner.updatedAt);
+		expect(afterConflict?.cadenceDays).toBe(28);
+		const [action, notification, job] = await Promise.all([
+			db
+				.select()
+				.from(cycleActionRequired)
+				.where(eq(cycleActionRequired.id, artifacts.actionId)),
+			db
+				.select()
+				.from(cycleNotification)
+				.where(eq(cycleNotification.id, artifacts.notificationId)),
+			db
+				.select()
+				.from(cycleScheduleJob)
+				.where(eq(cycleScheduleJob.id, artifacts.jobId)),
+		]);
+		expect(action[0]?.status).toBe("canceled");
+		expect(notification[0]?.cancellationReason).toBe("settings_changed");
+		expect(job[0]?.outcome).toBe("obsolete_settings");
+		expect([action, notification, job]).toEqual(artifactsAfterWinner);
+	});
+
 	test("rejects enabling automation and workspace/team mismatches", async () => {
 		await expectCode(
 			client(ids.manager).cycle.updateSettings(
 				{
 					workspaceId: ids.workspace,
 					teamId: ids.team,
+					expectedUpdatedAt: await currentRevision(),
 					...settings,
 					cadenceEnabled: true,
 					anchorDate: "2026-01-01T00:00:00.000Z",

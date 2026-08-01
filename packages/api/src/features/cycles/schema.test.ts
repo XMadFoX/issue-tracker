@@ -79,6 +79,7 @@ describe("cycle settings schemas", () => {
 			cycleUpdateSettingsSchema.parse({
 				workspaceId,
 				teamId,
+				expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
 				...disabledSettings,
 			}),
 		).toMatchObject({ workspaceId, teamId, ...disabledSettings });

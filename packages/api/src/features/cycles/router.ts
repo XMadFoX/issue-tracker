@@ -10,7 +10,11 @@ import {
 import { issueType } from "db/features/tracker/issue-types.schema";
 import { issue } from "db/features/tracker/issues.schema";
 import { teamCycleSettings } from "db/features/tracker/team-cycle-settings.schema";
-import { team, workspaceMembership } from "db/features/tracker/tracker.schema";
+import {
+	team,
+	teamMembership,
+	workspaceMembership,
+} from "db/features/tracker/tracker.schema";
 import { and, count, desc, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
 import z from "zod";
 import { authedRouter } from "../../context";
@@ -139,6 +143,10 @@ const settingsErrors = {
 	AUTOMATION_UNAVAILABLE: {
 		status: 409,
 		message: "Cycle automation is not available yet.",
+	},
+	SETTINGS_CHANGED: {
+		status: 409,
+		message: "Cycle settings changed. Review the current values and try again.",
 	},
 };
 
@@ -320,6 +328,42 @@ async function hasActiveWorkspaceMembership({
 		)
 		.limit(1);
 	return membership !== undefined;
+}
+
+async function hasActiveCycleMembership({
+	userId,
+	workspaceId,
+	teamId,
+}: {
+	userId: string;
+	workspaceId: string;
+	teamId: string;
+}) {
+	const [workspaceRow, teamRow] = await Promise.all([
+		db
+			.select({ id: workspaceMembership.id })
+			.from(workspaceMembership)
+			.where(
+				and(
+					eq(workspaceMembership.userId, userId),
+					eq(workspaceMembership.workspaceId, workspaceId),
+					eq(workspaceMembership.status, "active"),
+				),
+			)
+			.limit(1),
+		db
+			.select({ id: teamMembership.id })
+			.from(teamMembership)
+			.where(
+				and(
+					eq(teamMembership.userId, userId),
+					eq(teamMembership.teamId, teamId),
+					eq(teamMembership.status, "active"),
+				),
+			)
+			.limit(1),
+	]);
+	return workspaceRow.length > 0 && teamRow.length > 0;
 }
 
 async function canUseCycle({
@@ -869,6 +913,15 @@ const getSettings = authedRouter
 			teamId: input.teamId,
 		});
 		if (!scoped) throw errors.NOT_FOUND();
+		if (
+			!(await hasActiveCycleMembership({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+			}))
+		) {
+			throw errors.UNAUTHORIZED();
+		}
 
 		const [canRead, canManageSettings] = await Promise.all([
 			isAllowed({
@@ -891,6 +944,7 @@ const getSettings = authedRouter
 			settings: scoped.settings,
 			workspaceTimezone: scoped.workspaceTimezone,
 			canManageSettings,
+			automationAvailable: env.CYCLES_AUTOMATION_ENABLED,
 		};
 	});
 
@@ -904,6 +958,15 @@ const getSchedulePreview = authedRouter
 			teamId: input.teamId,
 		});
 		if (!scoped) throw errors.NOT_FOUND();
+		if (
+			!(await hasActiveCycleMembership({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+			}))
+		) {
+			throw errors.UNAUTHORIZED();
+		}
 
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
@@ -921,6 +984,7 @@ const getSchedulePreview = authedRouter
 			workspaceTimezone: scoped.workspaceTimezone,
 			settings: scoped.settings,
 			now: new Date(),
+			automationAvailable: env.CYCLES_AUTOMATION_ENABLED,
 		});
 	});
 
@@ -934,6 +998,15 @@ const updateSettings = authedRouter
 			teamId: input.teamId,
 		});
 		if (!scoped) throw errors.NOT_FOUND();
+		if (
+			!(await hasActiveCycleMembership({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+			}))
+		) {
+			throw errors.UNAUTHORIZED();
+		}
 
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
@@ -946,33 +1019,35 @@ const updateSettings = authedRouter
 		if (!isValidIanaTimezone(scoped.workspaceTimezone)) {
 			throw errors.INVALID_WORKSPACE_TIMEZONE();
 		}
-		if (input.cadenceEnabled && !env.CYCLES_AUTOMATION_ENABLED) {
-			throw errors.AUTOMATION_UNAVAILABLE();
-		}
-
-		const { teamId, workspaceId, ...settings } = input;
+		const { teamId, workspaceId, expectedUpdatedAt, ...settings } = input;
 		const updated = await db.transaction(async (tx) => {
-			const next = await updateScopedTeamCycleSettings({
+			const result = await updateScopedTeamCycleSettings({
 				executor: tx,
 				workspaceId,
 				teamId,
 				updatedBy: context.auth.session.userId,
 				settings,
+				expectedUpdatedAt,
+				automationAvailable: env.CYCLES_AUTOMATION_ENABLED,
 			});
-			if (!next) return null;
+			if (!result || result.status !== "updated") return result;
 			await cancelTeamCycleArtifacts(tx, {
 				workspaceId,
 				teamId,
 				reason: "settings_changed",
 			});
-			return next;
+			return result;
 		});
 		if (!updated) throw errors.SETTINGS_NOT_INITIALIZED();
+		if (updated.status === "conflict") throw errors.SETTINGS_CHANGED();
+		if (updated.status === "unavailable") throw errors.AUTOMATION_UNAVAILABLE();
 
 		return {
-			settings: updated,
+			settings: updated.settings,
 			workspaceTimezone: scoped.workspaceTimezone,
 			canManageSettings: true,
+			automationAvailable: env.CYCLES_AUTOMATION_ENABLED,
+			unchanged: updated.status === "unchanged",
 		};
 	});
 
