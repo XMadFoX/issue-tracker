@@ -174,27 +174,6 @@ export async function isAllowed({
 		totalCandidates: perms.length,
 	});
 
-	const hasGlobalAllow = perms.some((candidate) => {
-		if (candidate.rp.effect !== "allow") return false;
-		if (candidate.rp.constraintId !== null) return false;
-
-		const keyIsGlobal = candidate.pc?.key === "*";
-		const columnsAreGlobal =
-			candidate.pc?.resourceType === "*" && candidate.pc?.action === "*";
-
-		return keyIsGlobal || columnsAreGlobal;
-	});
-
-	if (hasGlobalAllow) {
-		logger.debug("[ABAC] Global wildcard allow matched, granting access", {
-			userId,
-			workspaceId,
-			teamId,
-			permissionKey,
-		});
-		return true;
-	}
-
 	// Filter candidate permissions that match either:
 	//  - exact key
 	//  - wildcard key ('*')
