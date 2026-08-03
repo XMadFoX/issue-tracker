@@ -12,7 +12,7 @@ import {
 	teamMembership,
 	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
 type Ambient = Record<string, any> | undefined;
 type Resource = { id?: string; attributes?: Record<string, any> } | undefined;
@@ -69,7 +69,10 @@ export async function isAllowed({
 				eq(roleAssignments.userId, userId),
 				eq(roleAssignments.workspaceId, workspaceId),
 				teamId
-					? eq(roleAssignments.teamId, teamId)
+					? or(
+							eq(roleAssignments.teamId, teamId),
+							isNull(roleAssignments.teamId),
+						)
 					: isNull(roleAssignments.teamId),
 			),
 		);
@@ -91,11 +94,13 @@ export async function isAllowed({
 			and(
 				eq(workspaceMembership.userId, userId),
 				eq(workspaceMembership.workspaceId, workspaceId),
+				eq(workspaceMembership.status, "active"),
 			),
 		);
 	const membershipRow = membershipRows?.[0] ?? null;
 	const membershipRoleId = membershipRow?.roleId ?? null;
 	const hasMembershipRole = Boolean(membershipRoleId);
+	const effectiveAssignments = membershipRow ? assignments : [];
 
 	const teamMembershipRows =
 		teamId == null
@@ -107,6 +112,7 @@ export async function isAllowed({
 						and(
 							eq(teamMembership.userId, userId),
 							eq(teamMembership.teamId, teamId),
+							eq(teamMembership.status, "active"),
 						),
 					);
 	const teamMembershipRoleIds = teamMembershipRows.map((row) => row.roleId);
@@ -129,7 +135,7 @@ export async function isAllowed({
 
 	const roleIds = Array.from(
 		new Set([
-			...assignments.map((a) => a.roleId),
+			...effectiveAssignments.map((a) => a.roleId),
 			...(membershipRoleId ? [membershipRoleId] : []),
 			...teamMembershipRoleIds,
 		]),
@@ -364,7 +370,7 @@ export async function isAllowed({
 		teamId,
 		subjectAttributes: {
 			...(membershipRow?.attributes ?? {}),
-			...(assignments?.reduce(
+			...(effectiveAssignments.reduce(
 				(acc: Record<string, unknown>, a) => ({
 					...acc,
 					...(a.attributes ?? {}),
@@ -383,7 +389,7 @@ export async function isAllowed({
 		attributes: {
 			// ...(userRow?.attributes ?? {}),
 			...(membershipRow?.attributes ?? {}),
-			...(assignments?.reduce(
+			...(effectiveAssignments.reduce(
 				(acc: Record<string, unknown>, a) => ({
 					...acc,
 					...(a.attributes ?? {}),
