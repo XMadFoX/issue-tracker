@@ -33,6 +33,7 @@ interface TeamListProps {
 	) => Promise<SubmitResult>;
 	updateTeam?: (input: UpdateTeam) => Promise<void>;
 	workspaceId: string;
+	workspaceSlug?: string;
 }
 
 export function TeamList({
@@ -40,6 +41,7 @@ export function TeamList({
 	onTeamSubmit,
 	updateTeam,
 	workspaceId,
+	workspaceSlug,
 }: TeamListProps) {
 	const handleCreateTeam = useCallback(
 		async (input: CreateTeam): Promise<SubmitResult> => {
@@ -157,7 +159,17 @@ export function TeamList({
 										{new Date(team.createdAt).toLocaleDateString()}
 									</TableCell>
 									<TableCell className="text-right text-muted-foreground">
-										{getRelativeTime(team.updatedAt)}
+										<div className="flex items-center justify-end gap-3">
+											{workspaceSlug ? (
+												<a
+													className="text-primary underline underline-offset-4"
+													href={`/workspace/${workspaceSlug}/teams/${team.key}/settings/cycles`}
+												>
+													Cycle settings
+												</a>
+											) : null}
+											<span>{getRelativeTime(team.updatedAt)}</span>
+										</div>
 									</TableCell>
 								</TableRow>
 							))

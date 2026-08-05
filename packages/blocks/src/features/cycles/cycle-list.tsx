@@ -1,4 +1,5 @@
 import type { Inputs } from "@prism/api/src/router";
+import { Badge } from "@prism/ui/components/badge";
 import { Button } from "@prism/ui/components/button";
 import { Edit, Trash2 } from "lucide-react";
 import { type ReactNode, useState } from "react";
@@ -116,7 +117,12 @@ export function CycleList({
 						key={cycle.id}
 						className="grid items-center gap-3 border-b py-3 text-sm last:border-b-0 md:grid-cols-[1fr_1fr_auto_auto]"
 					>
-						<div className="font-medium">{cycle.name}</div>
+						<div className="font-medium">
+							{cycle.name}{" "}
+							{cycle.origin === "scheduled" ? (
+								<Badge variant="outline">Scheduled</Badge>
+							) : null}
+						</div>
 						<div className="text-muted-foreground">
 							{formatCycleDateRange(cycle)}
 						</div>
@@ -166,7 +172,12 @@ export function CycleList({
 							key={cycle.id}
 							className="grid items-center gap-3 border-b py-3 text-sm last:border-b-0 md:grid-cols-[1fr_1fr_auto_auto]"
 						>
-							<div className="font-medium">{cycle.name}</div>
+							<div className="font-medium">
+								{cycle.name}{" "}
+								{cycle.origin === "scheduled" ? (
+									<Badge variant="outline">Scheduled</Badge>
+								) : null}
+							</div>
 							<div className="text-muted-foreground">
 								{formatCycleDateRange(cycle)}
 							</div>

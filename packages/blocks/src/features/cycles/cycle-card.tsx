@@ -58,7 +58,12 @@ export function CycleCard({
 							{formatCycleDateRange(cycle)}
 						</p>
 					</div>
-					<Badge variant="secondary">Active</Badge>
+					<div className="flex items-center gap-2">
+						<Badge variant="secondary">Active</Badge>
+						{cycle.origin === "scheduled" ? (
+							<Badge variant="outline">Scheduled</Badge>
+						) : null}
+					</div>
 				</div>
 			</CardHeader>
 			<CardContent className="space-y-4">
