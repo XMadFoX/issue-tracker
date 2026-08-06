@@ -71,6 +71,7 @@ vi.mock("src/orpc/client", () => ({
 		cycle: {
 			list: { queryOptions, key: () => ["cycle", "list"] },
 			getSettings: { queryOptions },
+			getSchedulePreview: { queryOptions },
 			listPendingActions: {
 				queryOptions,
 				key: () => ["cycle", "pending-actions"],
@@ -115,6 +116,7 @@ vi.mock("@/features/issues/issues-feature", () => ({
 }));
 
 vi.mock("@prism/blocks/src/features/cycles", () => ({
+	CycleScheduleStatus: () => <div>Schedule status</div>,
 	CycleList: ({
 		onComplete,
 		onMarkNotificationRead,

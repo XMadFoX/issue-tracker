@@ -2,6 +2,7 @@ import type { Outputs } from "@prism/api/src/router";
 import {
 	CycleList,
 	type CycleMetrics,
+	CycleScheduleStatus,
 } from "@prism/blocks/src/features/cycles";
 import {
 	useMutation,
@@ -93,6 +94,13 @@ export function RouteComponent() {
 			input: { workspaceId: workspace.data.id, teamId: team.data.id },
 		}),
 	);
+	const schedulePreview = useQuery({
+		...orpc.cycle.getSchedulePreview.queryOptions({
+			input: { workspaceId: workspace.data.id, teamId: team.data.id },
+		}),
+		enabled: settings.data !== undefined,
+		refetchInterval: 30_000,
+	});
 	const pendingActions = useQuery({
 		...orpc.cycle.listPendingActions.queryOptions({
 			input: { workspaceId: workspace.data.id, teamId: team.data.id },
@@ -199,6 +207,12 @@ export function RouteComponent() {
 
 	return (
 		<div className="w-full p-6">
+			<CycleScheduleStatus
+				preview={schedulePreview.data}
+				isLoading={schedulePreview.isPending}
+				isError={schedulePreview.isError}
+				onRetry={() => void schedulePreview.refetch()}
+			/>
 			<CycleList
 				cycles={cycles.data}
 				pendingActions={pendingActions.data ?? []}

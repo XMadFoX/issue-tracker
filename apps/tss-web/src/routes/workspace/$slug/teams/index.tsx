@@ -155,6 +155,7 @@ function RouteComponent() {
 				onTeamSubmit={handleCreateTeam}
 				updateTeam={handleUpdateTeam}
 				workspaceId={workspace.data.id}
+				workspaceSlug={slug}
 			/>
 		</div>
 	);
