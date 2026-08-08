@@ -309,12 +309,53 @@ beforeEach(async () => {
 });
 
 describe("cycle settings routes", () => {
+	test("returns permission-specific mutation capabilities", async () => {
+		await grant(ids.manager, [
+			"cycle:create",
+			"cycle:update",
+			"cycle:complete",
+			"issue:update",
+			"cycle:delete",
+		]);
+
+		const managerResult = await client(ids.manager).cycle.getSettings(
+			{ workspaceId: ids.workspace, teamId: ids.team },
+			options(ids.manager),
+		);
+		const readerResult = await client(ids.reader).cycle.getSettings(
+			{ workspaceId: ids.workspace, teamId: ids.team },
+			options(ids.reader),
+		);
+
+		expect(managerResult.capabilities).toEqual({
+			create: true,
+			update: true,
+			cancel: true,
+			complete: true,
+			delete: true,
+		});
+		expect(readerResult.capabilities).toEqual({
+			create: false,
+			update: false,
+			cancel: false,
+			complete: false,
+			delete: false,
+		});
+	});
+
 	test("allows cycle readers to read but not manage settings", async () => {
 		const result = await client(ids.reader).cycle.getSettings(
 			{ workspaceId: ids.workspace, teamId: ids.team },
 			options(ids.reader),
 		);
 		expect(result.canManageSettings).toBeFalse();
+		expect(result.capabilities).toEqual({
+			create: false,
+			update: false,
+			cancel: false,
+			complete: false,
+			delete: false,
+		});
 		expect(result.workspaceTimezone).toBe("America/New_York");
 		await expectCode(
 			client(ids.reader).cycle.updateSettings(

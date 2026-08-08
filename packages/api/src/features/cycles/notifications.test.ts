@@ -167,29 +167,35 @@ describe("durable notification events", () => {
 			dueAt: boundary,
 		};
 		await expect(
-			db.insert(cycleActionRequired).values(badAction),
+			db.insert(cycleActionRequired).values(badAction).execute(),
 		).rejects.toThrow();
 		await expect(
-			db.insert(cycleActionRequired).values({
-				...badAction,
-				workspaceId: ids.workspace,
-				status: "canceled",
-			}),
+			db
+				.insert(cycleActionRequired)
+				.values({
+					...badAction,
+					workspaceId: ids.workspace,
+					status: "canceled",
+				})
+				.execute(),
 		).rejects.toThrow();
 		await expect(
-			db.insert(cycleNotification).values({
-				id: createId(),
-				workspaceId: ids.workspace,
-				teamId: ids.team,
-				cycleId: ids.cycle,
-				recipientUserId: createId(),
-				kind: "end_reminder",
-				scheduledBoundary: boundary,
-				eventRevisionAt: new Date(),
-				deliverAt: boundary,
-				cycleName: "Current scheduled cycle",
-				teamName: "Notification Team",
-			}),
+			db
+				.insert(cycleNotification)
+				.values({
+					id: createId(),
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					cycleId: ids.cycle,
+					recipientUserId: createId(),
+					kind: "end_reminder",
+					scheduledBoundary: boundary,
+					eventRevisionAt: new Date(),
+					deliverAt: boundary,
+					cycleName: "Current scheduled cycle",
+					teamName: "Notification Team",
+				})
+				.execute(),
 		).rejects.toThrow();
 	});
 

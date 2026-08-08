@@ -393,6 +393,61 @@ async function canUseCycle({
 	return canRead || canUpdate;
 }
 
+async function getCycleCapabilities({
+	userId,
+	workspaceId,
+	teamId,
+}: {
+	userId: string;
+	workspaceId: string;
+	teamId: string;
+}) {
+	const [canCreate, canUpdate, canComplete, canUpdateIssue, canDelete] =
+		await Promise.all([
+			isAllowed({
+				userId,
+				workspaceId,
+				teamId,
+				permissionKey: "cycle:create",
+			}),
+			isAllowed({
+				userId,
+				workspaceId,
+				teamId,
+				permissionKey: "cycle:update",
+			}),
+			isAllowed({
+				userId,
+				workspaceId,
+				teamId,
+				permissionKey: "cycle:complete",
+			}),
+			isAllowed({
+				userId,
+				workspaceId,
+				teamId,
+				permissionKey: "issue:update",
+			}),
+			isAllowed({
+				userId,
+				workspaceId,
+				teamId,
+				permissionKey: "cycle:delete",
+			}),
+		]);
+
+	return {
+		create: canCreate,
+		update: canUpdate,
+		// Cancellation is routed through cycle.update with a complete permission.
+		cancel: canComplete,
+		// Completion also changes issue assignments, so mirror the API's complete
+		// authorization requirement instead of exposing a control that will fail.
+		complete: canComplete && canUpdateIssue,
+		delete: canDelete,
+	};
+}
+
 const listCycles = authedRouter
 	.input(cycleListSchema)
 	.errors(commonErrors)
@@ -923,7 +978,7 @@ const getSettings = authedRouter
 			throw errors.UNAUTHORIZED();
 		}
 
-		const [canRead, canManageSettings] = await Promise.all([
+		const [canRead, canManageSettings, capabilities] = await Promise.all([
 			isAllowed({
 				userId: context.auth.session.userId,
 				workspaceId: input.workspaceId,
@@ -936,6 +991,11 @@ const getSettings = authedRouter
 				teamId: scoped.team.id,
 				permissionKey: "cycle:manage_settings",
 			}),
+			getCycleCapabilities({
+				userId: context.auth.session.userId,
+				workspaceId: input.workspaceId,
+				teamId: scoped.team.id,
+			}),
 		]);
 		if (!canRead) throw errors.UNAUTHORIZED();
 		if (!scoped.settings) throw errors.SETTINGS_NOT_INITIALIZED();
@@ -944,6 +1004,7 @@ const getSettings = authedRouter
 			settings: scoped.settings,
 			workspaceTimezone: scoped.workspaceTimezone,
 			canManageSettings,
+			capabilities,
 			automationAvailable: env.CYCLES_AUTOMATION_ENABLED,
 		};
 	});
