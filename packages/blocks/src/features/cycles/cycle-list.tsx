@@ -7,8 +7,10 @@ import {
 	type Cycle,
 	CycleCard,
 	type CycleMetrics,
+	type CycleMutationCapabilities,
 	formatCycleDateRange,
 } from "./cycle-card";
+
 import { CycleCompleteDialog } from "./cycle-complete-dialog";
 import { CycleCreateModal } from "./cycle-create-modal";
 import { CycleFormDialog } from "./cycle-form-dialog";
@@ -20,6 +22,7 @@ import {
 type CycleListProps = {
 	cycles: Cycle[];
 	metricsByCycleId: Map<string, CycleMetrics>;
+	capabilities: CycleMutationCapabilities;
 	cycleDuration?: number | null;
 	isCompleting?: boolean;
 	onCreate: (
@@ -47,6 +50,7 @@ type CycleListProps = {
 export function CycleList({
 	cycles,
 	metricsByCycleId,
+	capabilities,
 	cycleDuration,
 	isCompleting = false,
 	onCreate,
@@ -80,13 +84,16 @@ export function CycleList({
 		<div className="w-full space-y-6">
 			<div className="flex items-center justify-between gap-4">
 				<h1 className="text-2xl font-bold">Cycles</h1>
-				<CycleCreateModal cycleDuration={cycleDuration} onSubmit={onCreate} />
+				{capabilities.create ? (
+					<CycleCreateModal cycleDuration={cycleDuration} onSubmit={onCreate} />
+				) : null}
 			</div>
 
 			<CycleScheduleAlerts
 				pendingActions={alertsWithCycleState(pendingActions)}
 				notifications={alertsWithCycleState(notifications)}
 				workspaceTimezone={workspaceTimezone}
+				canComplete={capabilities.complete}
 				isLoading={alertsLoading}
 				hasError={alertsError}
 				onOpenCompletion={(cycleId) => {
@@ -101,6 +108,7 @@ export function CycleList({
 				<CycleCard
 					cycle={activeCycle}
 					metrics={metricsByCycleId.get(activeCycle.id)}
+					capabilities={capabilities}
 					onComplete={() => setCompletionSource(activeCycle)}
 					onCancel={(cycle) => onUpdate({ id: cycle.id, state: "canceled" })}
 					onEdit={setEditingCycle}
@@ -130,25 +138,33 @@ export function CycleList({
 							Capacity {cycle.capacity ?? "—"}
 						</div>
 						<div className="flex items-center justify-end gap-2">
-							<Button
-								onClick={() => onUpdate({ id: cycle.id, state: "active" })}
-							>
-								Start
-							</Button>
-							<Button
-								size="icon"
-								variant="ghost"
-								onClick={() => setEditingCycle(cycle)}
-							>
-								<Edit className="size-4" />
-							</Button>
-							<Button
-								size="icon"
-								variant="ghost"
-								onClick={() => onDelete(cycle)}
-							>
-								<Trash2 className="size-4" />
-							</Button>
+							{capabilities.update ? (
+								<Button
+									onClick={() => onUpdate({ id: cycle.id, state: "active" })}
+								>
+									Start
+								</Button>
+							) : null}
+							{capabilities.update ? (
+								<Button
+									size="icon"
+									variant="ghost"
+									aria-label={`Edit ${cycle.name}`}
+									onClick={() => setEditingCycle(cycle)}
+								>
+									<Edit className="size-4" />
+								</Button>
+							) : null}
+							{capabilities.delete ? (
+								<Button
+									size="icon"
+									variant="ghost"
+									aria-label={`Delete ${cycle.name}`}
+									onClick={() => onDelete(cycle)}
+								>
+									<Trash2 className="size-4" />
+								</Button>
+							) : null}
 						</div>
 					</div>
 				))}
@@ -203,21 +219,23 @@ export function CycleList({
 				) : null}
 			</CycleSection>
 
-			<CycleFormDialog
-				open={editingCycle !== null}
-				onOpenChange={(open) => {
-					if (!open) setEditingCycle(null);
-				}}
-				title="Edit cycle"
-				cycle={editingCycle ?? undefined}
-				disableStartDate={editingCycle?.state === "active"}
-				onSubmit={async (value) => {
-					if (!editingCycle) return;
-					await onUpdate({ id: editingCycle.id, ...value });
-				}}
-			/>
+			{capabilities.update ? (
+				<CycleFormDialog
+					open={editingCycle !== null}
+					onOpenChange={(open) => {
+						if (!open) setEditingCycle(null);
+					}}
+					title="Edit cycle"
+					cycle={editingCycle ?? undefined}
+					disableStartDate={editingCycle?.state === "active"}
+					onSubmit={async (value) => {
+						if (!editingCycle) return;
+						await onUpdate({ id: editingCycle.id, ...value });
+					}}
+				/>
+			) : null}
 
-			{completionSource ? (
+			{capabilities.complete && completionSource ? (
 				<CycleCompleteDialog
 					source={completionSource}
 					cycles={cycles}

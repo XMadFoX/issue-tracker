@@ -66,7 +66,14 @@ export function IssueTypeReplaceDialog({
 				<div className="space-y-2">
 					<Label htmlFor={selectId}>Replacement team type</Label>
 					{replacementOptions.length > 0 ? (
-						<Select value={replacementId} onValueChange={setReplacementId}>
+						<Select
+							value={replacementId}
+							onValueChange={(value) => {
+								if (value !== null) {
+									setReplacementId(value);
+								}
+							}}
+						>
 							<SelectTrigger id={selectId} className="w-full">
 								<SelectValue placeholder="Select a team type" />
 							</SelectTrigger>

@@ -15,6 +15,7 @@ type CycleScheduleAlertsProps = {
 	notifications: ScheduleAlert[];
 	workspaceTimezone: string;
 	onOpenCompletion: (cycleId: string) => void;
+	canComplete?: boolean;
 	onMarkRead?: (notificationId: string) => Promise<void>;
 	markingNotificationId?: string | null;
 	isLoading?: boolean;
@@ -42,6 +43,7 @@ export function CycleScheduleAlerts({
 	notifications,
 	workspaceTimezone,
 	onOpenCompletion,
+	canComplete = true,
 	onMarkRead,
 	markingNotificationId = null,
 	isLoading = false,
@@ -85,14 +87,14 @@ export function CycleScheduleAlerts({
 							{formatDueAt(action.dueAt, workspaceTimezone)}.
 						</p>
 					</div>
-					{action.cycleState === "active" ? (
+					{action.cycleState === "active" && canComplete ? (
 						<Button
 							type="button"
 							onClick={() => onOpenCompletion(action.cycleId)}
 						>
 							Review cycle
 						</Button>
-					) : (
+					) : action.cycleState === "active" ? null : (
 						<div>
 							<Button
 								type="button"

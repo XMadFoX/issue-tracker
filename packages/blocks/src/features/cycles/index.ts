@@ -1,4 +1,8 @@
-export type { Cycle, CycleMetrics } from "./cycle-card";
+export type {
+	Cycle,
+	CycleMetrics,
+	CycleMutationCapabilities,
+} from "./cycle-card";
 export { CycleCard } from "./cycle-card";
 export type { CycleCompletionDisposition } from "./cycle-complete-dialog";
 export { CycleCompleteDialog } from "./cycle-complete-dialog";

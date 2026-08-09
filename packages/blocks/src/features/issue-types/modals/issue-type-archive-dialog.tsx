@@ -67,7 +67,14 @@ export function IssueTypeArchiveDialog({
 				{reassignTargets.length > 0 ? (
 					<div className="space-y-2">
 						<Label htmlFor={selectId}>Reassign existing issues to</Label>
-						<Select value={replacementId} onValueChange={setReplacementId}>
+						<Select
+							value={replacementId}
+							onValueChange={(value) => {
+								if (value !== null) {
+									setReplacementId(value);
+								}
+							}}
+						>
 							<SelectTrigger id={selectId} className="w-full">
 								<SelectValue />
 							</SelectTrigger>

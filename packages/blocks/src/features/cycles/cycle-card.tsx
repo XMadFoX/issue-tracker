@@ -12,9 +12,21 @@ import { Progress } from "@prism/ui/components/progress";
 export type Cycle = Outputs["cycle"]["list"][0];
 export type CycleMetrics = Outputs["cycle"]["metrics"];
 
+export type CycleMutationCapabilities = {
+	create: boolean;
+	update: boolean;
+	cancel: boolean;
+	complete: boolean;
+	delete: boolean;
+};
+
 type CycleCardProps = {
 	cycle: Cycle;
 	metrics?: CycleMetrics;
+	capabilities: Pick<
+		CycleMutationCapabilities,
+		"update" | "cancel" | "complete"
+	>;
 	onComplete?: (cycle: Cycle) => void;
 	onCancel?: (cycle: Cycle) => void;
 	onEdit?: (cycle: Cycle) => void;
@@ -38,6 +50,7 @@ function formatSignedPoints(points: number) {
 export function CycleCard({
 	cycle,
 	metrics,
+	capabilities,
 	onComplete,
 	onCancel,
 	onEdit,
@@ -88,19 +101,29 @@ export function CycleCard({
 						) : null}
 					</div>
 					<div className="flex gap-2">
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => onCancel?.(cycle)}
-						>
-							Cancel
-						</Button>
-						<Button variant="outline" size="sm" onClick={() => onEdit?.(cycle)}>
-							Edit
-						</Button>
-						<Button size="sm" onClick={() => onComplete?.(cycle)}>
-							Complete cycle
-						</Button>
+						{capabilities.cancel ? (
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => onCancel?.(cycle)}
+							>
+								Cancel
+							</Button>
+						) : null}
+						{capabilities.update ? (
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => onEdit?.(cycle)}
+							>
+								Edit
+							</Button>
+						) : null}
+						{capabilities.complete ? (
+							<Button size="sm" onClick={() => onComplete?.(cycle)}>
+								Complete cycle
+							</Button>
+						) : null}
 					</div>
 				</div>
 			</CardContent>

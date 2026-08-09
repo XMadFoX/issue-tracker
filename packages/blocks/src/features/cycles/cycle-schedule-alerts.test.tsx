@@ -69,6 +69,28 @@ describe("CycleScheduleAlerts", () => {
 		expect(screen.queryByText("Stale")).toBeNull();
 	});
 
+	test("does not expose completion review without completion capability", () => {
+		render(
+			<CycleScheduleAlerts
+				pendingActions={[
+					{
+						id: "action",
+						cycleId: "cycle",
+						cycleName: "Active Cycle",
+						dueAt: new Date("2026-08-01T10:00:00.000Z"),
+						cycleState: "active",
+					},
+				]}
+				notifications={[]}
+				workspaceTimezone="UTC"
+				onOpenCompletion={() => {}}
+				canComplete={false}
+			/>,
+		);
+		expect(screen.queryByRole("button", { name: "Review cycle" })).toBeNull();
+		expect(screen.getByText(/completion confirmation required/i)).toBeTruthy();
+	});
+
 	test("dedupes confirmation notification and explains planned action", () => {
 		render(
 			<CycleScheduleAlerts
