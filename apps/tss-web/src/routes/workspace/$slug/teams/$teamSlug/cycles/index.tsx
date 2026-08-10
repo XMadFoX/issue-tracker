@@ -2,6 +2,7 @@ import type { Outputs } from "@prism/api/src/router";
 import {
 	CycleList,
 	type CycleMetrics,
+	type CycleMutationCapabilities,
 	CycleScheduleStatus,
 } from "@prism/blocks/src/features/cycles";
 import {
@@ -129,6 +130,14 @@ export function RouteComponent() {
 	for (const result of metrics) {
 		if (result.data) metricsByCycleId.set(result.data.cycleId, result.data);
 	}
+	const capabilities: CycleMutationCapabilities = settings.data
+		?.capabilities ?? {
+		create: false,
+		update: false,
+		cancel: false,
+		complete: false,
+		delete: false,
+	};
 
 	const createCycle = useMutation(orpc.cycle.create.mutationOptions());
 	const updateCycle = useMutation(orpc.cycle.update.mutationOptions());
@@ -225,6 +234,7 @@ export function RouteComponent() {
 					actionRequiredId: notification.actionRequiredId,
 				}))}
 				workspaceTimezone={workspace.data.timezone ?? "UTC"}
+				capabilities={capabilities}
 				alertsLoading={
 					notifications.isPending ||
 					(settings.data?.canManageSettings === true &&

@@ -20,6 +20,26 @@ const invalidateQueries = vi.fn(async (options: InvalidationRequest) => {
 const completeMutation = vi.fn();
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
+const capabilitySnapshots: unknown[] = [];
+const managerCapabilities = {
+	create: true,
+	update: true,
+	cancel: true,
+	complete: true,
+	delete: true,
+};
+const readerCapabilities = {
+	create: false,
+	update: false,
+	cancel: false,
+	complete: false,
+	delete: false,
+};
+let cycleSettingsResponse = {
+	canManageSettings: true,
+	capabilities: managerCapabilities,
+};
+let useQueryCall = 0;
 
 const queryOptions = (options: { input: unknown }) => ({
 	queryKey: ["query", options],
@@ -35,7 +55,10 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
 	useMutation: () => ({ mutateAsync: completeMutation, isPending: false }),
-	useQuery: () => ({ data: [] }),
+	useQuery: () => {
+		useQueryCall += 1;
+		return { data: useQueryCall === 1 ? cycleSettingsResponse : [] };
+	},
 	useQueries: () => [],
 	useQueryClient: () => ({ invalidateQueries }),
 	useSuspenseQuery: (options: { queryKey: readonly unknown[] }) => {
@@ -120,35 +143,40 @@ vi.mock("@prism/blocks/src/features/cycles", () => ({
 	CycleList: ({
 		onComplete,
 		onMarkNotificationRead,
+		capabilities,
 	}: {
 		onComplete: (input: {
 			cycleId: string;
 			disposition: { type: "moveToBacklog" };
 		}) => Promise<void>;
 		onMarkNotificationRead?: (notificationId: string) => Promise<void>;
-	}) => (
-		<div>
-			<button
-				type="button"
-				onClick={() => {
-					void onComplete({
-						cycleId: "source-cycle",
-						disposition: { type: "moveToBacklog" },
-					}).catch(() => undefined);
-				}}
-			>
-				Complete source
-			</button>
-			{onMarkNotificationRead ? (
+		capabilities: unknown;
+	}) => {
+		capabilitySnapshots.push(capabilities);
+		return (
+			<div>
 				<button
 					type="button"
-					onClick={() => void onMarkNotificationRead("notification-1")}
+					onClick={() => {
+						void onComplete({
+							cycleId: "source-cycle",
+							disposition: { type: "moveToBacklog" },
+						}).catch(() => undefined);
+					}}
 				>
-					Dismiss notification
+					Complete source
 				</button>
-			) : null}
-		</div>
-	),
+				{onMarkNotificationRead ? (
+					<button
+						type="button"
+						onClick={() => void onMarkNotificationRead("notification-1")}
+					>
+						Dismiss notification
+					</button>
+				) : null}
+			</div>
+		);
+	},
 }));
 
 vi.mock("sonner", () => ({
@@ -158,6 +186,12 @@ vi.mock("sonner", () => ({
 const { RouteComponent } = await import("./index");
 
 beforeEach(async () => {
+	useQueryCall = 0;
+	capabilitySnapshots.splice(0, capabilitySnapshots.length);
+	cycleSettingsResponse = {
+		canManageSettings: true,
+		capabilities: managerCapabilities,
+	};
 	invalidateQueries.mockClear();
 	invalidationRequests.splice(0, invalidationRequests.length);
 	completeMutation.mockReset();
@@ -175,6 +209,20 @@ beforeEach(async () => {
 afterEach(cleanup);
 
 describe("cycles route completion integration", () => {
+	it("passes server-authoritative manager capabilities to CycleList", () => {
+		render(<RouteComponent />);
+		expect(capabilitySnapshots.at(-1)).toEqual(managerCapabilities);
+	});
+
+	it("passes server-authoritative reader capabilities to CycleList", () => {
+		cycleSettingsResponse = {
+			canManageSettings: false,
+			capabilities: readerCapabilities,
+		};
+		render(<RouteComponent />);
+		expect(capabilitySnapshots.at(-1)).toEqual(readerCapabilities);
+	});
+
 	it("submits cycle.complete and invalidates every affected cache scope", async () => {
 		render(<RouteComponent />);
 		fireEvent.click(screen.getByRole("button", { name: "Complete source" }));

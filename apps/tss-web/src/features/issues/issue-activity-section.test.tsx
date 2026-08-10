@@ -43,6 +43,8 @@ function activity({
 					startDate: new Date("2026-07-14T00:00:00.000Z"),
 					endDate: new Date("2026-07-28T00:00:00.000Z"),
 					state: "planned",
+					origin: "manual",
+					scheduledBoundary: null,
 					capacity: null,
 					velocity: null,
 					createdAt: new Date("2026-07-01T00:00:00.000Z"),

@@ -20,6 +20,8 @@ const source: Cycle = {
 	startDate: new Date("2026-07-01T00:00:00.000Z"),
 	endDate: new Date("2026-07-14T00:00:00.000Z"),
 	state: "active",
+	origin: "manual",
+	scheduledBoundary: null,
 	capacity: null,
 	velocity: null,
 	createdAt: new Date("2026-06-20T00:00:00.000Z"),
