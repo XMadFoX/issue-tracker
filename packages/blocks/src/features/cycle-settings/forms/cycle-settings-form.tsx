@@ -191,6 +191,7 @@ export function CycleSettingsForm({
 		<form
 			ref={formRef}
 			onSubmit={submit}
+			noValidate
 			className="space-y-6"
 			aria-describedby="cycle-settings-description"
 		>

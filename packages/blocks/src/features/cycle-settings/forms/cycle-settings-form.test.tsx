@@ -6,7 +6,12 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
-import type { CycleSettings, CycleSettingsDraft } from "../types";
+import {
+	type CycleSettings,
+	type CycleSettingsDraft,
+	cycleSettingsDraftSchema,
+	settingsToDraft,
+} from "../types";
 import { CycleSettingsForm } from "./cycle-settings-form";
 
 const settings: CycleSettings = {
@@ -110,6 +115,67 @@ describe("CycleSettingsForm", () => {
 				screen.getByLabelText("Cadence days"),
 			),
 		);
+	});
+
+	test("uses application validation instead of native number constraints", async () => {
+		const onSubmit = mock(async () => ({ success: true as const, settings }));
+		render(
+			<CycleSettingsForm
+				settings={settings}
+				workspaceTimezone="UTC"
+				automationAvailable={false}
+				onSubmit={onSubmit}
+			/>,
+		);
+		const cadenceDays = screen.getByLabelText("Cadence days");
+		const form = cadenceDays.closest("form");
+		expect(form?.noValidate).toBe(true);
+
+		fireEvent.change(cadenceDays, { target: { value: "0" } });
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+		await waitFor(() =>
+			expect(cadenceDays.getAttribute("aria-invalid")).toBe("true"),
+		);
+		expect(screen.getByText(/review the highlighted fields/i)).toBeTruthy();
+		expect(onSubmit).not.toHaveBeenCalled();
+	});
+
+	test("rejects every invalid numeric boundary through the draft schema", () => {
+		const draft = settingsToDraft(settings);
+		const scenarios: Array<{
+			field:
+				| "cadenceDays"
+				| "planningHorizon"
+				| "gracePeriodMinutes"
+				| "reminderLeadMinutes";
+			value: number;
+		}> = [
+			{ field: "cadenceDays", value: Number.NaN },
+			{ field: "cadenceDays", value: 0 },
+			{ field: "cadenceDays", value: -1 },
+			{ field: "cadenceDays", value: 1.5 },
+			{ field: "planningHorizon", value: 0 },
+			{ field: "planningHorizon", value: 13 },
+			{ field: "planningHorizon", value: 1.5 },
+			{ field: "gracePeriodMinutes", value: -1 },
+			{ field: "gracePeriodMinutes", value: 0.5 },
+			{ field: "reminderLeadMinutes", value: -1 },
+			{ field: "reminderLeadMinutes", value: 0.5 },
+		];
+
+		for (const { field, value } of scenarios) {
+			const result = cycleSettingsDraftSchema.safeParse({
+				...draft,
+				[field]: value,
+			});
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(
+					result.error.issues.some((issue) => issue.path[0] === field),
+				).toBe(true);
+			}
+		}
 	});
 
 	test("retains the draft and permits one retry after a rejection", async () => {
