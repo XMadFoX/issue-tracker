@@ -29,7 +29,22 @@
             biome
             commitlint-rs
             typescript-go
+
+
+            #Autoated Tests
+
+            python313
+            uv
+
+            firefox
+            geckodriver
           ];
+
+          shellHook = ''
+            if [ -f tests/.venv/bin/activate ]; then
+              source tests/.venv/bin/activate
+            fi
+          '';
         };
       }
     );

@@ -4,7 +4,11 @@
 	"scripts": {
 		"db:migrate": "FORCE_COLOR=3 bun --env-file=.env -F db migrate",
 		"dev": "FORCE_COLOR=3 bun --env-file=.env -F tss-web dev",
-		"test": "echo \"Error: no test specified\" && exit 1",
+		"test": "bun -F tss-web test",
+		"test:unit": "bun -F tss-web test:unit",
+		"test:unit:watch": "bun -F tss-web test:unit:watch",
+		"test:e2e": "bun -F tss-web test:e2e",
+		"test:e2e:ui": "bun -F tss-web test:e2e:ui",
 		"typecheck": "bun --workspaces --if-present run typecheck"
 	},
 	"keywords": [],

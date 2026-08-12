@@ -34,5 +34,11 @@
 			"db/*": ["../../packages/db/src/*"]
 		}
 	},
-	"include": ["src", "vite.config.ts"]
+	"include": [
+		"src",
+		"vite.config.ts",
+		"vitest.config.ts",
+		"playwright.config.ts",
+		"tests"
+	]
 }

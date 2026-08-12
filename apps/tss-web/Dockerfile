@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM oven/bun:1.3-alpine AS base
+FROM oven/bun:1.3 AS base
 WORKDIR /app
 
 FROM base AS deps
@@ -9,6 +9,7 @@ COPY apps/tss-web/package.json ./apps/tss-web/package.json
 COPY packages/api/package.json ./packages/api/package.json
 COPY packages/blocks/package.json ./packages/blocks/package.json
 COPY packages/db/package.json ./packages/db/package.json
+COPY packages/features/package.json ./packages/features/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
 RUN bun install --frozen-lockfile --filter "./apps/tss-web"
 
@@ -52,6 +53,7 @@ RUN --mount=type=secret,id=env,required=false \
 FROM base AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/apps/tss-web/.output ./
 EXPOSE 3000
 CMD ["bun", "./server/index.mjs"]

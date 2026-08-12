@@ -20,6 +20,15 @@ services:
           target: env
     ports:
       - 3000:3000
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@pg:5432/issue_tracker
+      NATS_URL: nats://nats:4222
+      HOST_API: "true"
+    depends_on:
+      - pg
+      - nats
 
   nats:
     image: nats
@@ -43,4 +52,4 @@ volumes:
 
 secrets:
   env:
-    file: ${WEB_BUILD_ENV_FILE:-/proc/self/environ}
+    file: ${WEB_BUILD_ENV_FILE:-.env}
