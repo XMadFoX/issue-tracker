@@ -18,11 +18,14 @@ export const cycleScheduleJobTypeEnum = pgEnum("cycle_schedule_job_type", [
 	"generate_planned_cycles",
 	"send_cycle_reminder",
 	"create_cycle_confirmation_required",
+	"start_scheduled_cycle",
+	"complete_scheduled_cycle",
 ]);
 
 export const cycleScheduleJobStatusEnum = pgEnum("cycle_schedule_job_status", [
 	"queued",
 	"started",
+	"blocked",
 	"succeeded",
 	"failed",
 ]);
@@ -117,6 +120,10 @@ export const cycleScheduleJob = pgTable(
 		check(
 			"cycle_schedule_job_started_state_check",
 			sql`(${table.status} <> 'started' OR (${table.attempts} >= 1 AND ${table.leaseExpiresAt} IS NOT NULL AND ${table.workerId} IS NOT NULL AND ${table.claimToken} IS NOT NULL AND ${table.startedAt} IS NOT NULL AND ${table.finishedAt} IS NULL))`,
+		),
+		check(
+			"cycle_schedule_job_blocked_state_check",
+			sql`(${table.status} <> 'blocked' OR (${table.jobType} = 'start_scheduled_cycle' AND ${table.leaseExpiresAt} IS NULL AND ${table.workerId} IS NULL AND ${table.claimToken} IS NULL AND ${table.startedAt} IS NOT NULL AND ${table.finishedAt} IS NULL))`,
 		),
 		check(
 			"cycle_schedule_job_terminal_state_check",
