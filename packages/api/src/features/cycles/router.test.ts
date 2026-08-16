@@ -15,12 +15,15 @@ import setupDb from "../../utils/prepare-tests";
 let db: typeof import("db").db;
 let router: typeof import("../../router").router;
 let cycle: typeof import("db/features/tracker/cycles.schema").cycle;
+let cycleScheduleJob: typeof import("db/features/tracker/cycle-schedule-jobs.schema").cycleScheduleJob;
 let issue: typeof import("db/features/tracker/issues.schema").issue;
 let issueStatus: typeof import("db/features/tracker/issue-statuses.schema").issueStatus;
 let issueStatusGroup: typeof import("db/features/tracker/issue-statuses.schema").issueStatusGroup;
 let issueType: typeof import("db/features/tracker/issue-types.schema").issueType;
 let team: typeof import("db/features/tracker/tracker.schema").team;
+let teamMembership: typeof import("db/features/tracker/tracker.schema").teamMembership;
 let workspace: typeof import("db/features/tracker/tracker.schema").workspace;
+let workspaceMembership: typeof import("db/features/tracker/tracker.schema").workspaceMembership;
 let teamCycleSettings: typeof import("db/features/tracker/team-cycle-settings.schema").teamCycleSettings;
 let user: typeof import("db/features/auth/auth.schema").user;
 let permissionsCatalog: typeof import("db/features/abac/abac.schema").permissionsCatalog;
@@ -42,6 +45,7 @@ const ids = {
 type Permission =
 	| "cycle:complete"
 	| "cycle:create"
+	| "cycle:manage_settings"
 	| "cycle:read"
 	| "cycle:update"
 	| "issue:create"
@@ -148,15 +152,26 @@ async function seed(permissions: Permission[]) {
 	});
 	const { ensurePermissionCatalog } = await import("../workspaces/defaults");
 	await ensurePermissionCatalog(db);
-	await db.insert(roleDefinitions).values({
-		id: "cycle-router-role",
-		workspaceId: ids.workspace,
-		teamId: ids.team,
-		scopeLevel: "team",
-		name: "Router role",
-		createdBy: ids.actor,
-		attributes: {},
-	});
+	await db.insert(roleDefinitions).values([
+		{
+			id: "cycle-router-workspace-role",
+			workspaceId: ids.workspace,
+			teamId: null,
+			scopeLevel: "workspace",
+			name: "Router workspace role",
+			createdBy: ids.actor,
+			attributes: {},
+		},
+		{
+			id: "cycle-router-role",
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			scopeLevel: "team",
+			name: "Router role",
+			createdBy: ids.actor,
+			attributes: {},
+		},
+	]);
 	const catalog = await db
 		.select()
 		.from(permissionsCatalog)
@@ -184,6 +199,21 @@ async function seed(permissions: Permission[]) {
 		teamId: ids.team,
 		assignedBy: ids.actor,
 		attributes: {},
+	});
+	await db.insert(workspaceMembership).values({
+		id: "cycle-router-workspace-membership",
+		workspaceId: ids.workspace,
+		userId: ids.actor,
+		roleId: "cycle-router-workspace-role",
+		status: "active",
+		joinedAt: new Date(),
+	});
+	await db.insert(teamMembership).values({
+		id: "cycle-router-team-membership",
+		teamId: ids.team,
+		userId: ids.actor,
+		roleId: "cycle-router-role",
+		status: "active",
 	});
 }
 
@@ -215,6 +245,55 @@ async function sourceState() {
 	return source?.state;
 }
 
+async function seedFailedStartJob(
+	boundary = new Date("2026-07-15T10:00:00.000Z"),
+) {
+	await db
+		.update(cycle)
+		.set({
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: boundary,
+			startDate: boundary,
+			endDate: new Date(boundary.getTime() + 7 * 86_400_000),
+		})
+		.where(eq(cycle.id, ids.source));
+	const [settings] = await db
+		.insert(teamCycleSettings)
+		.values({
+			teamId: ids.team,
+			cadenceEnabled: true,
+			cadenceDays: 7,
+			anchorDate: boundary,
+			planningHorizon: 2,
+			endBehavior: "automatic",
+			gracePeriodMinutes: 0,
+			defaultRolloverPolicy: "carry_over",
+			reminderLeadMinutes: 60,
+			updatedBy: null,
+		})
+		.returning();
+	if (!settings) throw new Error("settings missing");
+	const jobId = createId();
+	await db.insert(cycleScheduleJob).values({
+		id: jobId,
+		workspaceId: ids.workspace,
+		teamId: ids.team,
+		cycleId: ids.source,
+		jobType: "start_scheduled_cycle",
+		scheduledBoundary: boundary,
+		eventRevisionAt: settings.updatedAt,
+		status: "failed",
+		attempts: 8,
+		availableAt: boundary,
+		finishedAt: new Date(),
+		outcome: "transient_error",
+		lastErrorCode: "TRANSIENT_RUNTIME_ERROR",
+		lastErrorSummary: "redacted",
+	});
+	return jobId;
+}
+
 async function waitForWaiter() {
 	for (let attempt = 0; attempt < 100; attempt++) {
 		const result = await db.execute<{ waiting: boolean }>(
@@ -230,12 +309,17 @@ beforeAll(async () => {
 	teardown = await setupDb();
 	({ db } = await import("db"));
 	({ cycle } = await import("db/features/tracker/cycles.schema"));
+	({ cycleScheduleJob } = await import(
+		"db/features/tracker/cycle-schedule-jobs.schema"
+	));
 	({ issue } = await import("db/features/tracker/issues.schema"));
 	({ issueStatus, issueStatusGroup } = await import(
 		"db/features/tracker/issue-statuses.schema"
 	));
 	({ issueType } = await import("db/features/tracker/issue-types.schema"));
-	({ team, workspace } = await import("db/features/tracker/tracker.schema"));
+	({ team, teamMembership, workspace, workspaceMembership } = await import(
+		"db/features/tracker/tracker.schema"
+	));
 	({ teamCycleSettings } = await import(
 		"db/features/tracker/team-cycle-settings.schema"
 	));
@@ -258,6 +342,502 @@ beforeEach(async () => {
 });
 
 describe("cycle router authorization and transitions", () => {
+	test("lists only current lifecycle problems for an authorized manager", async () => {
+		await seed(["cycle:manage_settings", "cycle:read", "cycle:update"]);
+		const jobId = await seedFailedStartJob();
+		const [currentJob] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, jobId));
+		if (!currentJob?.eventRevisionAt) throw new Error("current job missing");
+		await db.insert(cycleScheduleJob).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId: ids.source,
+			jobType: "start_scheduled_cycle",
+			scheduledBoundary: currentJob.scheduledBoundary,
+			eventRevisionAt: new Date(currentJob.eventRevisionAt.getTime() - 1_000),
+			status: "failed",
+			attempts: 8,
+			availableAt: currentJob.availableAt,
+			finishedAt: new Date(),
+			outcome: "transient_error",
+			lastErrorSummary: "obsolete failure",
+		});
+		await db.insert(cycleScheduleJob).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			jobType: "generate_planned_cycles",
+			scheduledBoundary: new Date(),
+			status: "failed",
+			attempts: 8,
+			availableAt: new Date(),
+			finishedAt: new Date(),
+		});
+
+		const failed = await client().cycle.listLifecycleProblems(
+			{ workspaceId: ids.workspace, teamId: ids.team },
+			options(),
+		);
+		expect(failed).toHaveLength(1);
+		expect(failed[0]).toMatchObject({
+			id: jobId,
+			cycleId: ids.source,
+			cycleName: "Source",
+			jobType: "start_scheduled_cycle",
+			status: "failed",
+			attempts: 8,
+			maxAttempts: 8,
+			lastErrorCode: "TRANSIENT_RUNTIME_ERROR",
+			lastErrorSummary:
+				"Cycle automation failed. Retry the job or inspect worker telemetry.",
+			canRetry: true,
+		});
+
+		await db
+			.update(cycleScheduleJob)
+			.set({
+				status: "blocked",
+				attempts: 0,
+				startedAt: new Date(),
+				finishedAt: null,
+				outcome: "active_cycle_blocked",
+			})
+			.where(eq(cycleScheduleJob.id, jobId));
+		const blocked = await client().cycle.listLifecycleProblems(
+			{ workspaceId: ids.workspace, teamId: ids.team },
+			options(),
+		);
+		expect(blocked[0]).toMatchObject({ status: "blocked", canRetry: false });
+
+		await db
+			.update(cycleScheduleJob)
+			.set({ status: "queued", attempts: 1, outcome: "transient_error" })
+			.where(eq(cycleScheduleJob.id, jobId));
+		const retrying = await client().cycle.listLifecycleProblems(
+			{ workspaceId: ids.workspace, teamId: ids.team },
+			options(),
+		);
+		expect(retrying[0]).toMatchObject({ status: "queued", attempts: 1 });
+		await db
+			.update(cycleScheduleJob)
+			.set({ attempts: 0, outcome: null })
+			.where(eq(cycleScheduleJob.id, jobId));
+		expect(
+			await client().cycle.listLifecycleProblems(
+				{ workspaceId: ids.workspace, teamId: ids.team },
+				options(),
+			),
+		).toEqual([]);
+	});
+
+	test("hides stale scheduled provenance and unsafe persisted problem text", async () => {
+		await seed(["cycle:manage_settings", "cycle:read", "cycle:update"]);
+		const jobId = await seedFailedStartJob();
+		await db
+			.update(cycleScheduleJob)
+			.set({
+				outcome: "customer-123 api_key=super-secret",
+				lastErrorCode: "SECRET_customer-123",
+				lastErrorSummary: "token=super-secret customer-123",
+			})
+			.where(eq(cycleScheduleJob.id, jobId));
+		const sanitized = await client().cycle.listLifecycleProblems(
+			{ workspaceId: ids.workspace, teamId: ids.team },
+			options(),
+		);
+		expect(sanitized).toHaveLength(1);
+		expect(sanitized[0]).toMatchObject({
+			outcome: null,
+			lastErrorCode: null,
+			lastErrorSummary:
+				"Cycle automation failed. Retry the job or inspect worker telemetry.",
+		});
+		expect(JSON.stringify(sanitized)).not.toContain("super-secret");
+		expect(JSON.stringify(sanitized)).not.toContain("customer-123");
+
+		await db
+			.update(cycle)
+			.set({
+				scheduledBoundary: new Date("2026-07-16T10:00:00.000Z"),
+			})
+			.where(eq(cycle.id, ids.source));
+		expect(
+			await client().cycle.listLifecycleProblems(
+				{ workspaceId: ids.workspace, teamId: ids.team },
+				options(),
+			),
+		).toEqual([]);
+	});
+
+	test("derives completion retry capability from both required permissions", async () => {
+		await seed([
+			"cycle:manage_settings",
+			"cycle:read",
+			"cycle:complete",
+			"issue:update",
+		]);
+		await seedFailedStartJob();
+		const [settings] = await db.select().from(teamCycleSettings);
+		if (!settings) throw new Error("settings missing");
+		const endDate = new Date("2026-07-22T10:00:00.000Z");
+		await db
+			.update(cycle)
+			.set({ state: "active", endDate })
+			.where(eq(cycle.id, ids.source));
+		const completionJobId = createId();
+		await db.insert(cycleScheduleJob).values({
+			id: completionJobId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId: ids.source,
+			jobType: "complete_scheduled_cycle",
+			scheduledBoundary: endDate,
+			eventRevisionAt: settings.updatedAt,
+			status: "failed",
+			attempts: 8,
+			availableAt: endDate,
+			finishedAt: new Date(),
+			outcome: "no_rollover_target",
+			lastErrorSummary: "No rollover target is available",
+		});
+		const problems = await client().cycle.listLifecycleProblems(
+			{ workspaceId: ids.workspace, teamId: ids.team },
+			options(),
+		);
+		expect(problems).toHaveLength(1);
+		expect(problems[0]).toMatchObject({
+			id: completionJobId,
+			jobType: "complete_scheduled_cycle",
+			canRetry: true,
+		});
+	});
+
+	test("protects lifecycle problem visibility and retry capability", async () => {
+		await seed(["cycle:read", "cycle:manage_settings"]);
+		await seedFailedStartJob();
+		const managerRows = await client().cycle.listLifecycleProblems(
+			{ workspaceId: ids.workspace, teamId: ids.team },
+			options(),
+		);
+		expect(managerRows[0]?.canRetry).toBe(false);
+		await db.execute(sql`truncate table role_permissions cascade`);
+		await grant(["cycle:read"]);
+		await expectCode(
+			client().cycle.listLifecycleProblems(
+				{ workspaceId: ids.workspace, teamId: ids.team },
+				options(),
+			),
+			"UNAUTHORIZED",
+		);
+		const outsiderId = createId();
+		await expectCode(
+			client(outsiderId).cycle.listLifecycleProblems(
+				{ workspaceId: ids.workspace, teamId: ids.team },
+				options(outsiderId),
+			),
+			"UNAUTHORIZED",
+		);
+	});
+
+	test("retries a current failed start job with read and update permissions", async () => {
+		await seed(["cycle:read", "cycle:update"]);
+		const jobId = await seedFailedStartJob();
+		expect(
+			await client().cycle.retryLifecycleJob(
+				{ workspaceId: ids.workspace, jobId },
+				options(),
+			),
+		).toMatchObject({
+			status: "retried",
+			jobId,
+			jobType: "start_scheduled_cycle",
+		});
+		const [job] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, jobId));
+		expect(job).toMatchObject({ status: "queued", attempts: 0 });
+		expect(job?.finishedAt).toBeNull();
+	});
+
+	test("requires active team membership for lifecycle retry", async () => {
+		await seed(["cycle:read", "cycle:update"]);
+		const jobId = await seedFailedStartJob();
+		await db
+			.update(teamMembership)
+			.set({ status: "inactive" })
+			.where(
+				and(
+					eq(teamMembership.teamId, ids.team),
+					eq(teamMembership.userId, ids.actor),
+				),
+			);
+		await expectCode(
+			client().cycle.retryLifecycleJob(
+				{ workspaceId: ids.workspace, jobId },
+				options(),
+			),
+			"NOT_FOUND",
+		);
+		await db
+			.delete(teamMembership)
+			.where(
+				and(
+					eq(teamMembership.teamId, ids.team),
+					eq(teamMembership.userId, ids.actor),
+				),
+			);
+		await expectCode(
+			client().cycle.retryLifecycleJob(
+				{ workspaceId: ids.workspace, jobId },
+				options(),
+			),
+			"NOT_FOUND",
+		);
+	});
+
+	test("resets future lifecycle retries to their policy due times", async () => {
+		await seed([
+			"cycle:read",
+			"cycle:update",
+			"cycle:complete",
+			"issue:update",
+		]);
+		const futureStart = new Date("2030-01-10T10:00:00.000Z");
+		const startJobId = await seedFailedStartJob(futureStart);
+		await client().cycle.retryLifecycleJob(
+			{ workspaceId: ids.workspace, jobId: startJobId },
+			options(),
+		);
+		const [startJob] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, startJobId));
+		expect(startJob?.availableAt).toEqual(futureStart);
+
+		const futureEnd = new Date("2030-01-17T10:00:00.000Z");
+		await db
+			.update(cycle)
+			.set({ state: "active", endDate: futureEnd })
+			.where(eq(cycle.id, ids.source));
+		const [settings] = await db
+			.update(teamCycleSettings)
+			.set({ gracePeriodMinutes: 60, updatedAt: new Date() })
+			.where(eq(teamCycleSettings.teamId, ids.team))
+			.returning();
+		if (!settings) throw new Error("settings missing");
+		const completionJobId = createId();
+		await db.insert(cycleScheduleJob).values({
+			id: completionJobId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId: ids.source,
+			jobType: "complete_scheduled_cycle",
+			scheduledBoundary: futureEnd,
+			eventRevisionAt: settings.updatedAt,
+			status: "failed",
+			attempts: 8,
+			availableAt: new Date(),
+			finishedAt: new Date(),
+			outcome: "transient_error",
+		});
+		await client().cycle.retryLifecycleJob(
+			{ workspaceId: ids.workspace, jobId: completionJobId },
+			options(),
+		);
+		const [completionJob] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, completionJobId));
+		expect(completionJob?.availableAt).toEqual(
+			new Date(futureEnd.getTime() + 60 * 60_000),
+		);
+	});
+
+	test("hides foreign-team jobs and rejects non-lifecycle job types", async () => {
+		await seed(["cycle:read", "cycle:update"]);
+		const generationJobId = createId();
+		await db.insert(cycleScheduleJob).values({
+			id: generationJobId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			jobType: "generate_planned_cycles",
+			scheduledBoundary: new Date(),
+			status: "failed",
+			attempts: 8,
+			availableAt: new Date(),
+			finishedAt: new Date(),
+		});
+		await expectCode(
+			client().cycle.retryLifecycleJob(
+				{ workspaceId: ids.workspace, jobId: generationJobId },
+				options(),
+			),
+			"NOT_FOUND",
+		);
+
+		const foreignTeamId = createId();
+		const foreignCycleId = createId();
+		const boundary = new Date("2030-02-01T10:00:00.000Z");
+		await db.insert(team).values({
+			id: foreignTeamId,
+			workspaceId: ids.workspace,
+			name: "Foreign team",
+			key: "FRT",
+			privacy: "public",
+		});
+		const [foreignSettings] = await db
+			.insert(teamCycleSettings)
+			.values({
+				teamId: foreignTeamId,
+				cadenceEnabled: true,
+				cadenceDays: 7,
+				anchorDate: boundary,
+				planningHorizon: 2,
+				endBehavior: "automatic",
+				gracePeriodMinutes: 0,
+				defaultRolloverPolicy: "carry_over",
+				reminderLeadMinutes: 60,
+				updatedBy: null,
+			})
+			.returning();
+		if (!foreignSettings) throw new Error("foreign settings missing");
+		await db.insert(cycle).values({
+			id: foreignCycleId,
+			workspaceId: ids.workspace,
+			teamId: foreignTeamId,
+			name: "Foreign cycle",
+			sequence: 1,
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: boundary,
+			startDate: boundary,
+			endDate: new Date(boundary.getTime() + 7 * 86_400_000),
+		});
+		const foreignJobId = createId();
+		await db.insert(cycleScheduleJob).values({
+			id: foreignJobId,
+			workspaceId: ids.workspace,
+			teamId: foreignTeamId,
+			cycleId: foreignCycleId,
+			jobType: "start_scheduled_cycle",
+			scheduledBoundary: boundary,
+			eventRevisionAt: foreignSettings.updatedAt,
+			status: "failed",
+			attempts: 8,
+			availableAt: boundary,
+			finishedAt: new Date(),
+		});
+		await expectCode(
+			client().cycle.retryLifecycleJob(
+				{ workspaceId: ids.workspace, jobId: foreignJobId },
+				options(),
+			),
+			"NOT_FOUND",
+		);
+	});
+
+	test("protects lifecycle retries and rejects nonfailed or obsolete jobs", async () => {
+		await seed(["cycle:read"]);
+		const jobId = await seedFailedStartJob();
+		await expectCode(
+			client().cycle.retryLifecycleJob(
+				{ workspaceId: ids.workspace, jobId },
+				options(),
+			),
+			"NOT_FOUND",
+		);
+		await expectCode(
+			client().cycle.retryLifecycleJob(
+				{ workspaceId: ids.workspace, jobId: createId() },
+				options(),
+			),
+			"NOT_FOUND",
+		);
+		await grant(["cycle:update"]);
+		await db
+			.update(cycleScheduleJob)
+			.set({
+				status: "succeeded",
+				finishedAt: new Date(),
+				outcome: "started",
+			})
+			.where(eq(cycleScheduleJob.id, jobId));
+		await expectCode(
+			client().cycle.retryLifecycleJob(
+				{ workspaceId: ids.workspace, jobId },
+				options(),
+			),
+			"JOB_NOT_FAILED",
+		);
+		await db
+			.update(cycleScheduleJob)
+			.set({ status: "failed", finishedAt: new Date() })
+			.where(eq(cycleScheduleJob.id, jobId));
+		await db
+			.update(teamCycleSettings)
+			.set({ cadenceEnabled: false })
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		await expectCode(
+			client().cycle.retryLifecycleJob(
+				{ workspaceId: ids.workspace, jobId },
+				options(),
+			),
+			"JOB_OBSOLETE",
+		);
+	});
+
+	test("requires completion and issue update permissions for completion retry", async () => {
+		await seed(["cycle:read", "cycle:complete"]);
+		const startJobId = await seedFailedStartJob();
+		const [settings] = await db.select().from(teamCycleSettings);
+		if (!settings) throw new Error("settings missing");
+		const end = new Date("2026-07-22T10:00:00.000Z");
+		await db
+			.update(cycle)
+			.set({ state: "active" })
+			.where(eq(cycle.id, ids.source));
+		const completionJobId = createId();
+		await db.insert(cycleScheduleJob).values({
+			id: completionJobId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId: ids.source,
+			jobType: "complete_scheduled_cycle",
+			scheduledBoundary: end,
+			eventRevisionAt: settings.updatedAt,
+			status: "failed",
+			attempts: 8,
+			availableAt: end,
+			finishedAt: new Date(),
+			outcome: "transient_error",
+		});
+		await expectCode(
+			client().cycle.retryLifecycleJob(
+				{ workspaceId: ids.workspace, jobId: completionJobId },
+				options(),
+			),
+			"NOT_FOUND",
+		);
+		await grant(["issue:update"]);
+		expect(
+			await client().cycle.retryLifecycleJob(
+				{ workspaceId: ids.workspace, jobId: completionJobId },
+				options(),
+			),
+		).toMatchObject({ status: "retried" });
+		await expectCode(
+			client().cycle.retryLifecycleJob(
+				{ workspaceId: createId(), jobId: startJobId },
+				options(),
+			),
+			"NOT_FOUND",
+		);
+	});
+
 	test("requires both completion and issue update permissions", async () => {
 		await seed(["cycle:complete"]);
 		await expectCode(
@@ -323,6 +903,37 @@ describe("cycle router authorization and transitions", () => {
 		);
 		expect(result.ok).toBeTrue();
 		expect(await sourceState()).toBe("completed");
+	});
+
+	test("rejects manual activation while another team cycle is active", async () => {
+		await seed(["cycle:update"]);
+		await db
+			.update(cycle)
+			.set({
+				state: "planned",
+				startDate: new Date("2025-01-14"),
+				endDate: new Date("2025-01-28"),
+			})
+			.where(eq(cycle.id, ids.source));
+		await db.insert(cycle).values({
+			id: "cycle-router-active-blocker",
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Active blocker",
+			sequence: 2,
+			state: "active",
+			startDate: new Date("2025-01-01"),
+			endDate: new Date("2025-01-14"),
+		});
+
+		await expectCode(
+			client().cycle.update(
+				{ id: ids.source, workspaceId: ids.workspace, state: "active" },
+				options(),
+			),
+			"INVALID_STATE_TRANSITION",
+		);
+		expect(await sourceState()).toBe("planned");
 	});
 
 	test("rejects generic completion and protects cancellation with completion permission", async () => {

@@ -1,6 +1,5 @@
 import { type Msg, nuid, type Subscription } from "@nats-io/transport-node";
 import { getNatsConnection } from "../../lib/nats";
-import { logger } from "../../logger";
 import {
 	addNatsActiveSubscription,
 	recordNatsParseError,
@@ -213,6 +212,7 @@ class NatsPublisher<T extends Record<string, unknown>> {
 								return { done: false, value: parsed.data };
 							} catch (error) {
 								recordNatsParseError(attributes);
+								const { logger } = await import("../../logger");
 								logger.debug("Failed to parse NATS issue event: {error}", {
 									error,
 								});

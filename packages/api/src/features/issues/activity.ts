@@ -134,18 +134,20 @@ type IssueCycleUnassignedActivity = ActivityInput<
 		}
 >;
 
-type CycleActivityReason = "manual" | "scheduled";
+type CycleActivityReason =
+	| { reason: "manual" }
+	| { reason: "scheduled"; scheduleJobId: string };
 
 type IssueCycleRolledOverActivityMetadata = Pick<
 	IssueRecord,
 	"estimate" | "issueTypeId"
-> & {
-	fromCycleId: ActiveCycleId;
-	fromCycleName: string;
-	reason: CycleActivityReason;
-	toCycleId: ActiveCycleId;
-	toCycleName: string;
-};
+> &
+	CycleActivityReason & {
+		fromCycleId: ActiveCycleId;
+		fromCycleName: string;
+		toCycleId: ActiveCycleId;
+		toCycleName: string;
+	};
 
 type IssueCycleRolledOverActivity = ActivityInput<
 	"issue.cycle_rolled_over",
@@ -158,11 +160,11 @@ type IssueCycleRolledOverActivity = ActivityInput<
 type IssueCycleReturnedToBacklogActivityMetadata = Pick<
 	IssueRecord,
 	"estimate" | "issueTypeId"
-> & {
-	fromCycleId: ActiveCycleId;
-	fromCycleName: string;
-	reason: CycleActivityReason;
-};
+> &
+	CycleActivityReason & {
+		fromCycleId: ActiveCycleId;
+		fromCycleName: string;
+	};
 
 type IssueCycleReturnedToBacklogActivity = ActivityInput<
 	"issue.cycle_returned_to_backlog",

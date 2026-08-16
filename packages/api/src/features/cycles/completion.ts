@@ -7,21 +7,35 @@ import {
 } from "db/features/tracker/issue-statuses.schema";
 import { issue } from "db/features/tracker/issues.schema";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { type DbExecutor, writeIssueActivity } from "../issues/activity";
+import { writeIssueActivity } from "../issues/activity";
+import type { CycleTransaction } from "./mutation";
 import { resolveCycleConfirmationAction } from "./notifications";
 
 export type CycleCompletionDisposition =
 	| { type: "carryOver"; targetCycleId: string }
 	| { type: "moveToBacklog" };
 
-export type CycleCompletionInput = {
+type CycleCompletionInputBase = {
 	actorId: string | null;
 	disposition: CycleCompletionDisposition;
-	reason: "manual" | "scheduled";
 	teamId: string;
 	workspaceId: string;
 	cycleId: string;
 };
+
+export type CycleCompletionInput = CycleCompletionInputBase &
+	(
+		| { reason: "manual"; scheduleJobId?: never }
+		| { reason: "scheduled"; scheduleJobId: string }
+	);
+
+function completionActivityReason(
+	input: CycleCompletionInput,
+): { reason: "manual" } | { reason: "scheduled"; scheduleJobId: string } {
+	return input.reason === "scheduled"
+		? { reason: "scheduled", scheduleJobId: input.scheduleJobId }
+		: { reason: "manual" };
+}
 
 export type CycleCompletionError =
 	| "CYCLE_ALREADY_COMPLETED"
@@ -37,7 +51,7 @@ type CompletionCounts = {
 	returnedToBacklog: number;
 };
 
-type CompletionResult =
+export type CompletionResult =
 	| { ok: false; code: CycleCompletionError }
 	| {
 			ok: true;
@@ -49,7 +63,7 @@ type CompletionResult =
 	  };
 
 async function lockCycles(
-	tx: DbExecutor,
+	tx: CycleTransaction,
 	input: CycleCompletionInput,
 ): Promise<Array<typeof cycle.$inferSelect>> {
 	const cycleIds =
@@ -70,8 +84,8 @@ async function lockCycles(
 		.for("update");
 }
 
-async function completeInTransaction(
-	tx: DbExecutor,
+export async function completeCycleInTransaction(
+	tx: CycleTransaction,
 	input: CycleCompletionInput,
 ): Promise<CompletionResult> {
 	await tx.execute(
@@ -150,6 +164,7 @@ async function completeInTransaction(
 		returnedToBacklog: 0,
 	};
 	const affectedIssueIds: string[] = [];
+	const activityReason = completionActivityReason(input);
 	for (const member of members) {
 		if (member.canonicalCategory === "completed") {
 			counts.completed += 1;
@@ -187,7 +202,7 @@ async function completeInTransaction(
 					issueTypeId: member.issueTypeId,
 					fromCycleId: source.id,
 					fromCycleName: source.name,
-					reason: input.reason,
+					...activityReason,
 					toCycleId: target.id,
 					toCycleName: target.name,
 				},
@@ -209,7 +224,7 @@ async function completeInTransaction(
 					issueTypeId: member.issueTypeId,
 					fromCycleId: source.id,
 					fromCycleName: source.name,
-					reason: input.reason,
+					...activityReason,
 				},
 			});
 		}
@@ -255,5 +270,5 @@ async function completeInTransaction(
 export async function completeCycle(
 	input: CycleCompletionInput,
 ): Promise<CompletionResult> {
-	return db.transaction((tx) => completeInTransaction(tx, input));
+	return db.transaction((tx) => completeCycleInTransaction(tx, input));
 }

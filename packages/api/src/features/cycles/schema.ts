@@ -115,6 +115,13 @@ export const cycleMarkNotificationReadSchema = z.object({
 	notificationId: z.cuid2(),
 });
 
+export const cycleRetryLifecycleJobSchema = z.object({
+	workspaceId: cycleInsertSchema.shape.workspaceId,
+	jobId: z.cuid2(),
+});
+
+export const cycleLifecycleProblemsSchema = cyclePendingActionsSchema;
+
 const settingsValueShape = {
 	cadenceEnabled: z.boolean(),
 	cadenceDays: z.number().int().positive(),

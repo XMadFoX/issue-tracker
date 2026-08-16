@@ -2,6 +2,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import { cycleActionRequired } from "db/features/tracker/cycle-actions.schema";
 import { cycleNotification } from "db/features/tracker/cycle-notifications.schema";
+import { cycleScheduleJob } from "db/features/tracker/cycle-schedule-jobs.schema";
 import { cycle } from "db/features/tracker/cycles.schema";
 import {
 	issueStatus,
@@ -15,7 +16,19 @@ import {
 	teamMembership,
 	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
-import { and, count, desc, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
+import {
+	and,
+	count,
+	desc,
+	eq,
+	gt,
+	inArray,
+	isNull,
+	lte,
+	ne,
+	or,
+	sql,
+} from "drizzle-orm";
 import z from "zod";
 import { authedRouter } from "../../context";
 import { env } from "../../env";
@@ -25,6 +38,7 @@ import { writeIssueActivity } from "../issues/activity";
 import { issuePublisher } from "../issues/publisher";
 import { getIssueWithRelations } from "../issues/queries";
 import { completeCycle } from "./completion";
+import { isLifecycleJobType, retryLifecycleJob } from "./lifecycle-jobs";
 import {
 	buildIssueTypeScopeChange,
 	cycleBaselineActionTypes,
@@ -49,11 +63,13 @@ import {
 	cycleGetSchedulePreviewSchema,
 	cycleGetSchema,
 	cycleGetSettingsSchema,
+	cycleLifecycleProblemsSchema,
 	cycleListSchema,
 	cycleMarkNotificationReadSchema,
 	cycleMetricsSchema,
 	cycleNotificationsSchema,
 	cyclePendingActionsSchema,
+	cycleRetryLifecycleJobSchema,
 	cycleUnassignIssueSchema,
 	cycleUpdateSchema,
 	cycleUpdateSettingsSchema,
@@ -147,6 +163,18 @@ const settingsErrors = {
 	SETTINGS_CHANGED: {
 		status: 409,
 		message: "Cycle settings changed. Review the current values and try again.",
+	},
+};
+
+const retryLifecycleErrors = {
+	...commonErrors,
+	JOB_NOT_FAILED: {
+		status: 409,
+		message: "Only a failed lifecycle job can be retried.",
+	},
+	JOB_OBSOLETE: {
+		status: 409,
+		message: "This lifecycle job no longer matches the current cycle policy.",
 	},
 };
 
@@ -621,6 +649,22 @@ const updateCycle = authedRouter
 				!canTransitionCycleState(lockedExisting.state, input.state)
 			) {
 				throw errors.INVALID_STATE_TRANSITION();
+			}
+			if (input.state === "active") {
+				const [activeCycle] = await tx
+					.select({ id: cycle.id })
+					.from(cycle)
+					.where(
+						and(
+							eq(cycle.workspaceId, input.workspaceId),
+							eq(cycle.teamId, existing.teamId),
+							eq(cycle.state, "active"),
+							ne(cycle.id, input.id),
+						),
+					)
+					.limit(1)
+					.for("update");
+				if (activeCycle) throw errors.INVALID_STATE_TRANSITION();
 			}
 
 			const overlap = await getOverlappingCycle({
@@ -1112,6 +1156,262 @@ const updateSettings = authedRouter
 		};
 	});
 
+const visibleLifecycleProblemOutcomes = new Set([
+	"active_cycle_blocked",
+	"transient_error",
+	"not_due",
+	"invalid_provenance",
+	"invalid_job_identity",
+	"generation_failed",
+	"no_rollover_target",
+	"completion_failed",
+]);
+
+const visibleLifecycleProblemErrorCodes = new Set([
+	"TRANSIENT_RUNTIME_ERROR",
+	"INVALID_JOB_IDENTITY",
+	"CYCLE_ALREADY_COMPLETED",
+	"CYCLE_CLOSED",
+	"INVALID_ROLLOVER_TARGET",
+	"NOT_FOUND",
+	"TEAM_MISMATCH",
+	"settings_missing",
+	"invalid_timezone",
+	"manual_cycle_conflict",
+	"scheduled_cycle_conflict",
+	"horizon_unreachable",
+	"not_due",
+	"invalid_provenance",
+	"generation_failed",
+	"no_rollover_target",
+	"completion_failed",
+]);
+
+const LIFECYCLE_FAILURE_SUMMARY =
+	"Cycle automation failed. Retry the job or inspect worker telemetry.";
+
+const listLifecycleProblems = authedRouter
+	.input(cycleLifecycleProblemsSchema)
+	.errors(commonErrors)
+	.handler(async ({ context, input, errors }) => {
+		const userId = context.auth.session.userId;
+		if (
+			!(await hasActiveCycleMembership({
+				userId,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+			}))
+		) {
+			throw errors.UNAUTHORIZED();
+		}
+		const [
+			canManageSettings,
+			canRead,
+			canStartRetry,
+			canComplete,
+			canUpdateIssue,
+		] = await Promise.all([
+			isAllowed({
+				userId,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+				permissionKey: "cycle:manage_settings",
+			}),
+			isAllowed({
+				userId,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+				permissionKey: "cycle:read",
+			}),
+			isAllowed({
+				userId,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+				permissionKey: "cycle:update",
+			}),
+			isAllowed({
+				userId,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+				permissionKey: "cycle:complete",
+			}),
+			isAllowed({
+				userId,
+				workspaceId: input.workspaceId,
+				teamId: input.teamId,
+				permissionKey: "issue:update",
+			}),
+		]);
+		if (!canManageSettings || !canRead) throw errors.UNAUTHORIZED();
+
+		const rows = await db
+			.select({
+				id: cycleScheduleJob.id,
+				cycleId: cycleScheduleJob.cycleId,
+				cycleName: cycle.name,
+				jobType: cycleScheduleJob.jobType,
+				status: cycleScheduleJob.status,
+				attempts: cycleScheduleJob.attempts,
+				maxAttempts: cycleScheduleJob.maxAttempts,
+				availableAt: cycleScheduleJob.availableAt,
+				scheduledBoundary: cycleScheduleJob.scheduledBoundary,
+				outcome: cycleScheduleJob.outcome,
+				lastErrorCode: cycleScheduleJob.lastErrorCode,
+				lastErrorSummary: cycleScheduleJob.lastErrorSummary,
+			})
+			.from(cycleScheduleJob)
+			.innerJoin(cycle, eq(cycleScheduleJob.cycleId, cycle.id))
+			.innerJoin(teamCycleSettings, eq(teamCycleSettings.teamId, cycle.teamId))
+			.where(
+				and(
+					eq(cycleScheduleJob.workspaceId, input.workspaceId),
+					eq(cycleScheduleJob.teamId, input.teamId),
+					inArray(cycleScheduleJob.jobType, [
+						"start_scheduled_cycle",
+						"complete_scheduled_cycle",
+					]),
+					or(
+						eq(cycleScheduleJob.status, "blocked"),
+						eq(cycleScheduleJob.status, "failed"),
+						and(
+							eq(cycleScheduleJob.status, "queued"),
+							gt(cycleScheduleJob.attempts, 0),
+						),
+					),
+					eq(cycle.origin, "scheduled"),
+					eq(cycle.scheduledBoundary, cycle.startDate),
+					eq(
+						cycleScheduleJob.eventRevisionAt,
+						sql`date_trunc('milliseconds', ${teamCycleSettings.updatedAt})`,
+					),
+					eq(teamCycleSettings.cadenceEnabled, true),
+					or(
+						and(
+							eq(cycleScheduleJob.jobType, "start_scheduled_cycle"),
+							eq(cycle.state, "planned"),
+							eq(cycleScheduleJob.scheduledBoundary, cycle.startDate),
+						),
+						and(
+							eq(cycleScheduleJob.jobType, "complete_scheduled_cycle"),
+							eq(cycle.state, "active"),
+							eq(teamCycleSettings.endBehavior, "automatic"),
+							eq(cycleScheduleJob.scheduledBoundary, cycle.endDate),
+						),
+					),
+				),
+			)
+			.orderBy(desc(cycleScheduleJob.updatedAt), desc(cycleScheduleJob.id))
+			.limit(100);
+
+		const canCompleteRetry = canComplete && canUpdateIssue;
+		return rows.flatMap((row) => {
+			if (
+				!isLifecycleJobType(row.jobType) ||
+				!row.cycleId ||
+				(row.status !== "blocked" &&
+					row.status !== "queued" &&
+					row.status !== "failed")
+			)
+				return [];
+			return [
+				{
+					...row,
+					cycleId: row.cycleId,
+					jobType: row.jobType,
+					status: row.status,
+					outcome:
+						row.outcome && visibleLifecycleProblemOutcomes.has(row.outcome)
+							? row.outcome
+							: null,
+					lastErrorCode:
+						row.lastErrorCode &&
+						visibleLifecycleProblemErrorCodes.has(row.lastErrorCode)
+							? row.lastErrorCode
+							: null,
+					lastErrorSummary:
+						row.status === "failed" ? LIFECYCLE_FAILURE_SUMMARY : null,
+					canRetry:
+						row.status === "failed" &&
+						(row.jobType === "start_scheduled_cycle"
+							? canStartRetry
+							: canCompleteRetry),
+				},
+			];
+		});
+	});
+
+const retryLifecycle = authedRouter
+	.input(cycleRetryLifecycleJobSchema)
+	.errors(retryLifecycleErrors)
+	.handler(async ({ context, input, errors }) => {
+		const [job] = await db
+			.select({
+				jobType: cycleScheduleJob.jobType,
+				teamId: cycleScheduleJob.teamId,
+			})
+			.from(cycleScheduleJob)
+			.where(
+				and(
+					eq(cycleScheduleJob.id, input.jobId),
+					eq(cycleScheduleJob.workspaceId, input.workspaceId),
+				),
+			)
+			.limit(1);
+		if (!job || !isLifecycleJobType(job.jobType)) throw errors.NOT_FOUND();
+
+		const userId = context.auth.session.userId;
+		if (
+			!(await hasActiveCycleMembership({
+				userId,
+				workspaceId: input.workspaceId,
+				teamId: job.teamId,
+			}))
+		) {
+			throw errors.NOT_FOUND();
+		}
+		const canRead = await isAllowed({
+			userId,
+			workspaceId: input.workspaceId,
+			teamId: job.teamId,
+			permissionKey: "cycle:read",
+		});
+		const canMutate =
+			job.jobType === "start_scheduled_cycle"
+				? await isAllowed({
+						userId,
+						workspaceId: input.workspaceId,
+						teamId: job.teamId,
+						permissionKey: "cycle:update",
+					})
+				: (
+						await Promise.all([
+							isAllowed({
+								userId,
+								workspaceId: input.workspaceId,
+								teamId: job.teamId,
+								permissionKey: "cycle:complete",
+							}),
+							isAllowed({
+								userId,
+								workspaceId: input.workspaceId,
+								teamId: job.teamId,
+								permissionKey: "issue:update",
+							}),
+						])
+					).every(Boolean);
+		if (!canRead || !canMutate) throw errors.NOT_FOUND();
+
+		const result = await retryLifecycleJob({
+			workspaceId: input.workspaceId,
+			jobId: input.jobId,
+			now: new Date(),
+		});
+		if (result.status === "not_found") throw errors.NOT_FOUND();
+		if (result.status === "not_failed") throw errors.JOB_NOT_FAILED();
+		if (result.status === "obsolete") throw errors.JOB_OBSOLETE();
+		return result;
+	});
+
 const cycleMetrics = authedRouter
 	.input(cycleMetricsSchema)
 	.errors(commonErrors)
@@ -1541,6 +1841,8 @@ export const cycleRouter = {
 	getSettings,
 	getSchedulePreview,
 	updateSettings,
+	retryLifecycleJob: retryLifecycle,
+	listLifecycleProblems,
 	metrics: cycleMetrics,
 	listPendingActions,
 	listNotifications,

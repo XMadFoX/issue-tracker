@@ -8,7 +8,7 @@ import {
 	test,
 } from "bun:test";
 import { createId } from "@paralleldrive/cuid2";
-import { count, eq, sql } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import setupDb from "../../utils/prepare-tests";
 import type { PlannedCycleHorizonResult } from "./generation";
 
@@ -110,20 +110,32 @@ describe("durable cycle worker", () => {
 
 	test("two complete workers execute one queued generation", async () => {
 		const { CycleWorker } = await import("./worker");
+		const startedJobTypes: string[] = [];
+		const onJobEvent = (event: { phase: string; jobType: string }) => {
+			if (event.phase === "started") startedJobTypes.push(event.jobType);
+		};
 		const [first, second] = await Promise.all([
 			new CycleWorker({
 				clock,
 				automationEnabled: true,
 				workerId: "run-one",
+				onJobEvent,
 			}).runOnce(),
 			new CycleWorker({
 				clock,
 				automationEnabled: true,
 				workerId: "run-two",
+				onJobEvent,
 			}).runOnce(),
 		]);
-		expect(first.claimed + second.claimed).toBe(1);
-		expect(first.acknowledged + second.acknowledged).toBe(1);
+		expect(
+			startedJobTypes.filter(
+				(jobType) => jobType === "generate_planned_cycles",
+			),
+		).toHaveLength(1);
+		expect(first.acknowledged + second.acknowledged).toBe(
+			first.claimed + second.claimed,
+		);
 		expect(
 			(await db.select().from(cycle).where(eq(cycle.origin, "scheduled")))
 				.length,
@@ -176,7 +188,7 @@ describe("durable cycle worker", () => {
 		expect(rows[0]).toMatchObject({ status: "succeeded", outcome: "disabled" });
 	});
 
-	test("reclaims stale leases with a new token", async () => {
+	test("reclaims stale leases without consuming another attempt", async () => {
 		const { claimGenerationJobs } = await import("./worker");
 		await db.insert(cycleScheduleJob).values({
 			id: createId(),
@@ -196,8 +208,42 @@ describe("durable cycle worker", () => {
 			config: { workerId: "new-worker", clock, batchSize: 1 },
 		});
 		expect(claimed).toHaveLength(1);
-		expect(claimed[0]?.attempts).toBe(2);
+		expect(claimed[0]?.attempts).toBe(1);
 		expect(claimed[0]?.claimToken).not.toBe("old-token");
+	});
+
+	test("final-attempt lease recovery terminalizes a subsequent failure without overflow", async () => {
+		const { CycleWorker } = await import("./worker");
+		await db.insert(cycleScheduleJob).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			jobType: "generate_planned_cycles",
+			scheduledBoundary: now,
+			status: "started",
+			attempts: 2,
+			maxAttempts: 2,
+			availableAt: now,
+			leaseExpiresAt: now,
+			workerId: "expired-final-worker",
+			claimToken: "expired-final-token",
+			startedAt: new Date(now.getTime() - 1),
+		});
+
+		await new CycleWorker({
+			clock,
+			automationEnabled: true,
+			workerId: "final-recovery-worker",
+			maxAttempts: 1,
+			generateHorizon: async () => {
+				throw new Error("failure after final lease recovery");
+			},
+		}).runOnce();
+
+		const [job] = await db.select().from(cycleScheduleJob);
+		expect(job).toMatchObject({ status: "failed", attempts: 2 });
+		expect(job?.leaseExpiresAt).toBeNull();
+		expect(job?.claimToken).toBeNull();
 	});
 
 	test("retries transient failures and persists terminal typed conflicts", async () => {
@@ -258,9 +304,62 @@ describe("durable cycle worker", () => {
 		).toBe(true);
 	});
 
-	test("kill switch leaves queued work untouched", async () => {
+	test("kill switch leaves generation and lifecycle work untouched", async () => {
 		const { CycleWorker, enqueueGenerationJobs } = await import("./worker");
 		await enqueueGenerationJobs({ clock });
+		const [settings] = await db.select().from(teamCycleSettings);
+		if (!settings) throw new Error("settings missing");
+		const activeCycleId = createId();
+		const plannedCycleId = createId();
+		await db.insert(cycle).values([
+			{
+				id: activeCycleId,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				name: "Disabled active cycle",
+				sequence: 1,
+				state: "active",
+				origin: "scheduled",
+				scheduledBoundary: new Date(now.getTime() - 7 * 86_400_000),
+				startDate: new Date(now.getTime() - 7 * 86_400_000),
+				endDate: now,
+			},
+			{
+				id: plannedCycleId,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				name: "Disabled planned cycle",
+				sequence: 2,
+				state: "planned",
+				origin: "scheduled",
+				scheduledBoundary: now,
+				startDate: now,
+				endDate: new Date(now.getTime() + 7 * 86_400_000),
+			},
+		]);
+		await db.insert(cycleScheduleJob).values([
+			{
+				id: createId(),
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				cycleId: activeCycleId,
+				jobType: "complete_scheduled_cycle",
+				scheduledBoundary: now,
+				eventRevisionAt: settings.updatedAt,
+				availableAt: now,
+			},
+			{
+				id: createId(),
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				cycleId: plannedCycleId,
+				jobType: "start_scheduled_cycle",
+				scheduledBoundary: now,
+				eventRevisionAt: settings.updatedAt,
+				availableAt: now,
+			},
+		]);
+
 		const result = await new CycleWorker({
 			clock,
 			automationEnabled: false,
@@ -271,7 +370,17 @@ describe("durable cycle worker", () => {
 			.select()
 			.from(cycleScheduleJob)
 			.where(eq(cycleScheduleJob.status, "queued"));
-		expect(queued).toHaveLength(1);
+		expect(queued).toHaveLength(3);
+		expect(queued.every((job) => job.attempts === 0)).toBeTrue();
+		const states = await db
+			.select({ id: cycle.id, state: cycle.state })
+			.from(cycle);
+		expect(states.find((row) => row.id === activeCycleId)?.state).toBe(
+			"active",
+		);
+		expect(states.find((row) => row.id === plannedCycleId)?.state).toBe(
+			"planned",
+		);
 	});
 
 	test("database enforces ownership, uniqueness, state, bounds, and cascades", async () => {
@@ -711,6 +820,7 @@ describe("durable cycle worker", () => {
 			clock,
 			automationEnabled: true,
 			workerId: "crashed-after-generation",
+			maxAttempts: 1,
 			generateHorizon: (input) => maintainPlannedCycleHorizon(input),
 			onBeforeAcknowledgement: () => {
 				if (!crashed) {
@@ -732,19 +842,26 @@ describe("durable cycle worker", () => {
 		);
 
 		const recovered = new CycleWorker({
-			clock: { now: () => new Date(now.getTime() + 5 * 60 * 1000 + 1) },
+			clock: { now: () => new Date(now.getTime() + 5 * 60 * 1000) },
 			automationEnabled: true,
 			workerId: "recovery-after-commit",
+			maxAttempts: 1,
 		});
 		await recovered.runOnce();
-		expect((await db.select().from(cycleScheduleJob))[0]?.status).toBe(
-			"succeeded",
+		const [recoveredJob] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.jobType, "generate_planned_cycles"));
+		expect(recoveredJob).toMatchObject({ status: "succeeded", attempts: 1 });
+		const recoveredCycles = (await db.select().from(cycle)).filter(
+			(row) => row.origin === "scheduled",
 		);
+		expect(recoveredCycles).toHaveLength(3);
 		expect(
-			(await db.select().from(cycle)).filter(
-				(row) => row.origin === "scheduled",
-			),
-		).toHaveLength(2);
+			new Set(
+				recoveredCycles.map((row) => row.scheduledBoundary?.toISOString()),
+			).size,
+		).toBe(recoveredCycles.length);
 		expect(recovered.getHealth().activeLeases).toBe(0);
 	});
 
@@ -791,7 +908,11 @@ describe("durable cycle worker", () => {
 			workerId: "batch-processor-failure",
 			generateHorizon: async () => {
 				calls += 1;
-				if (calls === 1) throw new Error("one job failed");
+				if (calls === 1) {
+					throw new Error(
+						"job=cjldummy team=ctdummy user=550e8400-e29b-41d4-a716-446655440000 unexpected private failure",
+					);
+				}
 				return { status: "already_satisfied", scheduledBoundaries: [] };
 			},
 		});
@@ -815,11 +936,19 @@ describe("durable cycle worker", () => {
 		]);
 		const result = await worker.runOnce();
 		expect(result).toMatchObject({ claimed: 2, acknowledged: 2 });
-		expect(
-			(await db.select().from(cycleScheduleJob))
-				.map((row) => row.status)
-				.sort(),
-		).toEqual(["queued", "succeeded"]);
+		const rows = await db.select().from(cycleScheduleJob);
+		expect(rows.map((row) => row.status).sort()).toEqual([
+			"queued",
+			"succeeded",
+		]);
+		const [queued] = rows.filter((row) => row.status === "queued");
+		expect(queued?.lastErrorCode).toBe("TRANSIENT_RUNTIME_ERROR");
+		expect(queued?.outcome).toBe("transient_error");
+		expect(queued?.lastErrorSummary).toBe("Cycle generation failed");
+		expect(JSON.stringify(queued)).not.toContain("cjldummy");
+		expect(JSON.stringify(queued)).not.toContain("ctdummy");
+		expect(JSON.stringify(queued)).not.toContain("550e8400");
+		expect(JSON.stringify(queued)).not.toContain("private failure");
 		expect(worker.getHealth().activeLeases).toBe(0);
 	});
 
@@ -1097,6 +1226,112 @@ describe("durable cycle worker", () => {
 		expect(rows.find((row) => row.id === failedId)?.status).toBe("failed");
 	});
 
+	test("enforces blocked lifecycle state and per-cycle event identity", async () => {
+		const cycleId = createId();
+		const boundary = new Date(now.getTime() + 86_400_000);
+		const [settings] = await db
+			.select({ updatedAt: teamCycleSettings.updatedAt })
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		if (!settings) throw new Error("settings missing");
+		await db.insert(cycle).values({
+			id: cycleId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Blocked lifecycle cycle",
+			sequence: 1,
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: boundary,
+			startDate: boundary,
+			endDate: new Date(boundary.getTime() + 86_400_000),
+		});
+		const base = {
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			cycleId,
+			eventRevisionAt: settings.updatedAt,
+			availableAt: now,
+		};
+		await db.insert(cycleScheduleJob).values({
+			...base,
+			id: createId(),
+			jobType: "start_scheduled_cycle",
+			scheduledBoundary: boundary,
+			status: "blocked",
+			attempts: 0,
+			startedAt: now,
+		});
+
+		const invalidBlockedRows: Array<{
+			jobType: "start_scheduled_cycle" | "complete_scheduled_cycle";
+			scheduledBoundary: Date;
+			leaseExpiresAt?: Date;
+			workerId?: string;
+			claimToken?: string;
+			startedAt?: Date | null;
+			finishedAt?: Date;
+		}> = [
+			{
+				jobType: "complete_scheduled_cycle",
+				scheduledBoundary: new Date(boundary.getTime() + 1),
+			},
+			{
+				jobType: "start_scheduled_cycle",
+				scheduledBoundary: new Date(boundary.getTime() + 2),
+				leaseExpiresAt: new Date(now.getTime() + 60_000),
+			},
+			{
+				jobType: "start_scheduled_cycle",
+				scheduledBoundary: new Date(boundary.getTime() + 3),
+				workerId: "blocked-worker",
+			},
+			{
+				jobType: "start_scheduled_cycle",
+				scheduledBoundary: new Date(boundary.getTime() + 4),
+				claimToken: "blocked-token",
+			},
+			{
+				jobType: "start_scheduled_cycle",
+				scheduledBoundary: new Date(boundary.getTime() + 5),
+				startedAt: null,
+			},
+			{
+				jobType: "start_scheduled_cycle",
+				scheduledBoundary: new Date(boundary.getTime() + 6),
+				finishedAt: now,
+			},
+		];
+		for (const invalid of invalidBlockedRows) {
+			await expectRejected(() =>
+				db.insert(cycleScheduleJob).values({
+					...base,
+					id: createId(),
+					status: "blocked",
+					attempts: 0,
+					startedAt: now,
+					...invalid,
+				}),
+			);
+		}
+
+		const duplicateBoundary = new Date(boundary.getTime() + 10);
+		await db.insert(cycleScheduleJob).values({
+			...base,
+			id: createId(),
+			jobType: "start_scheduled_cycle",
+			scheduledBoundary: duplicateBoundary,
+		});
+		await expectRejected(() =>
+			db.insert(cycleScheduleJob).values({
+				...base,
+				id: createId(),
+				jobType: "start_scheduled_cycle",
+				scheduledBoundary: duplicateBoundary,
+			}),
+		);
+	});
+
 	test("claims notification events only at the exact due instant", async () => {
 		const { claimGenerationJobs } = await import("./worker");
 		const notificationCycleId = createId();
@@ -1185,10 +1420,6 @@ describe("durable cycle worker", () => {
 		expect(first.length + second.length).toBe(1);
 		// The existing claim is intentionally still leased; recover it after the
 		// lease expires and prove the persisted summary is redacted and requeued.
-		await db
-			.update(teamCycleSettings)
-			.set({ cadenceEnabled: false })
-			.where(eq(teamCycleSettings.teamId, ids.team));
 		const recovered = new CycleWorker({
 			clock: { now: () => new Date(now.getTime() + 5 * 60_000 + 1) },
 			automationEnabled: true,
@@ -1202,7 +1433,9 @@ describe("durable cycle worker", () => {
 		await recovered.runOnce();
 		const rows = await db.select().from(cycleScheduleJob);
 		const row = rows.find(
-			(candidate) => candidate.cycleId === notificationCycleId,
+			(candidate) =>
+				candidate.cycleId === notificationCycleId &&
+				candidate.jobType === "send_cycle_reminder",
 		);
 		if (!row) throw new Error("notification job missing");
 		expect(row.status).toBe("queued");
@@ -1210,6 +1443,291 @@ describe("durable cycle worker", () => {
 		expect(row.availableAt.getTime()).toBe(
 			now.getTime() + 5 * 60_000 + 1 + 60_000,
 		);
+	});
+
+	test("blocks a due start without consuming attempts and recovers after manual completion", async () => {
+		const { CycleWorker } = await import("./worker");
+		const sourceId = createId();
+		const blockerId = createId();
+		await db.insert(cycle).values([
+			{
+				id: blockerId,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				name: "Active blocker",
+				sequence: 1,
+				state: "active",
+				startDate: new Date(now.getTime() - 7 * 86_400_000),
+				endDate: now,
+			},
+			{
+				id: sourceId,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				name: "Due scheduled cycle",
+				sequence: 2,
+				state: "planned",
+				origin: "scheduled",
+				scheduledBoundary: now,
+				startDate: now,
+				endDate: new Date(now.getTime() + 7 * 86_400_000),
+			},
+		]);
+		await new CycleWorker({
+			clock,
+			automationEnabled: true,
+			workerId: "blocked-start",
+		}).runOnce();
+		let [job] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(
+				and(
+					eq(cycleScheduleJob.cycleId, sourceId),
+					eq(cycleScheduleJob.jobType, "start_scheduled_cycle"),
+				),
+			);
+		expect(job).toMatchObject({
+			jobType: "start_scheduled_cycle",
+			status: "blocked",
+			attempts: 0,
+		});
+
+		await db
+			.update(cycle)
+			.set({ state: "completed" })
+			.where(eq(cycle.id, blockerId));
+		await new CycleWorker({
+			clock,
+			automationEnabled: true,
+			workerId: "recovered-start",
+		}).runOnce();
+		[job] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(
+				and(
+					eq(cycleScheduleJob.cycleId, sourceId),
+					eq(cycleScheduleJob.jobType, "start_scheduled_cycle"),
+				),
+			);
+		expect(job).toMatchObject({ status: "succeeded", outcome: "started" });
+		const [startedCycle] = await db
+			.select({ state: cycle.state })
+			.from(cycle)
+			.where(eq(cycle.id, sourceId));
+		expect(startedCycle?.state).toBe("active");
+	});
+
+	test("processes same-boundary completion before the next scheduled start", async () => {
+		const { CycleWorker } = await import("./worker");
+		const sourceId = createId();
+		const targetId = createId();
+		const sourceStart = new Date(now.getTime() - 7 * 86_400_000);
+		await db.insert(cycle).values([
+			{
+				id: sourceId,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				name: "Ending source",
+				sequence: 1,
+				state: "active",
+				origin: "scheduled",
+				scheduledBoundary: sourceStart,
+				startDate: sourceStart,
+				endDate: now,
+			},
+			{
+				id: targetId,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				name: "Starting target",
+				sequence: 2,
+				state: "planned",
+				origin: "scheduled",
+				scheduledBoundary: now,
+				startDate: now,
+				endDate: new Date(now.getTime() + 7 * 86_400_000),
+			},
+		]);
+		await new CycleWorker({
+			clock,
+			automationEnabled: true,
+			workerId: "ordered-lifecycle",
+		}).runOnce();
+		const states = await db
+			.select({ id: cycle.id, state: cycle.state })
+			.from(cycle);
+		expect(states.find((row) => row.id === sourceId)?.state).toBe("completed");
+		expect(states.find((row) => row.id === targetId)?.state).toBe("active");
+		const lifecycleJobs = (await db.select().from(cycleScheduleJob)).filter(
+			(row) => row.cycleId === sourceId || row.cycleId === targetId,
+		);
+		expect(
+			lifecycleJobs.find((row) => row.jobType === "complete_scheduled_cycle"),
+		).toMatchObject({ status: "succeeded", outcome: "completed" });
+		expect(
+			lifecycleJobs.find((row) => row.jobType === "start_scheduled_cycle"),
+		).toMatchObject({ status: "succeeded", outcome: "started" });
+	});
+
+	test("retries and exhausts transient lifecycle failures", async () => {
+		const { CycleWorker } = await import("./worker");
+		const sourceId = createId();
+		await db.insert(cycle).values({
+			id: sourceId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Failing start",
+			sequence: 1,
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: now,
+			startDate: now,
+			endDate: new Date(now.getTime() + 7 * 86_400_000),
+		});
+		const failingStart = async () => {
+			throw new Error("private lifecycle failure");
+		};
+		await new CycleWorker({
+			clock,
+			automationEnabled: true,
+			workerId: "lifecycle-failure-one",
+			maxAttempts: 2,
+			processStartLifecycle: failingStart,
+		}).runOnce();
+		let [job] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(
+				and(
+					eq(cycleScheduleJob.cycleId, sourceId),
+					eq(cycleScheduleJob.jobType, "start_scheduled_cycle"),
+				),
+			);
+		expect(job).toMatchObject({ status: "queued", attempts: 1 });
+		expect(job?.lastErrorSummary).not.toContain("private lifecycle failure");
+		const retryClock = {
+			now: () => new Date(now.getTime() + 60_000),
+		};
+		await new CycleWorker({
+			clock: retryClock,
+			automationEnabled: true,
+			workerId: "lifecycle-failure-two",
+			maxAttempts: 2,
+			processStartLifecycle: failingStart,
+		}).runOnce();
+		[job] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(
+				and(
+					eq(cycleScheduleJob.cycleId, sourceId),
+					eq(cycleScheduleJob.jobType, "start_scheduled_cycle"),
+				),
+			);
+		expect(job).toMatchObject({ status: "failed", attempts: 2 });
+	});
+
+	test("publishes every affected issue after automatic completion", async () => {
+		const { CycleWorker } = await import("./worker");
+		const sourceId = createId();
+		const sourceStart = new Date(now.getTime() - 7 * 86_400_000);
+		await db.insert(cycle).values({
+			id: sourceId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Published completion source",
+			sequence: 1,
+			state: "active",
+			origin: "scheduled",
+			scheduledBoundary: sourceStart,
+			startDate: sourceStart,
+			endDate: now,
+		});
+		const [source] = await db
+			.select()
+			.from(cycle)
+			.where(eq(cycle.id, sourceId));
+		if (!source) throw new Error("source missing");
+		const published: string[] = [];
+		await new CycleWorker({
+			clock,
+			automationEnabled: true,
+			workerId: "publication-success",
+			processCompleteLifecycle: async () => ({
+				status: "completed",
+				completion: {
+					ok: true,
+					affectedIssueIds: ["affected-one", "affected-two"],
+					counts: {
+						canceled: 0,
+						carriedOver: 2,
+						completed: 0,
+						returnedToBacklog: 0,
+					},
+					destinationCycleId: null,
+					source: { ...source, state: "completed" },
+					target: null,
+				},
+			}),
+			publishIssueUpdate: async (issueId) => {
+				published.push(issueId);
+			},
+		}).runOnce();
+		expect(published).toEqual(["affected-one", "affected-two"]);
+	});
+
+	test("acknowledges completion before best-effort publication", async () => {
+		const { CycleWorker } = await import("./worker");
+		const sourceId = createId();
+		const sourceStart = new Date(now.getTime() - 7 * 86_400_000);
+		await db.insert(cycle).values({
+			id: sourceId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Publishing source",
+			sequence: 1,
+			state: "active",
+			origin: "scheduled",
+			scheduledBoundary: sourceStart,
+			startDate: sourceStart,
+			endDate: now,
+		});
+		const [source] = await db
+			.select()
+			.from(cycle)
+			.where(eq(cycle.id, sourceId));
+		if (!source) throw new Error("source missing");
+		await new CycleWorker({
+			clock,
+			automationEnabled: true,
+			workerId: "publication-failure",
+			processCompleteLifecycle: async () => ({
+				status: "completed",
+				completion: {
+					ok: true,
+					affectedIssueIds: ["missing-issue"],
+					counts: {
+						canceled: 0,
+						carriedOver: 0,
+						completed: 0,
+						returnedToBacklog: 0,
+					},
+					destinationCycleId: null,
+					source: { ...source, state: "completed" },
+					target: null,
+				},
+			}),
+			publishIssueUpdate: async () => {
+				throw new Error("publisher unavailable");
+			},
+		}).runOnce();
+		const [job] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.cycleId, sourceId));
+		expect(job).toMatchObject({ status: "succeeded", outcome: "completed" });
 	});
 
 	test("a closed database marks the worker unready without retaining leases", async () => {

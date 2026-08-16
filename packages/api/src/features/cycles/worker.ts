@@ -10,16 +10,31 @@ import { and, asc, eq, isNotNull, lt, lte, or, sql } from "drizzle-orm";
 import { redactErrorSummary } from "../../cycles-worker-errors";
 import {
 	addWorkerActiveLease,
+	lifecycleMetricAttributes,
 	recordWorkerGenerationOutcome,
 	recordWorkerJobEvent,
 	recordWorkerLatency,
 	setWorkerDbReady,
 } from "../../cycles-worker-metrics";
 import { env } from "../../env";
+import { issuePublisher } from "../issues/publisher";
+import { getIssueWithRelations } from "../issues/queries";
 import {
 	maintainPlannedCycleHorizon,
 	type PlannedCycleHorizonResult,
 } from "./generation";
+import type {
+	CompleteScheduledCycleResult,
+	StartScheduledCycleResult,
+} from "./lifecycle";
+import { completeScheduledCycle, startScheduledCycle } from "./lifecycle";
+import {
+	COMPLETE_LIFECYCLE_JOB_TYPE,
+	enqueueLifecycleJobs,
+	isLifecycleJobType,
+	type LifecycleJobType,
+	START_LIFECYCLE_JOB_TYPE,
+} from "./lifecycle-jobs";
 import {
 	enqueueNotificationJobs,
 	isNotificationJobType,
@@ -32,7 +47,8 @@ import { enumerateScheduledCycleOccurrences } from "./schedule";
 export const GENERATION_JOB_TYPE = "generate_planned_cycles" as const;
 export type CycleWorkerJobType =
 	| typeof GENERATION_JOB_TYPE
-	| NotificationJobType;
+	| NotificationJobType
+	| LifecycleJobType;
 export const DEFAULT_MAX_ATTEMPTS = 8;
 export const DEFAULT_LEASE_MS = 5 * 60 * 1000;
 export const DEFAULT_BACKOFF_MS = 60 * 1000;
@@ -48,6 +64,12 @@ export type GeneratePlannedCycles = (input: {
 	teamId: string;
 	now: Date;
 }) => Promise<PlannedCycleHorizonResult>;
+
+export type ProcessStartLifecycle = typeof startScheduledCycle;
+export type ProcessCompleteLifecycle = typeof completeScheduledCycle;
+type LifecycleOutcome =
+	| StartScheduledCycleResult
+	| CompleteScheduledCycleResult;
 
 export type WorkerJobEvent = {
 	phase: "started" | "completed" | "failed";
@@ -82,6 +104,15 @@ export type CycleWorkerConfig = {
 		outcome: NotificationJobOutcome,
 	) => void;
 	onBeforeNotificationFailureAcknowledgement?: (jobId: string) => void;
+	onBeforeLifecycleAcknowledgement?: (
+		jobId: string,
+		outcome: LifecycleOutcome,
+	) => void;
+	onBeforeLifecycleFailureAcknowledgement?: (jobId: string) => void;
+	/** Test/runtime seams for deterministic lifecycle crash/retry behavior. */
+	processStartLifecycle?: ProcessStartLifecycle;
+	processCompleteLifecycle?: ProcessCompleteLifecycle;
+	publishIssueUpdate?: (issueId: string, workspaceId: string) => Promise<void>;
 	/** Test/runtime seam for exercising notification retry semantics. */
 	processNotification?: (
 		job: CycleNotificationWorkerJob,
@@ -122,6 +153,8 @@ type ClaimedJob = Pick<
 	| "maxAttempts"
 	| "claimToken"
 >;
+
+type ClaimedLifecycleJob = ClaimedJob & { jobType: LifecycleJobType };
 
 export type CycleNotificationWorkerJob = ClaimedJob & {
 	jobType: NotificationJobType;
@@ -230,23 +263,26 @@ export async function claimGenerationJobs({
 			.select()
 			.from(cycleScheduleJob)
 			.where(
-				and(
-					or(
-						and(
-							eq(cycleScheduleJob.status, "queued"),
-							lte(cycleScheduleJob.availableAt, now),
-						),
-						and(
-							eq(cycleScheduleJob.status, "started"),
-							isNotNull(cycleScheduleJob.leaseExpiresAt),
-							lt(cycleScheduleJob.leaseExpiresAt, now),
-						),
+				or(
+					and(
+						eq(cycleScheduleJob.status, "queued"),
+						lte(cycleScheduleJob.availableAt, now),
+						lt(cycleScheduleJob.attempts, cycleScheduleJob.maxAttempts),
+						lt(cycleScheduleJob.attempts, maxAttempts),
 					),
-					lt(cycleScheduleJob.attempts, cycleScheduleJob.maxAttempts),
-					lt(cycleScheduleJob.attempts, maxAttempts),
+					and(
+						eq(cycleScheduleJob.status, "started"),
+						isNotNull(cycleScheduleJob.leaseExpiresAt),
+						lte(cycleScheduleJob.leaseExpiresAt, now),
+						lte(cycleScheduleJob.attempts, cycleScheduleJob.maxAttempts),
+					),
 				),
 			)
-			.orderBy(asc(cycleScheduleJob.availableAt), asc(cycleScheduleJob.id))
+			.orderBy(
+				asc(cycleScheduleJob.availableAt),
+				sql`case when ${cycleScheduleJob.jobType} = ${COMPLETE_LIFECYCLE_JOB_TYPE} then 0 when ${cycleScheduleJob.jobType} = ${START_LIFECYCLE_JOB_TYPE} then 1 else 2 end`,
+				asc(cycleScheduleJob.id),
+			)
 			.limit(batchSize)
 			.for("update", { skipLocked: true });
 
@@ -270,12 +306,15 @@ export async function claimGenerationJobs({
 				Math.max(0, now.getTime() - candidate.availableAt.getTime()),
 			);
 			const claimToken = crypto.randomUUID();
+			const recoveringLease = candidate.status === "started";
 			const [updated] = await tx
 				.update(cycleScheduleJob)
 				.set({
 					status: "started",
-					attempts: sql<number>`${cycleScheduleJob.attempts} + 1`,
-					maxAttempts,
+					attempts: recoveringLease
+						? candidate.attempts
+						: sql<number>`${cycleScheduleJob.attempts} + 1`,
+					maxAttempts: recoveringLease ? candidate.maxAttempts : maxAttempts,
 					workerId: config.workerId,
 					claimToken,
 					leaseExpiresAt,
@@ -377,6 +416,214 @@ async function acknowledgeFailure(
 	return exhausted ? "failed" : "requeued";
 }
 
+async function acknowledgeBlocked(
+	job: ClaimedJob,
+	clock: WorkerClock,
+): Promise<boolean> {
+	if (!job.claimToken) return false;
+	const updated = await db
+		.update(cycleScheduleJob)
+		.set({
+			status: "blocked",
+			attempts: sql<number>`greatest(${cycleScheduleJob.attempts} - 1, 0)`,
+			outcome: "active_cycle_blocked",
+			availableAt: clock.now(),
+			finishedAt: null,
+			leaseExpiresAt: null,
+			workerId: null,
+			claimToken: null,
+			lastErrorCode: null,
+			lastErrorSummary: null,
+		})
+		.where(
+			and(
+				eq(cycleScheduleJob.id, job.id),
+				eq(cycleScheduleJob.status, "started"),
+				eq(cycleScheduleJob.claimToken, job.claimToken),
+			),
+		)
+		.returning({ id: cycleScheduleJob.id });
+	return updated.length > 0;
+}
+
+async function publishIssueUpdateBestEffort(
+	issueId: string,
+	workspaceId: string,
+): Promise<void> {
+	try {
+		const freshIssue = await getIssueWithRelations(issueId, workspaceId);
+		if (!freshIssue) return;
+		await issuePublisher.publish("issue:changed", {
+			type: "update",
+			workspaceId,
+			teamId: freshIssue.teamId,
+			issue: freshIssue,
+		});
+	} catch {
+		// Database state and durable activity are authoritative. A best-effort
+		// live update must never roll back or re-fail an acknowledged lifecycle job.
+	}
+}
+
+const successfulLifecycleStatuses = new Set([
+	"started",
+	"already_started",
+	"completed",
+	"already_completed",
+	"not_found",
+	"obsolete_settings",
+	"obsolete_cycle_state",
+]);
+
+async function processLifecycleJob({
+	job,
+	clock,
+	onJobEvent,
+	onBeforeAcknowledgement,
+	onBeforeFailureAcknowledgement,
+	processStart,
+	processComplete,
+	publishIssueUpdate,
+}: {
+	job: ClaimedLifecycleJob;
+	clock: WorkerClock;
+	onJobEvent: ((event: WorkerJobEvent) => void) | undefined;
+	onBeforeAcknowledgement:
+		| ((jobId: string, outcome: LifecycleOutcome) => void)
+		| undefined;
+	onBeforeFailureAcknowledgement: ((jobId: string) => void) | undefined;
+	processStart: ProcessStartLifecycle;
+	processComplete: ProcessCompleteLifecycle;
+	publishIssueUpdate: (issueId: string, workspaceId: string) => Promise<void>;
+}): Promise<boolean> {
+	const event = {
+		jobId: job.id,
+		jobType: job.jobType,
+		teamId: job.teamId,
+		scheduledBoundary: job.scheduledBoundary,
+		attempt: job.attempts,
+	};
+	onJobEvent?.({ ...event, phase: "started" });
+	if (!job.cycleId || !job.eventRevisionAt) {
+		const acknowledgement = await acknowledgeFailure(
+			job,
+			"INVALID_JOB_IDENTITY",
+			"Lifecycle job is missing its cycle or settings revision identity",
+			clock,
+			"invalid_job_identity",
+			false,
+		);
+		if (acknowledgement === "failed") {
+			recordWorkerJobEvent(
+				"failed",
+				lifecycleMetricAttributes(job.jobType, "invalid_job_identity"),
+			);
+			onJobEvent?.({
+				...event,
+				phase: "failed",
+				outcome: "invalid_job_identity",
+			});
+		}
+		return acknowledgement !== "lost";
+	}
+	let outcome: LifecycleOutcome;
+	try {
+		const input = {
+			workspaceId: job.workspaceId,
+			teamId: job.teamId,
+			cycleId: job.cycleId,
+			scheduledBoundary: job.scheduledBoundary,
+			eventRevisionAt: job.eventRevisionAt,
+			now: clock.now(),
+		};
+		outcome =
+			job.jobType === START_LIFECYCLE_JOB_TYPE
+				? await processStart(input)
+				: await processComplete({ ...input, jobId: job.id });
+	} catch (_error: unknown) {
+		onBeforeFailureAcknowledgement?.(job.id);
+		const acknowledgement = await acknowledgeFailure(
+			job,
+			"TRANSIENT_RUNTIME_ERROR",
+			"Lifecycle processing failed",
+			clock,
+			"transient_error",
+			true,
+		);
+		const attributes = lifecycleMetricAttributes(
+			job.jobType,
+			"transient_error",
+		);
+		if (acknowledgement === "requeued") {
+			recordWorkerJobEvent("retried", attributes);
+			recordWorkerJobEvent("requeued", attributes);
+		}
+		if (acknowledgement === "failed") {
+			recordWorkerJobEvent("failed", attributes);
+		}
+		if (acknowledgement === "lost") return false;
+		onJobEvent?.({ ...event, phase: "failed", outcome: "transient_error" });
+		return true;
+	}
+
+	onBeforeAcknowledgement?.(job.id, outcome);
+	if (outcome.status === "blocked") {
+		const acknowledged = await acknowledgeBlocked(job, clock);
+		if (!acknowledged) return false;
+		recordWorkerJobEvent(
+			"blocked",
+			lifecycleMetricAttributes(job.jobType, outcome.status),
+		);
+		onJobEvent?.({ ...event, phase: "completed", outcome: outcome.status });
+		return true;
+	}
+	if (successfulLifecycleStatuses.has(outcome.status)) {
+		const acknowledged = await acknowledgeSuccess(job, outcome, clock);
+		if (!acknowledged) return false;
+		if (outcome.status === "completed") {
+			for (const issueId of outcome.completion.affectedIssueIds) {
+				try {
+					await publishIssueUpdate(issueId, job.workspaceId);
+				} catch {
+					// Live publication is best effort after the durable job acknowledgement.
+				}
+			}
+		}
+		recordWorkerJobEvent(
+			"succeeded",
+			lifecycleMetricAttributes(job.jobType, outcome.status),
+		);
+		onJobEvent?.({ ...event, phase: "completed", outcome: outcome.status });
+		return true;
+	}
+	const retryable = outcome.status === "not_due";
+	const code =
+		outcome.status === "generation_failed"
+			? outcome.generationStatus
+			: outcome.status === "completion_failed"
+				? outcome.completionCode
+				: outcome.status;
+	const acknowledgement = await acknowledgeFailure(
+		job,
+		code,
+		code,
+		clock,
+		outcome.status,
+		retryable,
+	);
+	const attributes = lifecycleMetricAttributes(job.jobType, outcome.status);
+	if (acknowledgement === "requeued") {
+		recordWorkerJobEvent("retried", attributes);
+		recordWorkerJobEvent("requeued", attributes);
+	}
+	if (acknowledgement === "failed") {
+		recordWorkerJobEvent("failed", attributes);
+	}
+	if (acknowledgement === "lost") return false;
+	onJobEvent?.({ ...event, phase: "failed", outcome: outcome.status });
+	return true;
+}
+
 async function processJob(
 	job: ClaimedJob,
 	clock: WorkerClock,
@@ -396,9 +643,40 @@ async function processJob(
 	processNotification:
 		| ((job: CycleNotificationWorkerJob) => Promise<NotificationJobOutcome>)
 		| undefined,
+	onBeforeLifecycleAcknowledgement:
+		| ((jobId: string, outcome: LifecycleOutcome) => void)
+		| undefined,
+	onBeforeLifecycleFailureAcknowledgement:
+		| ((jobId: string) => void)
+		| undefined,
+	processStartLifecycle: ProcessStartLifecycle,
+	processCompleteLifecycle: ProcessCompleteLifecycle,
+	publishIssueUpdate: (issueId: string, workspaceId: string) => Promise<void>,
 ): Promise<boolean> {
+	if (isLifecycleJobType(job.jobType)) {
+		return await processLifecycleJob({
+			job: { ...job, jobType: job.jobType },
+			clock,
+			onJobEvent,
+			onBeforeAcknowledgement: onBeforeLifecycleAcknowledgement,
+			onBeforeFailureAcknowledgement: onBeforeLifecycleFailureAcknowledgement,
+			processStart: processStartLifecycle,
+			processComplete: processCompleteLifecycle,
+			publishIssueUpdate,
+		});
+	}
 	if (job.jobType !== GENERATION_JOB_TYPE) {
-		if (!isNotificationJobType(job.jobType)) return false;
+		if (!isNotificationJobType(job.jobType)) {
+			const acknowledgement = await acknowledgeFailure(
+				job,
+				"UNSUPPORTED_JOB_TYPE",
+				"Unsupported cycle worker job type",
+				clock,
+				"unsupported_job_type",
+				false,
+			);
+			return acknowledgement !== "lost";
+		}
 		const event = {
 			jobId: job.id,
 			jobType: job.jobType,
@@ -431,12 +709,12 @@ async function processJob(
 							cycleId: notificationJob.cycleId,
 						},
 					});
-		} catch (error: unknown) {
+		} catch (_error: unknown) {
 			onBeforeNotificationFailureAcknowledgement?.(job.id);
 			const acknowledgement = await acknowledgeFailure(
 				job,
 				"TRANSIENT_RUNTIME_ERROR",
-				redactErrorSummary(error),
+				"Notification processing failed",
 				clock,
 				"transient_error",
 				true,
@@ -478,12 +756,12 @@ async function processJob(
 			now: clock.now(),
 		});
 		recordWorkerLatency("process", performance.now() - startedAt);
-	} catch (error: unknown) {
+	} catch (_error: unknown) {
 		onBeforeFailureAcknowledgement?.(job.id);
 		const acknowledgement = await acknowledgeFailure(
 			job,
 			"TRANSIENT_RUNTIME_ERROR",
-			redactErrorSummary(error),
+			"Cycle generation failed",
 			clock,
 			"transient_error",
 			true,
@@ -551,6 +829,12 @@ export class CycleWorker {
 				config.onBeforeNotificationAcknowledgement,
 			onBeforeNotificationFailureAcknowledgement:
 				config.onBeforeNotificationFailureAcknowledgement,
+			onBeforeLifecycleAcknowledgement: config.onBeforeLifecycleAcknowledgement,
+			onBeforeLifecycleFailureAcknowledgement:
+				config.onBeforeLifecycleFailureAcknowledgement,
+			processStartLifecycle: config.processStartLifecycle,
+			processCompleteLifecycle: config.processCompleteLifecycle,
+			publishIssueUpdate: config.publishIssueUpdate,
 			processNotification: config.processNotification,
 			generateHorizon: config.generateHorizon,
 		};
@@ -573,7 +857,13 @@ export class CycleWorker {
 			const generationEnqueue = await enqueueGenerationJobs({
 				clock: this.config.clock,
 			});
-			let enqueue = generationEnqueue;
+			const lifecycleEnqueue = await enqueueLifecycleJobs({
+				now: this.config.clock.now(),
+			});
+			let enqueue = {
+				enqueued: generationEnqueue.enqueued + lifecycleEnqueue.enqueued,
+				skipped: generationEnqueue.skipped + lifecycleEnqueue.skipped,
+			};
 			recordWorkerLatency("poll", performance.now() - pollStartedAt);
 			this.lastSuccessfulPollAt = this.config.clock.now();
 			if (this.stopping) {
@@ -601,6 +891,11 @@ export class CycleWorker {
 							this.config.onBeforeNotificationAcknowledgement,
 							this.config.onBeforeNotificationFailureAcknowledgement,
 							this.config.processNotification,
+							this.config.onBeforeLifecycleAcknowledgement,
+							this.config.onBeforeLifecycleFailureAcknowledgement,
+							this.config.processStartLifecycle ?? startScheduledCycle,
+							this.config.processCompleteLifecycle ?? completeScheduledCycle,
+							this.config.publishIssueUpdate ?? publishIssueUpdateBestEffort,
 						)
 					)
 						acknowledged += 1;

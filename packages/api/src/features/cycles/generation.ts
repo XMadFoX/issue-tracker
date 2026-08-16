@@ -180,6 +180,109 @@ function findMissingOccurrences({
 	return { status: "unreachable" };
 }
 
+export async function maintainPlannedCycleHorizonInTransaction({
+	tx,
+	workspaceId,
+	teamId,
+	now,
+}: {
+	tx: CycleTransaction;
+	workspaceId: string;
+	teamId: string;
+	now: Date;
+}): Promise<PlannedCycleHorizonResult> {
+	await lockCycleTeam({ tx, workspaceId, teamId });
+	const state = await getLockedGenerationState({ tx, workspaceId, teamId });
+	if (!state) return { status: "team_not_found" };
+	if (!state.settings) return { status: "settings_missing" };
+	if (!state.settings.cadenceEnabled) return { status: "disabled" };
+	if (!state.settings.anchorDate) return { status: "anchor_required" };
+	if (!isValidIanaTimezone(state.teamRow.workspaceTimezone)) {
+		return {
+			status: "invalid_timezone",
+			workspaceTimezone: state.teamRow.workspaceTimezone,
+		};
+	}
+
+	const settings = toScheduleSettings(state.settings);
+	const [firstOccurrence] = enumerateScheduledCycleOccurrences({
+		workspaceTimezone: state.teamRow.workspaceTimezone,
+		settings,
+		now,
+		count: 1,
+	});
+	if (!firstOccurrence) return { status: "horizon_unreachable" };
+	const persistedIdentityCount = state.cycles.filter(
+		(cycleRow) =>
+			cycleRow.origin === "scheduled" &&
+			cycleRow.scheduledBoundary !== null &&
+			cycleRow.scheduledBoundary >= firstOccurrence.boundary,
+	).length;
+	const occurrences = enumerateScheduledCycleOccurrences({
+		workspaceTimezone: state.teamRow.workspaceTimezone,
+		settings,
+		now,
+		count: state.settings.planningHorizon + persistedIdentityCount,
+	});
+	const reconciliation = findMissingOccurrences({
+		cycles: state.cycles,
+		occurrences,
+		planningHorizon: state.settings.planningHorizon,
+	});
+	if (reconciliation.status === "satisfied") {
+		return {
+			status: "already_satisfied",
+			scheduledBoundaries: reconciliation.scheduledBoundaries,
+		};
+	}
+	if (reconciliation.status === "unreachable") {
+		return { status: "horizon_unreachable" };
+	}
+	if (reconciliation.status === "manual_conflict") {
+		return {
+			status: "manual_cycle_conflict",
+			cycleId: reconciliation.cycleId,
+			scheduledBoundary: reconciliation.scheduledBoundary,
+		};
+	}
+	if (reconciliation.status === "scheduled_conflict") {
+		return {
+			status: "scheduled_cycle_conflict",
+			cycleId: reconciliation.cycleId,
+			scheduledBoundary: reconciliation.scheduledBoundary,
+		};
+	}
+
+	const sequenceStart = await getNextCycleSequence({
+		tx,
+		workspaceId,
+		teamId,
+	});
+	const values: (typeof cycle.$inferInsert)[] = reconciliation.occurrences.map(
+		(occurrence, index) => {
+			const sequence = sequenceStart + index;
+			return {
+				id: createId(),
+				workspaceId,
+				teamId,
+				name: `Cycle ${sequence}`,
+				sequence,
+				startDate: occurrence.boundary,
+				endDate: occurrence.endDate,
+				state: "planned",
+				origin: "scheduled",
+				scheduledBoundary: occurrence.boundary,
+			};
+		},
+	);
+	const created = await tx.insert(cycle).values(values).returning();
+	return {
+		status: "created",
+		created,
+		scheduledBoundaries: uniqueBoundaries(created),
+	};
+}
+
 export async function maintainPlannedCycleHorizon({
 	workspaceId,
 	teamId,
@@ -189,95 +292,7 @@ export async function maintainPlannedCycleHorizon({
 	teamId: string;
 	now: Date;
 }): Promise<PlannedCycleHorizonResult> {
-	return await db.transaction(async (tx) => {
-		await lockCycleTeam({ tx, workspaceId, teamId });
-		const state = await getLockedGenerationState({ tx, workspaceId, teamId });
-		if (!state) return { status: "team_not_found" };
-		if (!state.settings) return { status: "settings_missing" };
-		if (!state.settings.cadenceEnabled) return { status: "disabled" };
-		if (!state.settings.anchorDate) return { status: "anchor_required" };
-		if (!isValidIanaTimezone(state.teamRow.workspaceTimezone)) {
-			return {
-				status: "invalid_timezone",
-				workspaceTimezone: state.teamRow.workspaceTimezone,
-			};
-		}
-
-		const settings = toScheduleSettings(state.settings);
-		const [firstOccurrence] = enumerateScheduledCycleOccurrences({
-			workspaceTimezone: state.teamRow.workspaceTimezone,
-			settings,
-			now,
-			count: 1,
-		});
-		if (!firstOccurrence) return { status: "horizon_unreachable" };
-		const persistedIdentityCount = state.cycles.filter(
-			(cycleRow) =>
-				cycleRow.origin === "scheduled" &&
-				cycleRow.scheduledBoundary !== null &&
-				cycleRow.scheduledBoundary >= firstOccurrence.boundary,
-		).length;
-		const occurrences = enumerateScheduledCycleOccurrences({
-			workspaceTimezone: state.teamRow.workspaceTimezone,
-			settings,
-			now,
-			count: state.settings.planningHorizon + persistedIdentityCount,
-		});
-		const reconciliation = findMissingOccurrences({
-			cycles: state.cycles,
-			occurrences,
-			planningHorizon: state.settings.planningHorizon,
-		});
-		if (reconciliation.status === "satisfied") {
-			return {
-				status: "already_satisfied",
-				scheduledBoundaries: reconciliation.scheduledBoundaries,
-			};
-		}
-		if (reconciliation.status === "unreachable") {
-			return { status: "horizon_unreachable" };
-		}
-		if (reconciliation.status === "manual_conflict") {
-			return {
-				status: "manual_cycle_conflict",
-				cycleId: reconciliation.cycleId,
-				scheduledBoundary: reconciliation.scheduledBoundary,
-			};
-		}
-		if (reconciliation.status === "scheduled_conflict") {
-			return {
-				status: "scheduled_cycle_conflict",
-				cycleId: reconciliation.cycleId,
-				scheduledBoundary: reconciliation.scheduledBoundary,
-			};
-		}
-
-		const sequenceStart = await getNextCycleSequence({
-			tx,
-			workspaceId,
-			teamId,
-		});
-		const values: (typeof cycle.$inferInsert)[] =
-			reconciliation.occurrences.map((occurrence, index) => {
-				const sequence = sequenceStart + index;
-				return {
-					id: createId(),
-					workspaceId,
-					teamId,
-					name: `Cycle ${sequence}`,
-					sequence,
-					startDate: occurrence.boundary,
-					endDate: occurrence.endDate,
-					state: "planned",
-					origin: "scheduled",
-					scheduledBoundary: occurrence.boundary,
-				};
-			});
-		const created = await tx.insert(cycle).values(values).returning();
-		return {
-			status: "created",
-			created,
-			scheduledBoundaries: uniqueBoundaries(created),
-		};
-	});
+	return await db.transaction((tx) =>
+		maintainPlannedCycleHorizonInTransaction({ tx, workspaceId, teamId, now }),
+	);
 }
