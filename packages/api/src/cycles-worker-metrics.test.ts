@@ -51,6 +51,22 @@ const metricValue = (name: string): number | undefined => {
 	return metric.dataPoints[0]?.value;
 };
 
+const metricAttributes = (name: string) => {
+	const metric = exportedMetrics().findLast(
+		(candidate) => candidate.descriptor.name === name,
+	);
+	return metric?.dataPoints[0]?.attributes;
+};
+
+const lifecycleMetricAttributesFor = (name: string) => {
+	const metric = exportedMetrics().findLast(
+		(candidate) => candidate.descriptor.name === name,
+	);
+	return metric?.dataPoints.find(
+		(point) => point.attributes["job.type"] !== undefined,
+	)?.attributes;
+};
+
 beforeAll(async () => {
 	teardown = await setupDb();
 	const { db } = await import("db");
@@ -126,5 +142,64 @@ describe("cycle worker metric sink", () => {
 		await provider.forceFlush();
 		expect(metricValue("cycles.worker.db_ready")).toBe(0);
 		setWorkerDbReady(true);
+	});
+
+	test("exports low-cardinality lifecycle type and bounded outcome attributes", async () => {
+		const { lifecycleMetricAttributes, recordWorkerJobEvent } = await import(
+			"./cycles-worker-metrics"
+		);
+		expect(
+			lifecycleMetricAttributes(
+				"start_scheduled_cycle",
+				"invalid_job_identity",
+			),
+		).toEqual({
+			"job.type": "start_scheduled_cycle",
+			"job.outcome": "invalid_job_identity",
+		});
+		recordWorkerJobEvent(
+			"blocked",
+			lifecycleMetricAttributes("start_scheduled_cycle", "blocked"),
+		);
+		recordWorkerJobEvent(
+			"requeued",
+			lifecycleMetricAttributes(
+				"complete_scheduled_cycle",
+				"unexpected-unbounded-outcome",
+			),
+		);
+		const lifecycleEvents = ["retried", "failed", "succeeded"] satisfies Array<
+			"retried" | "failed" | "succeeded"
+		>;
+		for (const event of lifecycleEvents) {
+			recordWorkerJobEvent(
+				event,
+				lifecycleMetricAttributes("complete_scheduled_cycle", "completed"),
+			);
+		}
+		await provider.forceFlush();
+		expect(metricValue("cycles.worker.jobs.blocked")).toBe(1);
+		expect(metricAttributes("cycles.worker.jobs.blocked")).toEqual({
+			"job.type": "start_scheduled_cycle",
+			"job.outcome": "blocked",
+		});
+		expect(metricAttributes("cycles.worker.jobs.requeued")).toEqual({
+			"job.type": "complete_scheduled_cycle",
+			"job.outcome": "other",
+		});
+		for (const event of lifecycleEvents) {
+			expect(
+				lifecycleMetricAttributesFor(`cycles.worker.jobs.${event}`),
+			).toEqual({
+				"job.type": "complete_scheduled_cycle",
+				"job.outcome": "completed",
+			});
+		}
+		expect(metricAttributes("cycles.worker.jobs.blocked")).not.toHaveProperty(
+			"job.id",
+		);
+		expect(metricAttributes("cycles.worker.jobs.blocked")).not.toHaveProperty(
+			"team.id",
+		);
 	});
 });

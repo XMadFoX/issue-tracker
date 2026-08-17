@@ -13,6 +13,44 @@ let activeLeases: UpDownCounter | undefined;
 let dbReadiness: UpDownCounter | undefined;
 let dbReadyState = false;
 
+export type LifecycleMetricJobType =
+	| "start_scheduled_cycle"
+	| "complete_scheduled_cycle";
+
+const LIFECYCLE_METRIC_OUTCOMES = new Set([
+	"started",
+	"already_started",
+	"blocked",
+	"completed",
+	"already_completed",
+	"not_found",
+	"not_due",
+	"obsolete_settings",
+	"obsolete_cycle_state",
+	"invalid_provenance",
+	"invalid_job_identity",
+	"generation_failed",
+	"no_rollover_target",
+	"completion_failed",
+	"transient_error",
+]);
+
+export function lifecycleMetricAttributes(
+	jobType: LifecycleMetricJobType,
+	outcome?: string,
+): Attributes {
+	return {
+		"job.type": jobType,
+		...(outcome
+			? {
+					"job.outcome": LIFECYCLE_METRIC_OUTCOMES.has(outcome)
+						? outcome
+						: "other",
+				}
+			: {}),
+	};
+}
+
 function counter(name: string, description: string): Counter {
 	const existing = counters.get(name);
 	if (existing) return existing;
@@ -43,6 +81,8 @@ export function recordWorkerJobEvent(
 		| "claimed"
 		| "succeeded"
 		| "skipped_disabled"
+		| "blocked"
+		| "requeued"
 		| "retried"
 		| "failed"
 		| "lease_recovered",

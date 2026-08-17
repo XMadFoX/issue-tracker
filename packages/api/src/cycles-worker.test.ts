@@ -66,14 +66,20 @@ function spawnWorker(
 }
 
 describe("real cycle worker entrypoint", () => {
-	test("--once exits after closing its database pool", async () => {
+	test("--once configures standalone logging once and closes its database pool", async () => {
 		const port = 42000 + (process.pid % 1000);
 		const child = spawnWorker(
 			port,
 			{ CYCLES_AUTOMATION_ENABLED: "false" },
 			true,
 		);
-		expect(await child.exited).toBe(0);
+		const [exitCode, stderr] = await Promise.all([
+			child.exited,
+			new Response(child.stderr).text(),
+		]);
+		expect(stderr).not.toContain("ConfigureError");
+		expect(stderr).not.toContain("Already configured");
+		expect(exitCode).toBe(0);
 	});
 
 	test("SIGTERM and SIGINT drain active work before closing resources", async () => {

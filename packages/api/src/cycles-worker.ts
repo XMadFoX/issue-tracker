@@ -1,8 +1,53 @@
 import { closeDb, env as databaseEnv } from "db";
-import { redactErrorSummary } from "./cycles-worker-errors";
 import { env } from "./env";
-import type { CycleWorker } from "./features/cycles/worker";
+import type { CycleWorker, WorkerJobEvent } from "./features/cycles/worker";
 import { initOtel, shutdownOtel } from "./otel-instrumentation";
+
+const LOGGABLE_JOB_OUTCOMES = new Set([
+	"created",
+	"already_satisfied",
+	"disabled",
+	"anchor_required",
+	"team_not_found",
+	"settings_missing",
+	"invalid_timezone",
+	"manual_cycle_conflict",
+	"scheduled_cycle_conflict",
+	"horizon_unreachable",
+	"obsolete_settings",
+	"obsolete_cycle_state",
+	"no_recipients",
+	"started",
+	"already_started",
+	"blocked",
+	"completed",
+	"already_completed",
+	"not_found",
+	"not_due",
+	"invalid_provenance",
+	"invalid_job_identity",
+	"generation_failed",
+	"no_rollover_target",
+	"completion_failed",
+	"transient_error",
+]);
+
+export function cycleWorkerJobLogContext(event: WorkerJobEvent) {
+	return {
+		phase: event.phase,
+		jobType: event.jobType,
+		attempt: event.attempt,
+		outcome: event.outcome
+			? LOGGABLE_JOB_OUTCOMES.has(event.outcome)
+				? event.outcome
+				: "unknown"
+			: undefined,
+	};
+}
+
+export function cycleWorkerRunErrorContext(_error: unknown) {
+	return { error: "Cycle worker run failed" };
+}
 
 export async function runCycleWorker(): Promise<void> {
 	if (
@@ -23,7 +68,11 @@ export async function runCycleWorker(): Promise<void> {
 		import("./cycles-worker-logger"),
 	]);
 	const worker: CycleWorker = new CycleWorker({
-		onJobEvent: (event) => cycleWorkerLogger.info("cycle worker job", event),
+		onJobEvent: (event) =>
+			cycleWorkerLogger.info(
+				"cycle worker job",
+				cycleWorkerJobLogContext(event),
+			),
 	});
 	const once = process.argv.includes("--once");
 	let stopping = false;
@@ -64,9 +113,10 @@ export async function runCycleWorker(): Promise<void> {
 					durationMs: Math.round(performance.now() - startedAt),
 				});
 			} catch (error: unknown) {
-				cycleWorkerLogger.error("cycle worker run failed", {
-					error: redactErrorSummary(error),
-				});
+				cycleWorkerLogger.error(
+					"cycle worker run failed",
+					cycleWorkerRunErrorContext(error),
+				);
 			}
 			if (!stopping) await Bun.sleep(env.CYCLES_WORKER_POLL_INTERVAL_MS);
 		}
