@@ -1,3 +1,7 @@
+export {
+	CycleAutomationAlerts,
+	type CycleAutomationProblem,
+} from "./cycle-automation-alerts";
 export type {
 	Cycle,
 	CycleMetrics,

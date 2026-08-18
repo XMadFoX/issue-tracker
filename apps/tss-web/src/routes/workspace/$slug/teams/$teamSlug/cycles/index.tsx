@@ -109,6 +109,13 @@ export function RouteComponent() {
 		enabled: settings.data?.canManageSettings === true,
 		refetchInterval: 30_000,
 	});
+	const automationProblems = useQuery({
+		...orpc.cycle.listLifecycleProblems.queryOptions({
+			input: { workspaceId: workspace.data.id, teamId: team.data.id },
+		}),
+		enabled: settings.data?.canManageSettings === true,
+		refetchInterval: 30_000,
+	});
 	const notifications = useQuery({
 		...orpc.cycle.listNotifications.queryOptions({
 			input: {
@@ -145,6 +152,9 @@ export function RouteComponent() {
 	const completeCycle = useMutation(orpc.cycle.complete.mutationOptions());
 	const markNotificationRead = useMutation(
 		orpc.cycle.markNotificationRead.mutationOptions(),
+	);
+	const retryLifecycleJob = useMutation(
+		orpc.cycle.retryLifecycleJob.mutationOptions(),
 	);
 
 	const invalidateCycles = async (cycleId?: string) => {
@@ -233,8 +243,88 @@ export function RouteComponent() {
 					kind: notification.kind,
 					actionRequiredId: notification.actionRequiredId,
 				}))}
+				automationProblems={
+					settings.data?.canManageSettings === true
+						? (automationProblems.data ?? [])
+						: []
+				}
 				workspaceTimezone={workspace.data.timezone ?? "UTC"}
 				capabilities={capabilities}
+				automationProblemsLoading={
+					settings.data?.canManageSettings === true &&
+					automationProblems.isPending
+				}
+				automationProblemsError={
+					settings.data?.canManageSettings === true &&
+					automationProblems.isError
+				}
+				onRetryAutomation={async (jobId) => {
+					try {
+						const problem = automationProblems.data?.find(
+							(candidate) => candidate.id === jobId,
+						);
+						await retryLifecycleJob.mutateAsync({
+							workspaceId: workspace.data.id,
+							jobId,
+						});
+						await Promise.all([
+							queryClient.invalidateQueries({
+								queryKey: orpc.cycle.listLifecycleProblems.queryKey({
+									input: {
+										workspaceId: workspace.data.id,
+										teamId: team.data.id,
+									},
+								}),
+							}),
+							queryClient.invalidateQueries({
+								queryKey: orpc.cycle.listPendingActions.queryKey({
+									input: {
+										workspaceId: workspace.data.id,
+										teamId: team.data.id,
+									},
+								}),
+							}),
+							queryClient.invalidateQueries({
+								queryKey: orpc.cycle.listNotifications.queryKey({
+									input: {
+										workspaceId: workspace.data.id,
+										teamId: team.data.id,
+										unreadOnly: true,
+									},
+								}),
+							}),
+							queryClient.invalidateQueries({
+								queryKey: orpc.cycle.list.queryKey({
+									input: {
+										workspaceId: workspace.data.id,
+										teamId: team.data.id,
+									},
+								}),
+							}),
+							problem?.cycleId
+								? queryClient.invalidateQueries({
+										queryKey: orpc.cycle.metrics.queryKey({
+											input: {
+												workspaceId: workspace.data.id,
+												cycleId: problem.cycleId,
+											},
+										}),
+									})
+								: Promise.resolve(),
+						]);
+						toast.success("Cycle automation retry scheduled");
+					} catch (error) {
+						console.error(error);
+						toast.error(
+							getCycleErrorMessage(error, "Failed to retry cycle automation"),
+						);
+					}
+				}}
+				retryingAutomationJobId={
+					retryLifecycleJob.isPending
+						? retryLifecycleJob.variables?.jobId
+						: null
+				}
 				alertsLoading={
 					notifications.isPending ||
 					(settings.data?.canManageSettings === true &&

@@ -4,13 +4,16 @@ import { Button } from "@prism/ui/components/button";
 import { Edit, Trash2 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import {
+	CycleAutomationAlerts,
+	type CycleAutomationProblem,
+} from "./cycle-automation-alerts";
+import {
 	type Cycle,
 	CycleCard,
 	type CycleMetrics,
 	type CycleMutationCapabilities,
 	formatCycleDateRange,
 } from "./cycle-card";
-
 import { CycleCompleteDialog } from "./cycle-complete-dialog";
 import { CycleCreateModal } from "./cycle-create-modal";
 import { CycleFormDialog } from "./cycle-form-dialog";
@@ -40,9 +43,14 @@ type CycleListProps = {
 	onDelete: (cycle: Cycle) => Promise<void>;
 	pendingActions?: ScheduleAlert[];
 	notifications?: ScheduleAlert[];
+	automationProblems?: CycleAutomationProblem[];
 	workspaceTimezone?: string;
 	alertsLoading?: boolean;
 	alertsError?: boolean;
+	automationProblemsLoading?: boolean;
+	automationProblemsError?: boolean;
+	onRetryAutomation?: (jobId: string) => Promise<void>;
+	retryingAutomationJobId?: string | null;
 	onMarkNotificationRead?: (notificationId: string) => Promise<void>;
 	markingNotificationId?: string | null;
 };
@@ -59,9 +67,14 @@ export function CycleList({
 	onDelete,
 	pendingActions = [],
 	notifications = [],
+	automationProblems = [],
 	workspaceTimezone = "UTC",
 	alertsLoading = false,
 	alertsError = false,
+	automationProblemsLoading = false,
+	automationProblemsError = false,
+	onRetryAutomation,
+	retryingAutomationJobId = null,
 	onMarkNotificationRead,
 	markingNotificationId = null,
 }: CycleListProps) {
@@ -88,6 +101,15 @@ export function CycleList({
 					<CycleCreateModal cycleDuration={cycleDuration} onSubmit={onCreate} />
 				) : null}
 			</div>
+
+			<CycleAutomationAlerts
+				problems={automationProblems}
+				workspaceTimezone={workspaceTimezone}
+				onRetry={onRetryAutomation}
+				retryingJobId={retryingAutomationJobId}
+				isLoading={automationProblemsLoading}
+				hasError={automationProblemsError}
+			/>
 
 			<CycleScheduleAlerts
 				pendingActions={alertsWithCycleState(pendingActions)}

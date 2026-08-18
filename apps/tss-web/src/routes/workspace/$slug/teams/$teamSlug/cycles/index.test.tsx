@@ -18,9 +18,15 @@ const invalidateQueries = vi.fn(async (options: InvalidationRequest) => {
 	invalidationRequests.push(options);
 });
 const completeMutation = vi.fn();
+const retryMutation = vi.fn();
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 const capabilitySnapshots: unknown[] = [];
+const automationProblemSnapshots: unknown[] = [];
+const querySnapshots: Array<{
+	enabled?: boolean;
+	refetchInterval?: number;
+}> = [];
 const managerCapabilities = {
 	create: true,
 	update: true,
@@ -39,12 +45,19 @@ let cycleSettingsResponse = {
 	canManageSettings: true,
 	capabilities: managerCapabilities,
 };
+let automationProblemsResponse: unknown[] = [];
 let useQueryCall = 0;
 
 const queryOptions = (options: { input: unknown }) => ({
 	queryKey: ["query", options],
 });
-const mutationOptions = () => ({});
+const queryOptionsWithKey = (key: string) => (options: { input: unknown }) => ({
+	queryKey: [key, options],
+});
+const queryKeyWithKey =
+	(key: string) =>
+	({ input }: { input: unknown }) => ["cycle", key, input];
+const mutationOptions = (mutationName?: string) => ({ mutationName });
 
 vi.mock("@tanstack/react-router", () => ({
 	createFileRoute: () => (options: { component: unknown }) => ({
@@ -54,10 +67,20 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-	useMutation: () => ({ mutateAsync: completeMutation, isPending: false }),
-	useQuery: () => {
+	useMutation: (options: { mutationName?: string }) => ({
+		mutateAsync:
+			options.mutationName === "retry-lifecycle"
+				? retryMutation
+				: completeMutation,
+		isPending: false,
+		variables: undefined,
+	}),
+	useQuery: (options: { enabled?: boolean }) => {
 		useQueryCall += 1;
-		return { data: useQueryCall === 1 ? cycleSettingsResponse : [] };
+		querySnapshots.push(options);
+		if (useQueryCall === 1) return { data: cycleSettingsResponse };
+		if (useQueryCall === 4) return { data: automationProblemsResponse };
+		return { data: [] };
 	},
 	useQueries: () => [],
 	useQueryClient: () => ({ invalidateQueries }),
@@ -92,15 +115,25 @@ vi.mock("src/orpc/client", () => ({
 		workspace: { getBySlug: { queryOptions } },
 		team: { getBySlug: { queryOptions } },
 		cycle: {
-			list: { queryOptions, key: () => ["cycle", "list"] },
+			list: {
+				queryOptions,
+				queryKey: queryKeyWithKey("list"),
+				key: () => ["cycle", "list"],
+			},
 			getSettings: { queryOptions },
 			getSchedulePreview: { queryOptions },
 			listPendingActions: {
-				queryOptions,
+				queryOptions: queryOptionsWithKey("pending-actions"),
+				queryKey: queryKeyWithKey("pending-actions"),
 				key: () => ["cycle", "pending-actions"],
 			},
+			listLifecycleProblems: {
+				queryOptions: queryOptionsWithKey("lifecycle-problems"),
+				queryKey: queryKeyWithKey("lifecycle-problems"),
+			},
 			listNotifications: {
-				queryOptions,
+				queryOptions: queryOptionsWithKey("notifications"),
+				queryKey: queryKeyWithKey("notifications"),
 				key: () => ["cycle", "notifications"],
 			},
 			metrics: {
@@ -117,6 +150,9 @@ vi.mock("src/orpc/client", () => ({
 			delete: { mutationOptions },
 			complete: { mutationOptions },
 			markNotificationRead: { mutationOptions },
+			retryLifecycleJob: {
+				mutationOptions: () => mutationOptions("retry-lifecycle"),
+			},
 		},
 		issue: { list: { key: () => ["issue", "list"] } },
 	},
@@ -143,6 +179,8 @@ vi.mock("@prism/blocks/src/features/cycles", () => ({
 	CycleList: ({
 		onComplete,
 		onMarkNotificationRead,
+		onRetryAutomation,
+		automationProblems,
 		capabilities,
 	}: {
 		onComplete: (input: {
@@ -150,9 +188,12 @@ vi.mock("@prism/blocks/src/features/cycles", () => ({
 			disposition: { type: "moveToBacklog" };
 		}) => Promise<void>;
 		onMarkNotificationRead?: (notificationId: string) => Promise<void>;
+		onRetryAutomation?: (jobId: string) => Promise<void>;
+		automationProblems: unknown[];
 		capabilities: unknown;
 	}) => {
 		capabilitySnapshots.push(capabilities);
+		automationProblemSnapshots.push(automationProblems);
 		return (
 			<div>
 				<button
@@ -166,6 +207,14 @@ vi.mock("@prism/blocks/src/features/cycles", () => ({
 				>
 					Complete source
 				</button>
+				{onRetryAutomation ? (
+					<button
+						type="button"
+						onClick={() => void onRetryAutomation("lifecycle-job-1")}
+					>
+						Retry automation
+					</button>
+				) : null}
 				{onMarkNotificationRead ? (
 					<button
 						type="button"
@@ -187,7 +236,10 @@ const { RouteComponent } = await import("./index");
 
 beforeEach(async () => {
 	useQueryCall = 0;
+	querySnapshots.splice(0, querySnapshots.length);
 	capabilitySnapshots.splice(0, capabilitySnapshots.length);
+	automationProblemSnapshots.splice(0, automationProblemSnapshots.length);
+	automationProblemsResponse = [];
 	cycleSettingsResponse = {
 		canManageSettings: true,
 		capabilities: managerCapabilities,
@@ -195,6 +247,8 @@ beforeEach(async () => {
 	invalidateQueries.mockClear();
 	invalidationRequests.splice(0, invalidationRequests.length);
 	completeMutation.mockReset();
+	retryMutation.mockReset();
+	retryMutation.mockResolvedValue({ status: "retried" });
 	toastSuccess.mockClear();
 	toastError.mockClear();
 	completeMutation.mockResolvedValue({
@@ -209,18 +263,100 @@ beforeEach(async () => {
 afterEach(cleanup);
 
 describe("cycles route completion integration", () => {
-	it("passes server-authoritative manager capabilities to CycleList", () => {
+	it("passes manager capabilities and enables operational problem fetching", () => {
+		automationProblemsResponse = [{ id: "manager-problem" }];
 		render(<RouteComponent />);
 		expect(capabilitySnapshots.at(-1)).toEqual(managerCapabilities);
+		expect(querySnapshots[3]).toMatchObject({
+			enabled: true,
+			refetchInterval: 30_000,
+		});
+		expect(automationProblemSnapshots.at(-1)).toEqual([
+			{ id: "manager-problem" },
+		]);
 	});
 
-	it("passes server-authoritative reader capabilities to CycleList", () => {
+	it("passes reader capabilities without fetching or exposing operational problems", () => {
 		cycleSettingsResponse = {
 			canManageSettings: false,
 			capabilities: readerCapabilities,
 		};
+		automationProblemsResponse = [{ id: "private-problem" }];
 		render(<RouteComponent />);
 		expect(capabilitySnapshots.at(-1)).toEqual(readerCapabilities);
+		expect(querySnapshots[3]?.enabled).toBe(false);
+		expect(automationProblemSnapshots.at(-1)).toEqual([]);
+	});
+
+	it("retries lifecycle automation and invalidates targeted cycle state", async () => {
+		automationProblemsResponse = [
+			{ id: "lifecycle-job-1", cycleId: "source-cycle" },
+		];
+		render(<RouteComponent />);
+		fireEvent.click(screen.getByRole("button", { name: "Retry automation" }));
+
+		await waitFor(() => {
+			expect(retryMutation).toHaveBeenCalledWith({
+				workspaceId: "workspace-1",
+				jobId: "lifecycle-job-1",
+			});
+		});
+		expect(toastSuccess).toHaveBeenCalledWith(
+			"Cycle automation retry scheduled",
+		);
+		expect(invalidateQueries).toHaveBeenCalledWith({
+			queryKey: [
+				"cycle",
+				"lifecycle-problems",
+				{ workspaceId: "workspace-1", teamId: "team-1" },
+			],
+		});
+		expect(invalidateQueries).toHaveBeenCalledWith({
+			queryKey: [
+				"cycle",
+				"pending-actions",
+				{ workspaceId: "workspace-1", teamId: "team-1" },
+			],
+		});
+		expect(invalidateQueries).toHaveBeenCalledWith({
+			queryKey: [
+				"cycle",
+				"notifications",
+				{
+					workspaceId: "workspace-1",
+					teamId: "team-1",
+					unreadOnly: true,
+				},
+			],
+		});
+		expect(invalidateQueries).toHaveBeenCalledWith({
+			queryKey: [
+				"cycle",
+				"list",
+				{ workspaceId: "workspace-1", teamId: "team-1" },
+			],
+		});
+		expect(invalidateQueries).toHaveBeenCalledWith({
+			queryKey: [
+				"cycle",
+				"metrics",
+				{ workspaceId: "workspace-1", cycleId: "source-cycle" },
+			],
+		});
+	});
+
+	it("reports a rejected lifecycle retry without success", async () => {
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => undefined);
+		retryMutation.mockRejectedValueOnce(new Error("Retry is obsolete"));
+		render(<RouteComponent />);
+		fireEvent.click(screen.getByRole("button", { name: "Retry automation" }));
+		await waitFor(() => {
+			expect(toastError).toHaveBeenCalledWith("Retry is obsolete");
+		});
+		expect(toastSuccess).not.toHaveBeenCalled();
+		consoleError.mockRestore();
 	});
 
 	it("submits cycle.complete and invalidates every affected cache scope", async () => {
