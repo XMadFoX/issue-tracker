@@ -599,6 +599,37 @@ describe("cycle router authorization and transitions", () => {
 		);
 	});
 
+	test("allows workspace-scoped admin retry without team membership", async () => {
+		await seed(["cycle:read", "cycle:update"]);
+		const jobId = await seedFailedStartJob();
+		const [wildcardPermission] = await db
+			.select({ id: permissionsCatalog.id })
+			.from(permissionsCatalog)
+			.where(eq(permissionsCatalog.key, "*"));
+		if (!wildcardPermission) throw new Error("wildcard permission missing");
+		await db.insert(rolePermissions).values({
+			roleId: "cycle-router-workspace-role",
+			permissionId: wildcardPermission.id,
+			effect: "allow",
+			attributes: {},
+		});
+		await db
+			.delete(teamMembership)
+			.where(
+				and(
+					eq(teamMembership.teamId, ids.team),
+					eq(teamMembership.userId, ids.actor),
+				),
+			);
+
+		expect(
+			await client().cycle.retryLifecycleJob(
+				{ workspaceId: ids.workspace, jobId },
+				options(),
+			),
+		).toMatchObject({ status: "retried", jobId });
+	});
+
 	test("resets future lifecycle retries to their policy due times", async () => {
 		await seed([
 			"cycle:read",

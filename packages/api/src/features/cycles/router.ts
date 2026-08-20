@@ -11,11 +11,7 @@ import {
 import { issueType } from "db/features/tracker/issue-types.schema";
 import { issue } from "db/features/tracker/issues.schema";
 import { teamCycleSettings } from "db/features/tracker/team-cycle-settings.schema";
-import {
-	team,
-	teamMembership,
-	workspaceMembership,
-} from "db/features/tracker/tracker.schema";
+import { team, workspaceMembership } from "db/features/tracker/tracker.schema";
 import {
 	and,
 	count,
@@ -356,42 +352,6 @@ async function hasActiveWorkspaceMembership({
 		)
 		.limit(1);
 	return membership !== undefined;
-}
-
-async function hasActiveCycleMembership({
-	userId,
-	workspaceId,
-	teamId,
-}: {
-	userId: string;
-	workspaceId: string;
-	teamId: string;
-}) {
-	const [workspaceRow, teamRow] = await Promise.all([
-		db
-			.select({ id: workspaceMembership.id })
-			.from(workspaceMembership)
-			.where(
-				and(
-					eq(workspaceMembership.userId, userId),
-					eq(workspaceMembership.workspaceId, workspaceId),
-					eq(workspaceMembership.status, "active"),
-				),
-			)
-			.limit(1),
-		db
-			.select({ id: teamMembership.id })
-			.from(teamMembership)
-			.where(
-				and(
-					eq(teamMembership.userId, userId),
-					eq(teamMembership.teamId, teamId),
-					eq(teamMembership.status, "active"),
-				),
-			)
-			.limit(1),
-	]);
-	return workspaceRow.length > 0 && teamRow.length > 0;
 }
 
 async function canUseCycle({
@@ -1012,16 +972,6 @@ const getSettings = authedRouter
 			teamId: input.teamId,
 		});
 		if (!scoped) throw errors.NOT_FOUND();
-		if (
-			!(await hasActiveCycleMembership({
-				userId: context.auth.session.userId,
-				workspaceId: input.workspaceId,
-				teamId: input.teamId,
-			}))
-		) {
-			throw errors.UNAUTHORIZED();
-		}
-
 		const [canRead, canManageSettings, capabilities] = await Promise.all([
 			isAllowed({
 				userId: context.auth.session.userId,
@@ -1063,16 +1013,6 @@ const getSchedulePreview = authedRouter
 			teamId: input.teamId,
 		});
 		if (!scoped) throw errors.NOT_FOUND();
-		if (
-			!(await hasActiveCycleMembership({
-				userId: context.auth.session.userId,
-				workspaceId: input.workspaceId,
-				teamId: input.teamId,
-			}))
-		) {
-			throw errors.UNAUTHORIZED();
-		}
-
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
@@ -1103,16 +1043,6 @@ const updateSettings = authedRouter
 			teamId: input.teamId,
 		});
 		if (!scoped) throw errors.NOT_FOUND();
-		if (
-			!(await hasActiveCycleMembership({
-				userId: context.auth.session.userId,
-				workspaceId: input.workspaceId,
-				teamId: input.teamId,
-			}))
-		) {
-			throw errors.UNAUTHORIZED();
-		}
-
 		const allowed = await isAllowed({
 			userId: context.auth.session.userId,
 			workspaceId: input.workspaceId,
@@ -1195,15 +1125,6 @@ const listLifecycleProblems = authedRouter
 	.errors(commonErrors)
 	.handler(async ({ context, input, errors }) => {
 		const userId = context.auth.session.userId;
-		if (
-			!(await hasActiveCycleMembership({
-				userId,
-				workspaceId: input.workspaceId,
-				teamId: input.teamId,
-			}))
-		) {
-			throw errors.UNAUTHORIZED();
-		}
 		const [
 			canManageSettings,
 			canRead,
@@ -1360,15 +1281,6 @@ const retryLifecycle = authedRouter
 		if (!job || !isLifecycleJobType(job.jobType)) throw errors.NOT_FOUND();
 
 		const userId = context.auth.session.userId;
-		if (
-			!(await hasActiveCycleMembership({
-				userId,
-				workspaceId: input.workspaceId,
-				teamId: job.teamId,
-			}))
-		) {
-			throw errors.NOT_FOUND();
-		}
 		const canRead = await isAllowed({
 			userId,
 			workspaceId: input.workspaceId,

@@ -8,7 +8,7 @@ import {
 } from "bun:test";
 import { createRouterClient, ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { AuthedORPCContext } from "../../context";
 import setupDb from "../../utils/prepare-tests";
 
@@ -31,8 +31,10 @@ let workspace: typeof import("db/features/tracker/tracker.schema").workspace;
 let teardown: Awaited<ReturnType<typeof setupDb>>;
 
 const ids = {
+	admin: createId(),
 	manager: createId(),
 	reader: createId(),
+	workspaceGrantee: createId(),
 	noAccess: createId(),
 	team: createId(),
 	workspace: createId(),
@@ -235,11 +237,21 @@ beforeEach(async () => {
 	await db.execute(sql`truncate table team, workspace, "user" cascade`);
 	await db.insert(user).values([
 		{
+			id: ids.admin,
+			name: "Admin",
+			email: "settings-admin@example.test",
+		},
+		{
 			id: ids.manager,
 			name: "Manager",
 			email: "settings-manager@example.test",
 		},
 		{ id: ids.reader, name: "Reader", email: "settings-reader@example.test" },
+		{
+			id: ids.workspaceGrantee,
+			name: "Workspace Grantee",
+			email: "settings-workspace-grantee@example.test",
+		},
 		{
 			id: ids.noAccess,
 			name: "No Access",
@@ -265,7 +277,7 @@ beforeEach(async () => {
 		workspaceId: ids.workspace,
 		name: "Settings Team",
 		key: "SET",
-		privacy: "public",
+		privacy: "private",
 		cycleDuration: 14,
 	});
 	await db.insert(teamCycleSettings).values({
@@ -275,11 +287,40 @@ beforeEach(async () => {
 	});
 	const { ensurePermissionCatalog } = await import("../workspaces/defaults");
 	await ensurePermissionCatalog(db);
-	await grant(ids.reader, ["cycle:read"]);
+	await grant(ids.reader, ["cycle:read", "team:read"]);
 	await grant(ids.manager, ["cycle:read", "cycle:manage_settings"]);
+	await grant(ids.admin, ["*"], null);
 	await grant(ids.manager, ["team:create", "team:update"], null);
-	for (const userId of [ids.manager, ids.reader]) {
-		const [assignment] = await db
+	await grant(ids.reader, ["workspace:read"], null);
+	await grant(ids.workspaceGrantee, ["workspace:read"], null);
+	for (const userId of [
+		ids.admin,
+		ids.manager,
+		ids.reader,
+		ids.workspaceGrantee,
+	]) {
+		const [workspaceAssignment] = await db
+			.select({ roleId: roleAssignments.roleId })
+			.from(roleAssignments)
+			.where(
+				and(
+					eq(roleAssignments.userId, userId),
+					eq(roleAssignments.workspaceId, ids.workspace),
+					isNull(roleAssignments.teamId),
+				),
+			)
+			.limit(1);
+		if (!workspaceAssignment)
+			throw new Error("missing workspace role assignment");
+		await db.insert(workspaceMembership).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			userId,
+			roleId: workspaceAssignment.roleId,
+			status: "active",
+		});
+		if (userId === ids.admin || userId === ids.workspaceGrantee) continue;
+		const [teamAssignment] = await db
 			.select({ roleId: roleAssignments.roleId })
 			.from(roleAssignments)
 			.where(
@@ -290,19 +331,12 @@ beforeEach(async () => {
 				),
 			)
 			.limit(1);
-		if (!assignment) throw new Error("missing team role assignment");
-		await db.insert(workspaceMembership).values({
-			id: createId(),
-			workspaceId: ids.workspace,
-			userId,
-			roleId: assignment.roleId,
-			status: "active",
-		});
+		if (!teamAssignment) throw new Error("missing team role assignment");
 		await db.insert(teamMembership).values({
 			id: createId(),
 			teamId: ids.team,
 			userId,
-			roleId: assignment.roleId,
+			roleId: teamAssignment.roleId,
 			status: "active",
 		});
 	}
@@ -415,6 +449,302 @@ describe("cycle settings routes", () => {
 		);
 	});
 
+	test("allows workspace-scoped grants across teams without team membership", async () => {
+		expect(
+			await client(ids.workspaceGrantee).team.listByWorkspace(
+				{ id: ids.workspace },
+				options(ids.workspaceGrantee),
+			),
+		).toEqual([]);
+		await grant(
+			ids.workspaceGrantee,
+			["cycle:read", "cycle:manage_settings", "team:read"],
+			null,
+		);
+
+		const result = await client(ids.workspaceGrantee).cycle.getSettings(
+			{ workspaceId: ids.workspace, teamId: ids.team },
+			options(ids.workspaceGrantee),
+		);
+		expect(result.canManageSettings).toBeTrue();
+		expect(
+			await client(ids.workspaceGrantee).team.listByWorkspace(
+				{ id: ids.workspace },
+				options(ids.workspaceGrantee),
+			),
+		).toHaveLength(1);
+	});
+
+	test("denies stale or malformed team-scoped assignments without active team membership", async () => {
+		await grant(ids.workspaceGrantee, ["cycle:read", "team:read"]);
+		expect(
+			await client(ids.workspaceGrantee).team.listByWorkspace(
+				{ id: ids.workspace },
+				options(ids.workspaceGrantee),
+			),
+		).toEqual([]);
+		await expectCode(
+			client(ids.workspaceGrantee).cycle.getSettings(
+				{ workspaceId: ids.workspace, teamId: ids.team },
+				options(ids.workspaceGrantee),
+			),
+			"UNAUTHORIZED",
+		);
+
+		await db
+			.update(roleAssignments)
+			.set({ teamId: null })
+			.where(
+				and(
+					eq(roleAssignments.userId, ids.workspaceGrantee),
+					eq(roleAssignments.workspaceId, ids.workspace),
+					eq(roleAssignments.teamId, ids.team),
+				),
+			);
+		await expectCode(
+			client(ids.workspaceGrantee).cycle.getSettings(
+				{ workspaceId: ids.workspace, teamId: ids.team },
+				options(ids.workspaceGrantee),
+			),
+			"UNAUTHORIZED",
+		);
+		expect(
+			await client(ids.workspaceGrantee).team.listByWorkspace(
+				{ id: ids.workspace },
+				options(ids.workspaceGrantee),
+			),
+		).toEqual([]);
+	});
+
+	test("rejects malformed workspace, team, wrong-team, and cross-workspace role scopes", async () => {
+		const otherTeamId = createId();
+		const roleIds = {
+			emptyMembership: createId(),
+			workspaceAssignedAsTeam: createId(),
+			teamAssignedGlobally: createId(),
+			teamAssignedToWrongTeam: createId(),
+			crossWorkspace: createId(),
+		};
+		await db.insert(team).values({
+			id: otherTeamId,
+			workspaceId: ids.workspace,
+			name: "Malformed Scope Team",
+			key: "MST",
+			privacy: "private",
+		});
+		await db.insert(roleDefinitions).values([
+			{
+				id: roleIds.emptyMembership,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				scopeLevel: "team",
+				name: "Empty membership role",
+				createdBy: ids.manager,
+				attributes: {},
+			},
+			{
+				id: roleIds.workspaceAssignedAsTeam,
+				workspaceId: ids.workspace,
+				teamId: null,
+				scopeLevel: "workspace",
+				name: "Workspace role assigned as team",
+				createdBy: ids.manager,
+				attributes: {},
+			},
+			{
+				id: roleIds.teamAssignedGlobally,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				scopeLevel: "team",
+				name: "Team role assigned globally",
+				createdBy: ids.manager,
+				attributes: {},
+			},
+			{
+				id: roleIds.teamAssignedToWrongTeam,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				scopeLevel: "team",
+				name: "Team role assigned to wrong team",
+				createdBy: ids.manager,
+				attributes: {},
+			},
+			{
+				id: roleIds.crossWorkspace,
+				workspaceId: ids.wrongWorkspace,
+				teamId: null,
+				scopeLevel: "workspace",
+				name: "Cross workspace role",
+				createdBy: ids.manager,
+				attributes: {},
+			},
+		]);
+		const [cycleReadPermission] = await db
+			.select({ id: permissionsCatalog.id })
+			.from(permissionsCatalog)
+			.where(eq(permissionsCatalog.key, "cycle:read"));
+		if (!cycleReadPermission) throw new Error("cycle:read permission missing");
+		await db.insert(rolePermissions).values(
+			[
+				roleIds.workspaceAssignedAsTeam,
+				roleIds.teamAssignedGlobally,
+				roleIds.teamAssignedToWrongTeam,
+				roleIds.crossWorkspace,
+			].map((roleId) => ({
+				roleId,
+				permissionId: cycleReadPermission.id,
+				effect: "allow" as const,
+				attributes: {},
+			})),
+		);
+		await db.insert(teamMembership).values({
+			id: createId(),
+			teamId: ids.team,
+			userId: ids.workspaceGrantee,
+			roleId: roleIds.emptyMembership,
+			status: "active",
+		});
+		await db.insert(roleAssignments).values([
+			{
+				id: createId(),
+				roleId: roleIds.workspaceAssignedAsTeam,
+				userId: ids.workspaceGrantee,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				assignedBy: ids.manager,
+				attributes: {},
+			},
+			{
+				id: createId(),
+				roleId: roleIds.teamAssignedGlobally,
+				userId: ids.workspaceGrantee,
+				workspaceId: ids.workspace,
+				teamId: null,
+				assignedBy: ids.manager,
+				attributes: {},
+			},
+			{
+				id: createId(),
+				roleId: roleIds.teamAssignedToWrongTeam,
+				userId: ids.workspaceGrantee,
+				workspaceId: ids.workspace,
+				teamId: otherTeamId,
+				assignedBy: ids.manager,
+				attributes: {},
+			},
+			{
+				id: createId(),
+				roleId: roleIds.crossWorkspace,
+				userId: ids.workspaceGrantee,
+				workspaceId: ids.workspace,
+				teamId: null,
+				assignedBy: ids.manager,
+				attributes: {},
+			},
+		]);
+
+		await expectCode(
+			client(ids.workspaceGrantee).cycle.getSettings(
+				{ workspaceId: ids.workspace, teamId: ids.team },
+				options(ids.workspaceGrantee),
+			),
+			"UNAUTHORIZED",
+		);
+	});
+
+	test("allows workspace admin without team membership and denies inactive admin", async () => {
+		const result = await client(ids.admin).cycle.getSettings(
+			{ workspaceId: ids.workspace, teamId: ids.team },
+			options(ids.admin),
+		);
+		expect(result.canManageSettings).toBeTrue();
+		expect(result.capabilities).toEqual({
+			create: true,
+			update: true,
+			cancel: true,
+			complete: true,
+			delete: true,
+		});
+
+		await db
+			.update(workspaceMembership)
+			.set({ status: "inactive" })
+			.where(
+				and(
+					eq(workspaceMembership.userId, ids.admin),
+					eq(workspaceMembership.workspaceId, ids.workspace),
+				),
+			);
+		await expectCode(
+			client(ids.admin).cycle.getSettings(
+				{ workspaceId: ids.workspace, teamId: ids.team },
+				options(ids.admin),
+			),
+			"UNAUTHORIZED",
+		);
+	});
+
+	test("lists all teams for workspace admin and only joined teams for member", async () => {
+		const otherTeamId = createId();
+		await db.insert(team).values({
+			id: otherTeamId,
+			workspaceId: ids.workspace,
+			name: "Private Admin Team",
+			key: "PAT",
+			privacy: "private",
+		});
+
+		const adminTeams = await client(ids.admin).team.listByWorkspace(
+			{ id: ids.workspace },
+			options(ids.admin),
+		);
+		const readerTeams = await client(ids.reader).team.listByWorkspace(
+			{ id: ids.workspace },
+			options(ids.reader),
+		);
+		expect(adminTeams.map((row) => row.id).sort()).toEqual(
+			[ids.team, otherTeamId].sort(),
+		);
+		expect(readerTeams.map((row) => row.id)).toEqual([ids.team]);
+
+		const memberTeams = await client(ids.reader).team.listUserTeamsByWorkspace(
+			{ id: ids.workspace },
+			options(ids.reader),
+		);
+		const allMemberTeams = await client(ids.reader).team.listUserTeams(
+			undefined,
+			options(ids.reader),
+		);
+		expect(memberTeams.map((row) => row.id)).toEqual([ids.team]);
+		expect(allMemberTeams.map((row) => row.id)).toEqual([ids.team]);
+		expect(memberTeams[0]).toMatchObject({
+			id: ids.team,
+			workspaceId: ids.workspace,
+		});
+
+		await db
+			.update(workspaceMembership)
+			.set({ status: "inactive" })
+			.where(
+				and(
+					eq(workspaceMembership.userId, ids.reader),
+					eq(workspaceMembership.workspaceId, ids.workspace),
+				),
+			);
+		expect(
+			await client(ids.reader).team.listUserTeamsByWorkspace(
+				{ id: ids.workspace },
+				options(ids.reader),
+			),
+		).toEqual([]);
+		expect(
+			await client(ids.reader).team.listUserTeams(
+				undefined,
+				options(ids.reader),
+			),
+		).toEqual([]);
+	});
+
 	test("updates full replacement settings, audit actor, and legacy cadence", async () => {
 		const result = await client(ids.manager).cycle.updateSettings(
 			{
@@ -437,16 +767,17 @@ describe("cycle settings routes", () => {
 		expect(updatedTeam?.cycleDuration).toBe(21);
 	});
 
-	test("creates disabled settings atomically through the supported team route", async () => {
-		const created = await client(ids.manager).team.create(
-			{
-				workspaceId: ids.workspace,
-				name: "New Settings Team",
-				key: "NEW",
-				privacy: "public",
-				cycleDuration: null,
-			},
-			options(ids.manager),
+	test("creates disabled settings without synthetic membership for a workspace admin", async () => {
+		const input = {
+			workspaceId: ids.workspace,
+			name: "New Settings Team",
+			key: "NEW",
+			privacy: "public",
+			cycleDuration: null,
+		};
+		const created = await client(ids.admin).team.create(
+			input,
+			options(ids.admin),
 		);
 		const createdSettings = await db
 			.select()
@@ -456,7 +787,62 @@ describe("cycle settings routes", () => {
 		expect(createdSettings[0]).toMatchObject({
 			cadenceEnabled: false,
 			cadenceDays: 14,
-			updatedBy: ids.manager,
+			updatedBy: ids.admin,
+		});
+
+		const memberships = await db
+			.select({
+				status: teamMembership.status,
+				roleName: roleDefinitions.name,
+			})
+			.from(teamMembership)
+			.innerJoin(roleDefinitions, eq(teamMembership.roleId, roleDefinitions.id))
+			.where(
+				and(
+					eq(teamMembership.teamId, created.id),
+					eq(teamMembership.userId, ids.admin),
+				),
+			);
+		expect(memberships).toEqual([]);
+
+		const settingsResult = await client(ids.admin).cycle.getSettings(
+			{ workspaceId: ids.workspace, teamId: created.id },
+			options(ids.admin),
+		);
+		expect(settingsResult.canManageSettings).toBeTrue();
+		expect(settingsResult.capabilities).toEqual({
+			create: true,
+			update: true,
+			cancel: true,
+			complete: true,
+			delete: true,
+		});
+		await expectCode(
+			client(ids.noAccess).cycle.getSettings(
+				{ workspaceId: ids.workspace, teamId: created.id },
+				options(ids.noAccess),
+			),
+			"UNAUTHORIZED",
+		);
+
+		await expectCode(
+			client(ids.admin).team.create(input, options(ids.admin)),
+			"CONFLICT",
+		);
+		const [duplicateCounts] = await db
+			.select({
+				teams: sql<number>`count(distinct ${team.id})::int`,
+				memberships: sql<number>`count(distinct ${teamMembership.id})::int`,
+				settings: sql<number>`count(distinct ${teamCycleSettings.teamId})::int`,
+			})
+			.from(team)
+			.leftJoin(teamMembership, eq(teamMembership.teamId, team.id))
+			.innerJoin(teamCycleSettings, eq(teamCycleSettings.teamId, team.id))
+			.where(and(eq(team.workspaceId, ids.workspace), eq(team.key, input.key)));
+		expect(duplicateCounts).toEqual({
+			teams: 1,
+			memberships: 0,
+			settings: 1,
 		});
 	});
 

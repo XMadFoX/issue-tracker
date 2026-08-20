@@ -12,7 +12,7 @@ import {
 	teamMembership,
 	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 const DEFAULT_MAX_DEPTH = 2;
@@ -220,6 +220,15 @@ export async function getReadableTeamIdsForPermission({
 			attributes: workspaceMembership.attributes,
 		})
 		.from(workspaceMembership)
+		.innerJoin(
+			roleDefinitions,
+			and(
+				eq(workspaceMembership.roleId, roleDefinitions.id),
+				eq(roleDefinitions.workspaceId, workspaceId),
+				eq(roleDefinitions.scopeLevel, "workspace"),
+				isNull(roleDefinitions.teamId),
+			),
+		)
 		.where(
 			and(
 				eq(workspaceMembership.userId, userId),
@@ -228,6 +237,7 @@ export async function getReadableTeamIdsForPermission({
 			),
 		)
 		.limit(1);
+	if (!workspaceMembershipRow) return [];
 
 	const teamMembershipRows = await db
 		.select({
@@ -237,6 +247,15 @@ export async function getReadableTeamIdsForPermission({
 		})
 		.from(teamMembership)
 		.innerJoin(team, eq(teamMembership.teamId, team.id))
+		.innerJoin(
+			roleDefinitions,
+			and(
+				eq(teamMembership.roleId, roleDefinitions.id),
+				eq(roleDefinitions.workspaceId, workspaceId),
+				eq(roleDefinitions.scopeLevel, "team"),
+				eq(roleDefinitions.teamId, teamMembership.teamId),
+			),
+		)
 		.where(
 			and(
 				eq(teamMembership.userId, userId),
@@ -244,21 +263,45 @@ export async function getReadableTeamIdsForPermission({
 				eq(teamMembership.status, "active"),
 			),
 		);
+	const activeTeamIds = new Set(
+		teamMembershipRows.map((membership) => membership.teamId),
+	);
 
-	const teamAssignmentRows = await db
+	const assignmentRows = await db
 		.select({
 			teamId: roleAssignments.teamId,
 			roleId: roleAssignments.roleId,
 			attributes: roleAssignments.attributes,
+			roleScopeLevel: roleDefinitions.scopeLevel,
+			roleTeamId: roleDefinitions.teamId,
 		})
 		.from(roleAssignments)
+		.innerJoin(
+			roleDefinitions,
+			and(
+				eq(roleAssignments.roleId, roleDefinitions.id),
+				eq(roleDefinitions.workspaceId, workspaceId),
+			),
+		)
 		.where(
 			and(
 				eq(roleAssignments.userId, userId),
 				eq(roleAssignments.workspaceId, workspaceId),
-				isNotNull(roleAssignments.teamId),
 			),
 		);
+	const workspaceAssignmentRows = assignmentRows.filter(
+		(assignment) =>
+			assignment.roleScopeLevel === "workspace" &&
+			assignment.teamId == null &&
+			assignment.roleTeamId == null,
+	);
+	const teamAssignmentRows = assignmentRows.filter(
+		(assignment) =>
+			assignment.roleScopeLevel === "team" &&
+			assignment.teamId != null &&
+			assignment.roleTeamId === assignment.teamId &&
+			activeTeamIds.has(assignment.teamId),
+	);
 
 	const roleIdsByTeamId = new Map<string, Set<string>>();
 	const teamMembershipAttributesByTeamId = new Map<
@@ -271,10 +314,13 @@ export async function getReadableTeamIdsForPermission({
 	>();
 
 	for (const teamId of workspaceTeamIds) {
-		const roleIds = new Set<string>();
-		if (workspaceMembershipRow?.roleId)
-			roleIds.add(workspaceMembershipRow.roleId);
-		roleIdsByTeamId.set(teamId, roleIds);
+		roleIdsByTeamId.set(
+			teamId,
+			new Set([
+				workspaceMembershipRow.roleId,
+				...workspaceAssignmentRows.map((assignment) => assignment.roleId),
+			]),
+		);
 	}
 
 	for (const membership of teamMembershipRows) {
@@ -282,6 +328,14 @@ export async function getReadableTeamIdsForPermission({
 		teamMembershipAttributesByTeamId.set(
 			membership.teamId,
 			toAttributes(membership.attributes),
+		);
+	}
+
+	const workspaceAssignmentAttributes: Record<string, unknown> = {};
+	for (const assignment of workspaceAssignmentRows) {
+		Object.assign(
+			workspaceAssignmentAttributes,
+			toAttributes(assignment.attributes),
 		);
 	}
 
@@ -381,7 +435,8 @@ export async function getReadableTeamIdsForPermission({
 		if (!teamRoleIds || teamRoleIds.size === 0) continue;
 
 		const subjectAttributes = {
-			...toAttributes(workspaceMembershipRow?.attributes),
+			...toAttributes(workspaceMembershipRow.attributes),
+			...workspaceAssignmentAttributes,
 			...(teamMembershipAttributesByTeamId.get(teamId) ?? {}),
 			...(assignmentAttributesByTeamId.get(teamId) ?? {}),
 			...userAttributes,

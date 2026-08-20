@@ -5,17 +5,25 @@ import {
 	permissionsCatalog,
 	policyConstraints,
 	roleAssignments,
+	roleDefinitions,
 	rolePermissions,
 } from "db/features/abac/abac.schema";
 import { user } from "db/features/auth/auth.schema";
 import {
+	team,
 	teamMembership,
 	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
-type Ambient = Record<string, any> | undefined;
-type Resource = { id?: string; attributes?: Record<string, any> } | undefined;
+type Ambient = Record<string, unknown> | undefined;
+type Resource =
+	| { id?: string; attributes?: Record<string, unknown> }
+	| undefined;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 const mapEntityAttributes = (
 	rows: { key: string; value: unknown }[] | undefined,
@@ -60,71 +68,38 @@ export async function isAllowed({
 	resource?: Resource;
 	ambient?: Ambient;
 }) {
-	// 1) Load role assignments for user in workspace (and team if provided)
-	const assignments = await db
-		.select()
-		.from(roleAssignments)
-		.where(
-			and(
-				eq(roleAssignments.userId, userId),
-				eq(roleAssignments.workspaceId, workspaceId),
-				teamId
-					? or(
-							eq(roleAssignments.teamId, teamId),
-							isNull(roleAssignments.teamId),
-						)
-					: isNull(roleAssignments.teamId),
-			),
-		);
-
-	logger.debug("[ABAC] Loaded role assignments", {
-		userId,
-		workspaceId,
-		teamId,
-		assignmentsCount: assignments.length,
-		assignments,
-	});
-
 	const [reqResource, reqAction] = permissionKey.split(":");
 
-	const membershipRows = await db
-		.select()
+	// An active workspace membership is the root of every authorization decision.
+	// Role definitions are validated at their declared scope so malformed or stale
+	// assignments cannot accidentally become workspace-wide grants.
+	const [membershipRow] = await db
+		.select({
+			roleId: workspaceMembership.roleId,
+			status: workspaceMembership.status,
+			attributes: workspaceMembership.attributes,
+		})
 		.from(workspaceMembership)
+		.innerJoin(
+			roleDefinitions,
+			and(
+				eq(workspaceMembership.roleId, roleDefinitions.id),
+				eq(roleDefinitions.workspaceId, workspaceId),
+				eq(roleDefinitions.scopeLevel, "workspace"),
+				isNull(roleDefinitions.teamId),
+			),
+		)
 		.where(
 			and(
 				eq(workspaceMembership.userId, userId),
 				eq(workspaceMembership.workspaceId, workspaceId),
 				eq(workspaceMembership.status, "active"),
 			),
-		);
-	const membershipRow = membershipRows?.[0] ?? null;
-	const membershipRoleId = membershipRow?.roleId ?? null;
-	const hasMembershipRole = Boolean(membershipRoleId);
-	const effectiveAssignments = membershipRow ? assignments : [];
+		)
+		.limit(1);
 
-	const teamMembershipRows =
-		teamId == null
-			? []
-			: await db
-					.select({ roleId: teamMembership.roleId })
-					.from(teamMembership)
-					.where(
-						and(
-							eq(teamMembership.userId, userId),
-							eq(teamMembership.teamId, teamId),
-							eq(teamMembership.status, "active"),
-						),
-					);
-	const teamMembershipRoleIds = teamMembershipRows.map((row) => row.roleId);
-	const hasTeamMembershipRole = teamMembershipRoleIds.length > 0;
-
-	if (
-		(!assignments || assignments.length === 0) &&
-		!hasMembershipRole &&
-		!hasTeamMembershipRole &&
-		reqResource !== "workspace"
-	) {
-		logger.info("[ABAC] No assignments found, denying", {
+	if (!membershipRow) {
+		logger.info("[ABAC] No active workspace membership, denying", {
 			userId,
 			workspaceId,
 			teamId,
@@ -133,11 +108,89 @@ export async function isAllowed({
 		return false;
 	}
 
+	const teamMembershipRows =
+		teamId == null
+			? []
+			: await db
+					.select({
+						roleId: teamMembership.roleId,
+						attributes: teamMembership.attributes,
+					})
+					.from(teamMembership)
+					.innerJoin(
+						team,
+						and(
+							eq(teamMembership.teamId, team.id),
+							eq(team.workspaceId, workspaceId),
+						),
+					)
+					.innerJoin(
+						roleDefinitions,
+						and(
+							eq(teamMembership.roleId, roleDefinitions.id),
+							eq(roleDefinitions.workspaceId, workspaceId),
+							eq(roleDefinitions.scopeLevel, "team"),
+							eq(roleDefinitions.teamId, teamId),
+						),
+					)
+					.where(
+						and(
+							eq(teamMembership.userId, userId),
+							eq(teamMembership.teamId, teamId),
+							eq(teamMembership.status, "active"),
+						),
+					);
+	const hasActiveTeamMembership = teamMembershipRows.length > 0;
+
+	const assignmentRows = await db
+		.select({
+			roleId: roleAssignments.roleId,
+			assignmentTeamId: roleAssignments.teamId,
+			attributes: roleAssignments.attributes,
+			roleScopeLevel: roleDefinitions.scopeLevel,
+			roleTeamId: roleDefinitions.teamId,
+		})
+		.from(roleAssignments)
+		.innerJoin(
+			roleDefinitions,
+			and(
+				eq(roleAssignments.roleId, roleDefinitions.id),
+				eq(roleDefinitions.workspaceId, workspaceId),
+			),
+		)
+		.where(
+			and(
+				eq(roleAssignments.userId, userId),
+				eq(roleAssignments.workspaceId, workspaceId),
+			),
+		);
+
+	const effectiveAssignments = assignmentRows.filter((assignment) => {
+		if (assignment.roleScopeLevel === "workspace") {
+			return (
+				assignment.assignmentTeamId == null && assignment.roleTeamId == null
+			);
+		}
+		return (
+			teamId != null &&
+			hasActiveTeamMembership &&
+			assignment.assignmentTeamId === teamId &&
+			assignment.roleTeamId === teamId
+		);
+	});
+
+	logger.debug("[ABAC] Loaded scope-valid role assignments", {
+		userId,
+		workspaceId,
+		teamId,
+		assignmentsCount: effectiveAssignments.length,
+	});
+
 	const roleIds = Array.from(
 		new Set([
-			...effectiveAssignments.map((a) => a.roleId),
-			...(membershipRoleId ? [membershipRoleId] : []),
-			...teamMembershipRoleIds,
+			membershipRow.roleId,
+			...teamMembershipRows.map((row) => row.roleId),
+			...effectiveAssignments.map((assignment) => assignment.roleId),
 		]),
 	);
 
@@ -254,25 +307,28 @@ export async function isAllowed({
 	// Placeholder predicate evaluator:
 	// TODO: replace with actual predicate evaluator (e.g., small DSL interpreter or OPA/Rego call).
 	function evaluatePredicate(
-		predicateJson: any,
-		ctx: { subject: any; resource: any; ambient: any },
+		predicateJson: unknown,
+		ctx: {
+			subject: { attributes: Record<string, unknown> };
+			resource: Resource;
+			ambient: Ambient;
+		},
 	) {
 		logger.debug("[ABAC] Evaluating predicate", {
 			predicateJson,
-			subjectAttributes: ctx.subject?.attributes,
+			subjectAttributes: ctx.subject.attributes,
 			resource,
 			ambient,
 		});
 
-		if (!predicateJson) {
+		if (predicateJson == null) {
 			logger.debug("[ABAC] Predicate empty, default allow", {
 				resource,
 				ambient,
 			});
 			return true;
 		}
-		// Basic example: support predicateJson = { "always": true } or { "subject": { "attribute_equals": { "k":"v" } } }
-		// For production use integrate a proper predicate engine.
+		if (!isRecord(predicateJson)) return false;
 		if (predicateJson.always === true) {
 			logger.debug("[ABAC] Predicate explicit always allow", {
 				resource,
@@ -281,13 +337,13 @@ export async function isAllowed({
 			return true;
 		}
 
-		// If predicateJson.subject.attribute_equals exists, all of those must match subject attributes
-		try {
-			if (predicateJson?.subject?.attribute_equals) {
-				const checks = predicateJson.subject.attribute_equals;
-				const subjectAttrs = ctx.subject?.attributes ?? {};
+		const predicateSubject = predicateJson.subject;
+		if (isRecord(predicateSubject)) {
+			const checks = predicateSubject.attribute_equals;
+			if (isRecord(checks)) {
+				const subjectAttrs = ctx.subject.attributes;
 				const attrMatch = Object.entries(checks).every(
-					([k, v]) => subjectAttrs[k] === v,
+					([key, value]) => subjectAttrs[key] === value,
 				);
 				logger.debug("[ABAC] Predicate subject attribute check", {
 					checks,
@@ -296,18 +352,9 @@ export async function isAllowed({
 				});
 				return attrMatch;
 			}
-		} catch (error) {
-			logger.warn("[ABAC] Predicate evaluation error", {
-				error,
-				predicateJson,
-			});
-			return false;
 		}
 
-		// Fallback: if unknown structure, deny (safe default)
-		logger.debug("[ABAC] Predicate fell back to deny", {
-			predicateJson,
-		});
+		logger.debug("[ABAC] Predicate fell back to deny", { predicateJson });
 		return false;
 	}
 
@@ -364,48 +411,36 @@ export async function isAllowed({
 				)
 		: [];
 
+	const assignmentAttributes: Record<string, unknown> = {};
+	for (const assignment of effectiveAssignments) {
+		Object.assign(assignmentAttributes, assignment.attributes ?? {});
+	}
+	const teamMembershipAttributes: Record<string, unknown> = {};
+	for (const membership of teamMembershipRows) {
+		Object.assign(teamMembershipAttributes, membership.attributes ?? {});
+	}
+	const subjectAttributes = {
+		...(membershipRow.attributes ?? {}),
+		...teamMembershipAttributes,
+		...assignmentAttributes,
+		...mapEntityAttributes(userAttributes),
+		...mapEntityAttributes(workspaceAttributes),
+		...mapEntityAttributes(teamAttributes),
+	};
+
 	logger.debug("[ABAC] Subject context composed", {
 		userId,
 		workspaceId,
 		teamId,
-		subjectAttributes: {
-			...(membershipRow?.attributes ?? {}),
-			...(effectiveAssignments.reduce(
-				(acc: Record<string, unknown>, a) => ({
-					...acc,
-					...(a.attributes ?? {}),
-				}),
-				{},
-			) ?? {}),
-			...mapEntityAttributes(userAttributes),
-			...mapEntityAttributes(workspaceAttributes),
-			...mapEntityAttributes(teamAttributes),
-		},
+		subjectAttributes,
 		resource,
 		ambient,
 	});
 
 	const subject = {
-		attributes: {
-			// ...(userRow?.attributes ?? {}),
-			...(membershipRow?.attributes ?? {}),
-			...(effectiveAssignments.reduce(
-				(acc: Record<string, unknown>, a) => ({
-					...acc,
-					...(a.attributes ?? {}),
-				}),
-				{},
-			) ?? {}), // Assignment attributes
-			...mapEntityAttributes(userAttributes),
-			...mapEntityAttributes(workspaceAttributes),
-			...mapEntityAttributes(teamAttributes),
-		},
-		user: userRow
-			? { id: (userRow as any).id, email: (userRow as any).email }
-			: undefined,
-		membership: membershipRow
-			? { status: (membershipRow as any).status }
-			: undefined,
+		attributes: subjectAttributes,
+		user: userRow ? { id: userRow.id, email: userRow.email } : undefined,
+		membership: { status: membershipRow.status },
 	};
 
 	// 3) Evaluate each candidate: check constraint (if present) and collect effects

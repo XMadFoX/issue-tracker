@@ -11,7 +11,7 @@ import { teamCycleSettings } from "db/features/tracker/team-cycle-settings.schem
 import {
 	team,
 	teamMembership,
-	workspace,
+	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
 import { and, DrizzleQueryError, eq, inArray } from "drizzle-orm";
 import { omit } from "remeda";
@@ -38,7 +38,20 @@ export const listUserTeams = authedRouter.handler(async ({ context }) => {
 		.select({ team })
 		.from(team)
 		.innerJoin(teamMembership, eq(team.id, teamMembership.teamId))
-		.where(eq(teamMembership.userId, context.auth.session.userId));
+		.innerJoin(
+			workspaceMembership,
+			and(
+				eq(workspaceMembership.workspaceId, team.workspaceId),
+				eq(workspaceMembership.userId, teamMembership.userId),
+			),
+		)
+		.where(
+			and(
+				eq(teamMembership.userId, context.auth.session.userId),
+				eq(teamMembership.status, "active"),
+				eq(workspaceMembership.status, "active"),
+			),
+		);
 
 	return userTeams.map((item) => item.team);
 });
@@ -46,43 +59,47 @@ export const listUserTeams = authedRouter.handler(async ({ context }) => {
 export const listUserTeamsByWorkspace = authedRouter
 	.input(teamListSchema)
 	.handler(async ({ context, input }) => {
-		const [list] = await db
+		const list = await db
 			.select({ team })
 			.from(team)
 			.innerJoin(teamMembership, eq(team.id, teamMembership.teamId))
-			.innerJoin(workspace, eq(team.workspaceId, workspace.id))
+			.innerJoin(
+				workspaceMembership,
+				and(
+					eq(workspaceMembership.workspaceId, team.workspaceId),
+					eq(workspaceMembership.userId, teamMembership.userId),
+				),
+			)
 			.where(
 				and(
 					eq(teamMembership.userId, context.auth.session.userId),
-					eq(workspace.id, input.id),
+					eq(teamMembership.status, "active"),
+					eq(workspaceMembership.status, "active"),
+					eq(team.workspaceId, input.id),
 				),
 			);
 
-		return list;
+		return list.map((row) => row.team);
 	});
 
 export const listByWorkspace = authedRouter
 	.input(teamListSchema)
 	.handler(async ({ context, input }) => {
-		const allowed = await isAllowed({
+		const readableTeamIds = await getReadableTeamIdsForPermission({
 			userId: context.auth.session.userId,
 			workspaceId: input.id,
-			permissionKey: "workspace:read",
+			permissionKey: "team:read",
 		});
-		if (!allowed) {
-			throw new ORPCError("Unauthorized to read workspace");
-		}
-		if (!allowed) {
-			throw new ORPCError("Unauthorized to read workspace");
-		}
+		if (readableTeamIds.length === 0) return [];
 
 		const list = await db
 			.select({ team })
 			.from(team)
-			.innerJoin(workspace, eq(team.workspaceId, workspace.id))
-			.where(eq(workspace.id, input.id));
+			.where(
+				and(eq(team.workspaceId, input.id), inArray(team.id, readableTeamIds)),
+			);
 
-		return list.map((t) => t.team);
+		return list.map((row) => row.team);
 	});
 
 export const getBySlug = authedRouter
