@@ -39,6 +39,13 @@ export type PolicyEffect = (typeof rolePermissions.$inferSelect)["effect"];
 export type AttributeEntityType =
 	(typeof entityAttributes.$inferSelect)["entityType"];
 
+type FixtureInput<
+	Table extends { $inferInsert: object },
+	RequiredKeys extends keyof Table["$inferInsert"],
+	OptionalKeys extends keyof Table["$inferInsert"] = never,
+> = Required<Pick<Table["$inferInsert"], RequiredKeys>> &
+	Partial<Pick<Table["$inferInsert"], OptionalKeys>>;
+
 export function createLogicalIds() {
 	return {
 		user: createId(),
@@ -71,11 +78,9 @@ function catalogParts(key: string): { resourceType: string; action: string } {
 }
 
 export function createAbacFixtures(tables: AbacTables) {
-	const insertUser = async (input: {
-		id: string;
-		name?: string;
-		email?: string;
-	}) => {
+	const insertUser = async (
+		input: FixtureInput<typeof user, "id", "name" | "email">,
+	) => {
 		await tables.db.insert(tables.user).values({
 			id: input.id,
 			name: input.name ?? `User ${input.id}`,
@@ -84,12 +89,9 @@ export function createAbacFixtures(tables: AbacTables) {
 		return input.id;
 	};
 
-	const insertWorkspace = async (input: {
-		id: string;
-		name?: string;
-		slug?: string;
-		timezone?: string;
-	}) => {
+	const insertWorkspace = async (
+		input: FixtureInput<typeof workspace, "id", "name" | "slug" | "timezone">,
+	) => {
 		await tables.db.insert(tables.workspace).values({
 			id: input.id,
 			name: input.name ?? `Workspace ${input.id}`,
@@ -99,13 +101,13 @@ export function createAbacFixtures(tables: AbacTables) {
 		return input.id;
 	};
 
-	const insertTeam = async (input: {
-		id: string;
-		workspaceId: string;
-		name?: string;
-		key?: string;
-		privacy: "public" | "private";
-	}) => {
+	const insertTeam = async (
+		input: FixtureInput<
+			typeof team,
+			"id" | "workspaceId" | "privacy",
+			"name" | "key"
+		>,
+	) => {
 		await tables.db.insert(tables.team).values({
 			id: input.id,
 			workspaceId: input.workspaceId,
@@ -116,16 +118,13 @@ export function createAbacFixtures(tables: AbacTables) {
 		return input.id;
 	};
 
-	const insertRoleDefinition = async (input: {
-		id?: string;
-		workspaceId: string;
-		scopeLevel: RoleScopeLevel;
-		teamId: string | null;
-		name: string;
-		createdBy: string;
-		description?: string;
-		attributes?: Record<string, unknown>;
-	}) => {
+	const insertRoleDefinition = async (
+		input: FixtureInput<
+			typeof roleDefinitions,
+			"workspaceId" | "scopeLevel" | "teamId" | "name" | "createdBy",
+			"id" | "description" | "attributes"
+		>,
+	) => {
 		const id = input.id ?? createId();
 		await tables.db.insert(tables.roleDefinitions).values({
 			id,
@@ -140,13 +139,13 @@ export function createAbacFixtures(tables: AbacTables) {
 		return id;
 	};
 
-	const insertWorkspaceRole = async (input: {
-		id?: string;
-		workspaceId: string;
-		createdBy: string;
-		name: string;
-		attributes?: Record<string, unknown>;
-	}) =>
+	const insertWorkspaceRole = async (
+		input: FixtureInput<
+			typeof roleDefinitions,
+			"workspaceId" | "createdBy" | "name",
+			"id" | "attributes"
+		>,
+	) =>
 		insertRoleDefinition({
 			id: input.id,
 			workspaceId: input.workspaceId,
@@ -157,14 +156,13 @@ export function createAbacFixtures(tables: AbacTables) {
 			attributes: input.attributes,
 		});
 
-	const insertTeamRole = async (input: {
-		id?: string;
-		workspaceId: string;
-		teamId: string;
-		createdBy: string;
-		name: string;
-		attributes?: Record<string, unknown>;
-	}) =>
+	const insertTeamRole = async (
+		input: FixtureInput<
+			typeof roleDefinitions,
+			"workspaceId" | "teamId" | "createdBy" | "name",
+			"id" | "attributes"
+		>,
+	) =>
 		insertRoleDefinition({
 			id: input.id,
 			workspaceId: input.workspaceId,
@@ -175,14 +173,13 @@ export function createAbacFixtures(tables: AbacTables) {
 			attributes: input.attributes,
 		});
 
-	const insertWorkspaceMembership = async (input: {
-		id?: string;
-		workspaceId: string;
-		userId: string;
-		roleId: string;
-		status: string;
-		attributes?: Record<string, unknown>;
-	}) => {
+	const insertWorkspaceMembership = async (
+		input: FixtureInput<
+			typeof workspaceMembership,
+			"workspaceId" | "userId" | "roleId" | "status",
+			"id" | "attributes"
+		>,
+	) => {
 		const id = input.id ?? createId();
 		await tables.db.insert(tables.workspaceMembership).values({
 			id,
@@ -195,14 +192,13 @@ export function createAbacFixtures(tables: AbacTables) {
 		return id;
 	};
 
-	const insertTeamMembership = async (input: {
-		id?: string;
-		teamId: string;
-		userId: string;
-		roleId: string;
-		status: string;
-		attributes?: Record<string, unknown>;
-	}) => {
+	const insertTeamMembership = async (
+		input: FixtureInput<
+			typeof teamMembership,
+			"teamId" | "userId" | "roleId" | "status",
+			"id" | "attributes"
+		>,
+	) => {
 		const id = input.id ?? createId();
 		await tables.db.insert(tables.teamMembership).values({
 			id,
@@ -215,13 +211,13 @@ export function createAbacFixtures(tables: AbacTables) {
 		return id;
 	};
 
-	const insertPermission = async (input: {
-		id?: string;
-		key: string;
-		resourceType: string;
-		action: string;
-		description?: string;
-	}) => {
+	const insertPermission = async (
+		input: FixtureInput<
+			typeof permissionsCatalog,
+			"key" | "resourceType" | "action",
+			"id" | "description"
+		>,
+	) => {
 		const id = input.id ?? createId();
 		await tables.db.insert(tables.permissionsCatalog).values({
 			id,
@@ -242,13 +238,13 @@ export function createAbacFixtures(tables: AbacTables) {
 		});
 	};
 
-	const insertConstraint = async (input: {
-		id?: string;
-		workspaceId: string;
-		scopeLevel: RoleScopeLevel;
-		predicateJson: unknown;
-		description?: string;
-	}) => {
+	const insertConstraint = async (
+		input: FixtureInput<
+			typeof policyConstraints,
+			"workspaceId" | "scopeLevel" | "predicateJson",
+			"id" | "description"
+		>,
+	) => {
 		const id = input.id ?? createId();
 		await tables.db.insert(tables.policyConstraints).values({
 			id,
@@ -260,13 +256,13 @@ export function createAbacFixtures(tables: AbacTables) {
 		return id;
 	};
 
-	const insertRolePermission = async (input: {
-		roleId: string;
-		permissionId: string;
-		effect: PolicyEffect;
-		constraintId?: string | null;
-		attributes?: Record<string, unknown>;
-	}) => {
+	const insertRolePermission = async (
+		input: FixtureInput<
+			typeof rolePermissions,
+			"roleId" | "permissionId" | "effect",
+			"constraintId" | "attributes"
+		>,
+	) => {
 		await tables.db.insert(tables.rolePermissions).values({
 			roleId: input.roleId,
 			permissionId: input.permissionId,
@@ -276,15 +272,13 @@ export function createAbacFixtures(tables: AbacTables) {
 		});
 	};
 
-	const insertAssignment = async (input: {
-		id?: string;
-		roleId: string;
-		userId: string;
-		workspaceId: string;
-		teamId: string | null;
-		assignedBy: string;
-		attributes?: Record<string, unknown>;
-	}) => {
+	const insertAssignment = async (
+		input: FixtureInput<
+			typeof roleAssignments,
+			"roleId" | "userId" | "workspaceId" | "teamId" | "assignedBy",
+			"id" | "attributes"
+		>,
+	) => {
 		const id = input.id ?? createId();
 		await tables.db.insert(tables.roleAssignments).values({
 			id,
@@ -298,16 +292,13 @@ export function createAbacFixtures(tables: AbacTables) {
 		return id;
 	};
 
-	const insertEntityAttribute = async (input: {
-		id?: string;
-		entityType: AttributeEntityType;
-		entityId: string;
-		key: string;
-		value: unknown;
-		userId?: string | null;
-		workspaceId?: string | null;
-		teamId?: string | null;
-	}) => {
+	const insertEntityAttribute = async (
+		input: FixtureInput<
+			typeof entityAttributes,
+			"entityType" | "entityId" | "key" | "value",
+			"id" | "userId" | "workspaceId" | "teamId"
+		>,
+	) => {
 		const id = input.id ?? createId();
 		await tables.db.insert(tables.entityAttributes).values({
 			id,
