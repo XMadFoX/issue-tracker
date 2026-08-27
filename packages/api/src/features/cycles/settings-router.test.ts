@@ -10,6 +10,7 @@ import { createRouterClient, ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { AuthedORPCContext } from "../../context";
+import { env } from "../../env";
 import setupDb from "../../utils/prepare-tests";
 
 let db: typeof import("db").db;
@@ -28,6 +29,11 @@ let teamMembership: typeof import("db/features/tracker/tracker.schema").teamMemb
 let workspaceMembership: typeof import("db/features/tracker/tracker.schema").workspaceMembership;
 let user: typeof import("db/features/auth/auth.schema").user;
 let workspace: typeof import("db/features/tracker/tracker.schema").workspace;
+let issue: typeof import("db/features/tracker/issues.schema").issue;
+let issueActivity: typeof import("db/features/tracker/issue-activities.schema").issueActivity;
+let issueStatus: typeof import("db/features/tracker/issue-statuses.schema").issueStatus;
+let issueStatusGroup: typeof import("db/features/tracker/issue-statuses.schema").issueStatusGroup;
+let issueType: typeof import("db/features/tracker/issue-types.schema").issueType;
 let teardown: Awaited<ReturnType<typeof setupDb>>;
 
 const ids = {
@@ -163,7 +169,60 @@ async function expectCode(operation: Promise<unknown>, code: string) {
 	} catch (error) {
 		if (!(error instanceof ORPCError)) throw error;
 		expect(error.code).toBe(code);
+		return error;
 	}
+	throw new Error("expected oRPC error");
+}
+
+function setAutomationEnabled(value: boolean) {
+	Object.assign(env, { CYCLES_AUTOMATION_ENABLED: value });
+}
+
+async function withAutomationEnabled<T>(run: () => Promise<T>): Promise<T> {
+	const previous = env.CYCLES_AUTOMATION_ENABLED;
+	setAutomationEnabled(true);
+	try {
+		return await run();
+	} finally {
+		setAutomationEnabled(previous);
+	}
+}
+
+const enabledSettings = {
+	...settings,
+	cadenceEnabled: true,
+	cadenceDays: 7,
+	anchorDate: "2026-07-01T10:00:00.000Z",
+	planningHorizon: 2,
+} as const;
+
+async function snapshotTeamState() {
+	const [settingsRow] = await db
+		.select()
+		.from(teamCycleSettings)
+		.where(eq(teamCycleSettings.teamId, ids.team));
+	const [teamRow] = await db.select().from(team).where(eq(team.id, ids.team));
+	const cycles = await db
+		.select()
+		.from(cycle)
+		.where(eq(cycle.teamId, ids.team))
+		.orderBy(cycle.sequence);
+	const jobs = await db
+		.select()
+		.from(cycleScheduleJob)
+		.where(eq(cycleScheduleJob.teamId, ids.team))
+		.orderBy(cycleScheduleJob.id);
+	const actions = await db
+		.select()
+		.from(cycleActionRequired)
+		.where(eq(cycleActionRequired.teamId, ids.team))
+		.orderBy(cycleActionRequired.id);
+	const notifications = await db
+		.select()
+		.from(cycleNotification)
+		.where(eq(cycleNotification.teamId, ids.team))
+		.orderBy(cycleNotification.id);
+	return { settingsRow, teamRow, cycles, jobs, actions, notifications };
 }
 
 async function grant(
@@ -226,6 +285,14 @@ beforeAll(async () => {
 		"db/features/tracker/tracker.schema"
 	));
 	({ user } = await import("db/features/auth/auth.schema"));
+	({ issue } = await import("db/features/tracker/issues.schema"));
+	({ issueActivity } = await import(
+		"db/features/tracker/issue-activities.schema"
+	));
+	({ issueStatus, issueStatusGroup } = await import(
+		"db/features/tracker/issue-statuses.schema"
+	));
+	({ issueType } = await import("db/features/tracker/issue-types.schema"));
 	({ router } = await import("../../router"));
 }, 300_000);
 
@@ -1381,5 +1448,607 @@ describe("cycle settings routes", () => {
 			),
 			"NOT_FOUND",
 		);
+	});
+
+	test("rejects incompatible enabled cadence changes without mutating preserved state", async () => {
+		const staleCycleId = createId();
+		const issueId = createId();
+		const activityId = createId();
+		const statusGroupId = createId();
+		const statusId = createId();
+		const typeId = createId();
+		await db.insert(cycle).values({
+			id: staleCycleId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Stale planned",
+			sequence: 1,
+			startDate: new Date("2020-01-01T10:00:00.000Z"),
+			endDate: new Date("2020-01-08T10:00:00.000Z"),
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: new Date("2020-01-01T10:00:00.000Z"),
+		});
+		await db.insert(issueStatusGroup).values({
+			id: statusGroupId,
+			workspaceId: ids.workspace,
+			key: "planned",
+			name: "Planned",
+			canonicalCategory: "planned",
+			orderIndex: 0,
+		});
+		await db.insert(issueStatus).values({
+			id: statusId,
+			workspaceId: ids.workspace,
+			statusGroupId,
+			name: "Planned",
+			orderIndex: 0,
+		});
+		await db.insert(issueType).values({
+			id: typeId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Task",
+			key: "task",
+			icon: "check",
+			color: "blue",
+			orderIndex: 0,
+		});
+		await db.insert(issue).values({
+			id: issueId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			number: 1,
+			title: "Attached",
+			statusId,
+			issueTypeId: typeId,
+			cycleId: staleCycleId,
+			creatorId: ids.manager,
+			sortOrder: "a00",
+		});
+		await db.insert(issueActivity).values({
+			id: activityId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			issueId,
+			cycleId: staleCycleId,
+			actionType: "issue.cycle_assigned",
+		});
+		const artifacts = await seedScheduledArtifacts();
+		await db
+			.update(team)
+			.set({ cycleDuration: 14 })
+			.where(eq(team.id, ids.team));
+		const before = await snapshotTeamState();
+		const [issueBefore] = await db
+			.select()
+			.from(issue)
+			.where(eq(issue.id, issueId));
+		const [activityBefore] = await db
+			.select()
+			.from(issueActivity)
+			.where(eq(issueActivity.id, activityId));
+
+		const error = await withAutomationEnabled(async () =>
+			expectCode(
+				client(ids.manager).cycle.updateSettings(
+					{
+						workspaceId: ids.workspace,
+						teamId: ids.team,
+						expectedUpdatedAt: await currentRevision(),
+						...enabledSettings,
+						cadenceDays: 21,
+					},
+					options(ids.manager),
+				),
+				"SCHEDULE_RECONCILIATION_REQUIRED",
+			),
+		);
+		expect(error.data).toEqual({
+			reason: "scheduled_cycles_require_resolution",
+		});
+		expect(error.message).toContain("Cancel or reschedule");
+		expect(JSON.stringify(error.data)).not.toContain(staleCycleId);
+
+		const after = await snapshotTeamState();
+		expect(after).toEqual(before);
+		const [issueAfter] = await db
+			.select()
+			.from(issue)
+			.where(eq(issue.id, issueId));
+		const [activityAfter] = await db
+			.select()
+			.from(issueActivity)
+			.where(eq(issueActivity.id, activityId));
+		expect(issueAfter).toEqual(issueBefore);
+		expect(activityAfter).toEqual(activityBefore);
+		const [job] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, artifacts.jobId));
+		expect(job?.status).toBe("queued");
+	});
+
+	test("allows a compatible enable when no persisted cycles exist", async () => {
+		const result = await withAutomationEnabled(async () =>
+			client(ids.manager).cycle.updateSettings(
+				{
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					expectedUpdatedAt: await currentRevision(),
+					...enabledSettings,
+				},
+				options(ids.manager),
+			),
+		);
+		expect(result.settings.cadenceEnabled).toBeTrue();
+		expect(result.settings.cadenceDays).toBe(7);
+		const [updatedTeam] = await db
+			.select({ cycleDuration: team.cycleDuration })
+			.from(team)
+			.where(eq(team.id, ids.team));
+		expect(updatedTeam?.cycleDuration).toBe(7);
+	});
+
+	test("does not reject policy-only saves because an active cycle exists", async () => {
+		await db
+			.update(teamCycleSettings)
+			.set({
+				cadenceEnabled: true,
+				cadenceDays: 7,
+				anchorDate: new Date(enabledSettings.anchorDate),
+			})
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		await db.insert(cycle).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Active",
+			sequence: 1,
+			state: "active",
+			origin: "scheduled",
+			scheduledBoundary: new Date("2026-07-01T10:00:00.000Z"),
+			startDate: new Date("2026-07-01T10:00:00.000Z"),
+			endDate: new Date("2026-07-08T10:00:00.000Z"),
+		});
+		const cyclesBefore = await db.select().from(cycle);
+		const result = await withAutomationEnabled(async () =>
+			client(ids.manager).cycle.updateSettings(
+				{
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					expectedUpdatedAt: await currentRevision(),
+					...enabledSettings,
+					endBehavior: "reminder_only",
+					reminderLeadMinutes: 120,
+				},
+				options(ids.manager),
+			),
+		);
+		expect(result.settings.endBehavior).toBe("reminder_only");
+		expect(result.settings.cadenceEnabled).toBeTrue();
+		expect(await db.select().from(cycle)).toEqual(cyclesBefore);
+	});
+
+	test("rejects an overlapping manual cycle and preserves completed cycles", async () => {
+		const { enumerateScheduledCycleOccurrences } = await import("./schedule");
+		const [occurrence] = enumerateScheduledCycleOccurrences({
+			workspaceTimezone: "America/New_York",
+			settings: {
+				...enabledSettings,
+				anchorDate: new Date(enabledSettings.anchorDate),
+			},
+			now: new Date(),
+			count: 1,
+		});
+		if (!occurrence) throw new Error("expected an occurrence");
+		const completedId = createId();
+		await db.insert(cycle).values([
+			{
+				id: createId(),
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				name: "Manual overlap",
+				sequence: 1,
+				state: "planned",
+				origin: "manual",
+				startDate: occurrence.boundary,
+				endDate: occurrence.endDate,
+			},
+			{
+				id: completedId,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				name: "Completed",
+				sequence: 2,
+				state: "completed",
+				origin: "scheduled",
+				scheduledBoundary: new Date("2019-01-01T10:00:00.000Z"),
+				startDate: new Date("2019-01-01T10:00:00.000Z"),
+				endDate: new Date("2019-01-08T10:00:00.000Z"),
+			},
+		]);
+		const [completedBefore] = await db
+			.select()
+			.from(cycle)
+			.where(eq(cycle.id, completedId));
+		const error = await withAutomationEnabled(async () =>
+			expectCode(
+				client(ids.manager).cycle.updateSettings(
+					{
+						workspaceId: ids.workspace,
+						teamId: ids.team,
+						expectedUpdatedAt: await currentRevision(),
+						...enabledSettings,
+					},
+					options(ids.manager),
+				),
+				"SCHEDULE_RECONCILIATION_REQUIRED",
+			),
+		);
+		expect(error.data).toEqual({ reason: "manual_cycle_conflict" });
+		const [completedAfter] = await db
+			.select()
+			.from(cycle)
+			.where(eq(cycle.id, completedId));
+		expect(completedAfter).toEqual(completedBefore);
+	});
+
+	test("rejects an overlapping active cycle without mutating it", async () => {
+		const { enumerateScheduledCycleOccurrences } = await import("./schedule");
+		const [occurrence] = enumerateScheduledCycleOccurrences({
+			workspaceTimezone: "America/New_York",
+			settings: {
+				...enabledSettings,
+				anchorDate: new Date(enabledSettings.anchorDate),
+			},
+			now: new Date(),
+			count: 1,
+		});
+		if (!occurrence) throw new Error("expected an occurrence");
+		const activeId = createId();
+		await db.insert(cycle).values({
+			id: activeId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Active overlap",
+			sequence: 1,
+			state: "active",
+			origin: "manual",
+			startDate: occurrence.boundary,
+			endDate: occurrence.endDate,
+		});
+		const [before] = await db
+			.select()
+			.from(cycle)
+			.where(eq(cycle.id, activeId));
+		const error = await withAutomationEnabled(async () =>
+			expectCode(
+				client(ids.manager).cycle.updateSettings(
+					{
+						workspaceId: ids.workspace,
+						teamId: ids.team,
+						expectedUpdatedAt: await currentRevision(),
+						...enabledSettings,
+					},
+					options(ids.manager),
+				),
+				"SCHEDULE_RECONCILIATION_REQUIRED",
+			),
+		);
+		expect(error.data).toEqual({ reason: "active_cycle_conflict" });
+		const [after] = await db.select().from(cycle).where(eq(cycle.id, activeId));
+		expect(after).toEqual(before);
+	});
+
+	test("keeps unauthorized rejections non-disclosing and non-mutating", async () => {
+		await db.insert(cycle).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Hidden",
+			sequence: 1,
+			startDate: new Date("2020-01-01T10:00:00.000Z"),
+			endDate: new Date("2020-01-08T10:00:00.000Z"),
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: new Date("2020-01-01T10:00:00.000Z"),
+		});
+		const before = await snapshotTeamState();
+		const error = await expectCode(
+			client(ids.reader).cycle.updateSettings(
+				{
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					expectedUpdatedAt: await currentRevision(),
+					...enabledSettings,
+				},
+				options(ids.reader),
+			),
+			"UNAUTHORIZED",
+		);
+		expect(error.data).toBeUndefined();
+		expect(error.message).not.toContain("cadence");
+		expect(await snapshotTeamState()).toEqual(before);
+	});
+
+	test("stale expectedUpdatedAt wins over schedule reconciliation", async () => {
+		await db.insert(cycle).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Stale",
+			sequence: 1,
+			startDate: new Date("2020-01-01T10:00:00.000Z"),
+			endDate: new Date("2020-01-08T10:00:00.000Z"),
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: new Date("2020-01-01T10:00:00.000Z"),
+		});
+		await withAutomationEnabled(async () =>
+			expectCode(
+				client(ids.manager).cycle.updateSettings(
+					{
+						workspaceId: ids.workspace,
+						teamId: ids.team,
+						expectedUpdatedAt: "2020-01-01T00:00:00.000Z",
+						...enabledSettings,
+					},
+					options(ids.manager),
+				),
+				"SETTINGS_CHANGED",
+			),
+		);
+	});
+
+	test("disables cadence while preserving cycles and started job leases", async () => {
+		const cycleId = createId();
+		const boundary = new Date("2026-07-15T10:00:00.000Z");
+		const [initial] = await db
+			.select()
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		if (!initial) throw new Error("settings missing");
+		await db.insert(cycle).values({
+			id: cycleId,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Keep me",
+			sequence: 1,
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: boundary,
+			startDate: boundary,
+			endDate: new Date("2026-07-22T10:00:00.000Z"),
+		});
+		const startedId = createId();
+		const queuedId = createId();
+		const blockedId = createId();
+		const failedId = createId();
+		const claimToken = "started-claim-token";
+		await db.insert(cycleScheduleJob).values([
+			{
+				id: startedId,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				cycleId,
+				jobType: "start_scheduled_cycle",
+				scheduledBoundary: boundary,
+				eventRevisionAt: initial.updatedAt,
+				status: "started",
+				attempts: 1,
+				availableAt: boundary,
+				leaseExpiresAt: new Date("2030-01-01T00:00:00.000Z"),
+				workerId: "worker-1",
+				claimToken,
+				startedAt: new Date("2026-07-15T10:00:00.000Z"),
+			},
+			{
+				id: queuedId,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				cycleId,
+				jobType: "complete_scheduled_cycle",
+				scheduledBoundary: new Date("2026-07-22T10:00:00.000Z"),
+				eventRevisionAt: initial.updatedAt,
+				status: "queued",
+			},
+			{
+				id: blockedId,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				cycleId,
+				jobType: "start_scheduled_cycle",
+				scheduledBoundary: new Date("2026-07-29T10:00:00.000Z"),
+				eventRevisionAt: initial.updatedAt,
+				status: "blocked",
+				attempts: 0,
+				startedAt: new Date("2026-07-15T10:00:00.000Z"),
+			},
+			{
+				id: failedId,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				cycleId,
+				jobType: "send_cycle_reminder",
+				scheduledBoundary: new Date("2026-07-22T10:00:00.000Z"),
+				eventRevisionAt: initial.updatedAt,
+				status: "failed",
+				attempts: 1,
+				finishedAt: new Date("2026-07-15T11:00:00.000Z"),
+			},
+		]);
+		const [startedBefore] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, startedId));
+		await client(ids.manager).cycle.updateSettings(
+			{
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				expectedUpdatedAt: await currentRevision(),
+				...settings,
+				cadenceEnabled: false,
+			},
+			options(ids.manager),
+		);
+		const [keptCycle] = await db
+			.select()
+			.from(cycle)
+			.where(eq(cycle.id, cycleId));
+		expect(keptCycle?.state).toBe("planned");
+		const [startedAfter] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, startedId));
+		expect(startedAfter).toEqual(startedBefore);
+		expect(startedAfter?.claimToken).toBe(claimToken);
+		expect(startedAfter?.workerId).toBe("worker-1");
+		const [queued] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, queuedId));
+		const [blocked] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, blockedId));
+		const [failed] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, failedId));
+		expect(queued).toMatchObject({
+			status: "succeeded",
+			outcome: "obsolete_settings",
+		});
+		expect(blocked).toMatchObject({
+			status: "succeeded",
+			outcome: "obsolete_settings",
+		});
+		expect(failed).toMatchObject({
+			status: "succeeded",
+			outcome: "obsolete_settings",
+		});
+	});
+
+	test("re-enables a compatible schedule and rejects an incompatible re-enable", async () => {
+		const boundary = new Date(enabledSettings.anchorDate);
+		const endDate = new Date("2026-07-08T10:00:00.000Z");
+		await db.insert(cycle).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "On grid",
+			sequence: 1,
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: boundary,
+			startDate: boundary,
+			endDate,
+		});
+		const enabled = await withAutomationEnabled(async () =>
+			client(ids.manager).cycle.updateSettings(
+				{
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					expectedUpdatedAt: await currentRevision(),
+					...enabledSettings,
+				},
+				options(ids.manager),
+			),
+		);
+		expect(enabled.settings.cadenceEnabled).toBeTrue();
+		await client(ids.manager).cycle.updateSettings(
+			{
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				expectedUpdatedAt: enabled.settings.updatedAt.toISOString(),
+				...enabledSettings,
+				cadenceEnabled: false,
+			},
+			options(ids.manager),
+		);
+		await db.insert(cycle).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Off grid",
+			sequence: 2,
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: new Date("2020-02-01T10:00:00.000Z"),
+			startDate: new Date("2020-02-01T10:00:00.000Z"),
+			endDate: new Date("2020-02-08T10:00:00.000Z"),
+		});
+		await withAutomationEnabled(async () =>
+			expectCode(
+				client(ids.manager).cycle.updateSettings(
+					{
+						workspaceId: ids.workspace,
+						teamId: ids.team,
+						expectedUpdatedAt: await currentRevision(),
+						...enabledSettings,
+					},
+					options(ids.manager),
+				),
+				"SCHEDULE_RECONCILIATION_REQUIRED",
+			),
+		);
+	});
+
+	test("serializes settings updates with generation under the team lock", async () => {
+		const { maintainPlannedCycleHorizon } = await import("./generation");
+		await withAutomationEnabled(async () => {
+			await client(ids.manager).cycle.updateSettings(
+				{
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					expectedUpdatedAt: await currentRevision(),
+					...enabledSettings,
+				},
+				options(ids.manager),
+			);
+			const generated = await maintainPlannedCycleHorizon({
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				now: new Date("2026-07-15T10:00:00.000Z"),
+			});
+			expect([
+				"created",
+				"already_satisfied",
+				"scheduled_cycle_conflict",
+			]).toContain(generated.status);
+			await expectCode(
+				client(ids.manager).cycle.updateSettings(
+					{
+						workspaceId: ids.workspace,
+						teamId: ids.team,
+						expectedUpdatedAt: await currentRevision(),
+						...enabledSettings,
+						cadenceDays: 21,
+						anchorDate: "2026-08-01T10:00:00.000Z",
+					},
+					options(ids.manager),
+				),
+				"SCHEDULE_RECONCILIATION_REQUIRED",
+			);
+			const disable = await client(ids.manager).cycle.updateSettings(
+				{
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					expectedUpdatedAt: await currentRevision(),
+					...enabledSettings,
+					cadenceEnabled: false,
+				},
+				options(ids.manager),
+			);
+			expect(disable.settings.cadenceEnabled).toBeFalse();
+			expect(
+				await maintainPlannedCycleHorizon({
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					now: new Date("2026-07-15T10:00:00.000Z"),
+				}),
+			).toEqual({ status: "disabled" });
+		});
 	});
 });

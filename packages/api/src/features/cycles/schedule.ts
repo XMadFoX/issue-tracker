@@ -168,6 +168,86 @@ function getActionTiming({
 	};
 }
 
+export function exactCadenceOccurrenceForCycle({
+	workspaceTimezone,
+	settings,
+	cycleRow,
+}: {
+	workspaceTimezone: string;
+	settings: Pick<
+		ScheduleSettings,
+		"cadenceEnabled" | "cadenceDays" | "anchorDate"
+	>;
+	cycleRow: {
+		origin: string;
+		scheduledBoundary: Date | null;
+		startDate: Date;
+		endDate: Date;
+	};
+}): ScheduledCycleOccurrence | null {
+	if (cycleRow.origin !== "scheduled" || !cycleRow.scheduledBoundary) {
+		return null;
+	}
+	const occurrence = cadenceOccurrenceAtBoundary({
+		workspaceTimezone,
+		settings,
+		boundary: cycleRow.scheduledBoundary,
+	});
+	if (
+		!occurrence ||
+		cycleRow.startDate.getTime() !== occurrence.boundary.getTime() ||
+		cycleRow.endDate.getTime() !== occurrence.endDate.getTime()
+	) {
+		return null;
+	}
+	return occurrence;
+}
+
+export function cadenceOccurrenceAtBoundary({
+	workspaceTimezone,
+	settings,
+	boundary,
+}: {
+	workspaceTimezone: string;
+	settings: Pick<
+		ScheduleSettings,
+		"cadenceEnabled" | "cadenceDays" | "anchorDate"
+	>;
+	boundary: Date;
+}): ScheduledCycleOccurrence | null {
+	if (!isValidIanaTimezone(workspaceTimezone)) {
+		throw new InvalidWorkspaceTimezoneError(workspaceTimezone);
+	}
+	if (!settings.cadenceEnabled || !settings.anchorDate) return null;
+
+	const anchor = Temporal.Instant.from(
+		settings.anchorDate.toISOString(),
+	).toZonedDateTimeISO(workspaceTimezone);
+	const candidate = Temporal.Instant.from(
+		boundary.toISOString(),
+	).toZonedDateTimeISO(workspaceTimezone);
+	const calendarDays = anchor
+		.toPlainDate()
+		.until(candidate.toPlainDate(), { largestUnit: "days" }).days;
+	if (calendarDays < 0 || calendarDays % settings.cadenceDays !== 0) {
+		return null;
+	}
+
+	const expectedBoundary = addCalendarDays(anchor, calendarDays);
+	if (
+		expectedBoundary.toInstant().epochMilliseconds !==
+		candidate.toInstant().epochMilliseconds
+	) {
+		return null;
+	}
+
+	const end = addCalendarDays(expectedBoundary, settings.cadenceDays);
+	return {
+		boundary: new Date(expectedBoundary.toInstant().epochMilliseconds),
+		endDate: new Date(end.toInstant().epochMilliseconds),
+	};
+}
+
 export function enumerateScheduledCycleOccurrences({
 	workspaceTimezone,
 	settings,

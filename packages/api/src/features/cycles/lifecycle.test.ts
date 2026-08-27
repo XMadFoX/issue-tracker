@@ -226,6 +226,39 @@ describe("scheduled cycle lifecycle", () => {
 		expect(source?.state).toBe("active");
 	});
 
+	test("rejects start for a correct boundary with the wrong cadence end", async () => {
+		const settings = await seedSettings();
+		const wrongEnd = new Date("2026-07-16T10:00:00.000Z");
+		await db.insert(cycle).values({
+			id: ids.source,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Source Cycle",
+			sequence: 1,
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: sourceStart,
+			startDate: sourceStart,
+			endDate: wrongEnd,
+		});
+		expect(await startScheduledCycle(startInput(settings))).toEqual({
+			status: "invalid_provenance",
+		});
+		const [unchanged] = await db
+			.select({ state: cycle.state, endDate: cycle.endDate })
+			.from(cycle)
+			.where(eq(cycle.id, ids.source));
+		expect(unchanged).toEqual({ state: "planned", endDate: wrongEnd });
+
+		await db
+			.update(cycle)
+			.set({ endDate: sourceEnd })
+			.where(eq(cycle.id, ids.source));
+		expect(await startScheduledCycle(startInput(settings))).toEqual({
+			status: "started",
+		});
+	});
+
 	test("keeps not-due, stale, and invalid-provenance starts inert", async () => {
 		const settings = await seedSettings();
 		await seedSource("planned");
@@ -375,6 +408,61 @@ describe("scheduled cycle lifecycle", () => {
 			expect(persistedIssue?.cycleId).toBe(ids.source);
 			expect(await db.select().from(issueActivity)).toHaveLength(0);
 		}
+	});
+
+	test("rejects completion for a correct boundary with the wrong cadence end", async () => {
+		const settings = await seedSettings({
+			defaultRolloverPolicy: "move_to_backlog",
+		});
+		const wrongEnd = new Date("2026-07-16T10:00:00.000Z");
+		await db.insert(cycle).values({
+			id: ids.source,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Source Cycle",
+			sequence: 1,
+			state: "active",
+			origin: "scheduled",
+			scheduledBoundary: sourceStart,
+			startDate: sourceStart,
+			endDate: wrongEnd,
+		});
+		await seedPlannedIssue();
+		const wrongInput = {
+			...completionInput(settings),
+			scheduledBoundary: wrongEnd,
+		};
+		await seedCompletionJob(settings, wrongInput);
+		expect(await completeScheduledCycle(wrongInput)).toEqual({
+			status: "invalid_provenance",
+		});
+		const [unchanged] = await db
+			.select({ state: cycle.state, endDate: cycle.endDate })
+			.from(cycle)
+			.where(eq(cycle.id, ids.source));
+		expect(unchanged).toEqual({ state: "active", endDate: wrongEnd });
+		const [persistedIssue] = await db
+			.select({ cycleId: issue.cycleId })
+			.from(issue)
+			.where(eq(issue.id, ids.issue));
+		expect(persistedIssue?.cycleId).toBe(ids.source);
+		expect(await db.select().from(issueActivity)).toHaveLength(0);
+
+		await db
+			.update(cycle)
+			.set({ endDate: sourceEnd })
+			.where(eq(cycle.id, ids.source));
+		await db
+			.delete(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, wrongInput.jobId));
+		await seedCompletionJob(settings);
+		const result = await completeScheduledCycle(completionInput(settings));
+		expect(result.status).toBe("completed");
+		const [movedIssue] = await db
+			.select({ cycleId: issue.cycleId })
+			.from(issue)
+			.where(eq(issue.id, ids.issue));
+		expect(movedIssue?.cycleId).toBeNull();
 	});
 
 	test("rejects completion without a matching durable completion job", async () => {

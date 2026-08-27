@@ -13,7 +13,11 @@ import {
 	type PlannedCycleHorizonResult,
 } from "./generation";
 import { type CycleTransaction, lockCycleTeam } from "./mutation";
-import { deriveScheduleActionTiming, type ScheduleSettings } from "./schedule";
+import {
+	deriveScheduleActionTiming,
+	exactCadenceOccurrenceForCycle,
+	type ScheduleSettings,
+} from "./schedule";
 
 export type ScheduledLifecycleJobInput = {
 	workspaceId: string;
@@ -136,7 +140,7 @@ async function startScheduledCycleInTransaction(
 ): Promise<StartScheduledCycleResult> {
 	const state = await lockLifecycleState(tx, input);
 	if (!state) return { status: "not_found" };
-	const { cycleRow, settings } = state;
+	const { cycleRow, settings, workspaceTimezone } = state;
 	if (
 		cycleRow.origin !== "scheduled" ||
 		!sameInstant(cycleRow.scheduledBoundary, cycleRow.startDate) ||
@@ -151,6 +155,17 @@ async function startScheduledCycleInTransaction(
 		!sameInstant(settings.updatedAt, input.eventRevisionAt)
 	) {
 		return { status: "obsolete_settings" };
+	}
+	const occurrence = exactCadenceOccurrenceForCycle({
+		workspaceTimezone,
+		settings: scheduleSettings(settings),
+		cycleRow,
+	});
+	if (
+		!occurrence ||
+		!sameInstant(input.scheduledBoundary, occurrence.boundary)
+	) {
+		return { status: "invalid_provenance" };
 	}
 	if (input.now < cycleRow.startDate) return { status: "not_due" };
 
@@ -233,6 +248,17 @@ async function completeScheduledCycleInTransaction(
 		!sameInstant(settings.updatedAt, input.eventRevisionAt)
 	) {
 		return { status: "obsolete_settings" };
+	}
+	const occurrence = exactCadenceOccurrenceForCycle({
+		workspaceTimezone,
+		settings: scheduleSettings(settings),
+		cycleRow,
+	});
+	if (
+		!occurrence ||
+		!sameInstant(input.scheduledBoundary, occurrence.endDate)
+	) {
+		return { status: "invalid_provenance" };
 	}
 	const timing = deriveScheduleActionTiming({
 		workspaceTimezone,

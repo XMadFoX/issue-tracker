@@ -34,7 +34,12 @@ import { writeIssueActivity } from "../issues/activity";
 import { issuePublisher } from "../issues/publisher";
 import { getIssueWithRelations } from "../issues/queries";
 import { completeCycle } from "./completion";
-import { isLifecycleJobType, retryLifecycleJob } from "./lifecycle-jobs";
+import { assessEnabledScheduleCompatibility } from "./generation";
+import {
+	isLifecycleJobType,
+	obsoleteNonStartedTeamEventJobs,
+	retryLifecycleJob,
+} from "./lifecycle-jobs";
 import {
 	buildIssueTypeScopeChange,
 	cycleBaselineActionTypes,
@@ -142,6 +147,21 @@ const completionErrors = {
 	},
 };
 
+const scheduleReconciliationReasonSchema = z.enum([
+	"scheduled_cycles_require_resolution",
+	"active_cycle_conflict",
+	"manual_cycle_conflict",
+]);
+
+const scheduleReconciliationMessages = {
+	scheduled_cycles_require_resolution:
+		"Existing scheduled cycles cannot be safely moved to the requested cadence. Cancel or reschedule the conflicting planned cycles explicitly, then retry.",
+	active_cycle_conflict:
+		"An active cycle overlaps the requested cadence. Complete or cancel it explicitly, then retry.",
+	manual_cycle_conflict:
+		"A manual cycle overlaps the requested cadence. Cancel or reschedule it explicitly, then retry.",
+} as const;
+
 const settingsErrors = {
 	...commonErrors,
 	SETTINGS_NOT_INITIALIZED: {
@@ -159,6 +179,13 @@ const settingsErrors = {
 	SETTINGS_CHANGED: {
 		status: 409,
 		message: "Cycle settings changed. Review the current values and try again.",
+	},
+	SCHEDULE_RECONCILIATION_REQUIRED: {
+		status: 409,
+		message: scheduleReconciliationMessages.scheduled_cycles_require_resolution,
+		data: z.object({
+			reason: scheduleReconciliationReasonSchema,
+		}),
 	},
 };
 
@@ -1056,6 +1083,11 @@ const updateSettings = authedRouter
 		}
 		const { teamId, workspaceId, expectedUpdatedAt, ...settings } = input;
 		const updated = await db.transaction(async (tx) => {
+			await lockCycleTeam({
+				tx,
+				workspaceId,
+				teamId,
+			});
 			const result = await updateScopedTeamCycleSettings({
 				executor: tx,
 				workspaceId,
@@ -1064,6 +1096,33 @@ const updateSettings = authedRouter
 				settings,
 				expectedUpdatedAt,
 				automationAvailable: env.CYCLES_AUTOMATION_ENABLED,
+				validateEnabledSchedule: async (current) => {
+					const scopedTx = await getScopedTeamCycleSettings({
+						executor: tx,
+						workspaceId,
+						teamId,
+					});
+					if (!scopedTx) return null;
+					const cycles = await tx
+						.select()
+						.from(cycle)
+						.where(
+							and(eq(cycle.workspaceId, workspaceId), eq(cycle.teamId, teamId)),
+						)
+						.for("update");
+					const compatibility = assessEnabledScheduleCompatibility({
+						cycles,
+						workspaceTimezone: scopedTx.workspaceTimezone,
+						settings,
+						now: new Date(),
+					});
+					if (compatibility.status !== "incompatible") return null;
+					return {
+						status: "incompatible" as const,
+						reason: compatibility.reason,
+						settings: current,
+					};
+				},
 			});
 			if (!result || result.status !== "updated") return result;
 			await cancelTeamCycleArtifacts(tx, {
@@ -1071,11 +1130,21 @@ const updateSettings = authedRouter
 				teamId,
 				reason: "settings_changed",
 			});
+			await obsoleteNonStartedTeamEventJobs(tx, {
+				workspaceId,
+				teamId,
+			});
 			return result;
 		});
 		if (!updated) throw errors.SETTINGS_NOT_INITIALIZED();
 		if (updated.status === "conflict") throw errors.SETTINGS_CHANGED();
 		if (updated.status === "unavailable") throw errors.AUTOMATION_UNAVAILABLE();
+		if (updated.status === "incompatible") {
+			throw errors.SCHEDULE_RECONCILIATION_REQUIRED({
+				message: scheduleReconciliationMessages[updated.reason],
+				data: { reason: updated.reason },
+			});
+		}
 
 		return {
 			settings: updated.settings,

@@ -2,6 +2,7 @@ import type { db } from "db";
 import { teamCycleSettings } from "db/features/tracker/team-cycle-settings.schema";
 import { team, workspace } from "db/features/tracker/tracker.schema";
 import { and, eq } from "drizzle-orm";
+import type { ScheduleCompatibilityReason } from "./generation";
 import type { CycleSettingsValue } from "./schema";
 
 const DEFAULT_CADENCE_DAYS = 14;
@@ -108,9 +109,31 @@ export type UpdateTeamCycleSettingsResult =
 	| { status: "updated"; settings: TeamCycleSettings }
 	| { status: "unchanged"; settings: TeamCycleSettings }
 	| { status: "conflict"; settings: TeamCycleSettings }
-	| { status: "unavailable"; settings: TeamCycleSettings };
+	| { status: "unavailable"; settings: TeamCycleSettings }
+	| {
+			status: "incompatible";
+			reason: ScheduleCompatibilityReason;
+			settings: TeamCycleSettings;
+	  };
 
-function settingsMatch(
+export function requiresScheduleCompatibility(
+	current: TeamCycleSettings,
+	requested: CycleSettingsValue,
+): boolean {
+	if (!requested.cadenceEnabled) return false;
+	if (!current.cadenceEnabled) return true;
+	const currentAnchor = current.anchorDate?.getTime() ?? null;
+	const requestedAnchor = requested.anchorDate
+		? new Date(requested.anchorDate).getTime()
+		: null;
+	return (
+		current.cadenceDays !== requested.cadenceDays ||
+		currentAnchor !== requestedAnchor ||
+		current.planningHorizon !== requested.planningHorizon
+	);
+}
+
+export function settingsMatch(
 	current: TeamCycleSettings,
 	requested: CycleSettingsValue,
 ): boolean {
@@ -137,6 +160,7 @@ export async function updateScopedTeamCycleSettings({
 	settings,
 	expectedUpdatedAt,
 	automationAvailable,
+	validateEnabledSchedule,
 }: {
 	executor: DbExecutor;
 	workspaceId: string;
@@ -145,6 +169,12 @@ export async function updateScopedTeamCycleSettings({
 	settings: CycleSettingsValue;
 	expectedUpdatedAt: string;
 	automationAvailable: boolean;
+	validateEnabledSchedule?: (
+		current: TeamCycleSettings,
+	) => Promise<Extract<
+		UpdateTeamCycleSettingsResult,
+		{ status: "incompatible" }
+	> | null>;
 }): Promise<UpdateTeamCycleSettingsResult | null> {
 	const [scopedTeam] = await executor
 		.select({ id: team.id, cycleDuration: team.cycleDuration })
@@ -170,6 +200,13 @@ export async function updateScopedTeamCycleSettings({
 	}
 	if (settings.cadenceEnabled && automationAvailable === false) {
 		return { status: "unavailable", settings: current };
+	}
+	if (
+		validateEnabledSchedule &&
+		requiresScheduleCompatibility(current, settings)
+	) {
+		const incompatible = await validateEnabledSchedule(current);
+		if (incompatible) return incompatible;
 	}
 
 	const [updated] = await executor

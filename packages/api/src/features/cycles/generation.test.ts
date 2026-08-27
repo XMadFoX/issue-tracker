@@ -167,10 +167,11 @@ describe("maintainPlannedCycleHorizon", () => {
 		expect(await scheduledCycles()).toHaveLength(0);
 	});
 
-	test("preserves edited and canceled scheduled boundaries while maintaining future coverage", async () => {
+	test("does not treat a matching boundary with the wrong duration as satisfied", async () => {
 		await maintain();
-		const [first, second] = await scheduledCycles();
-		if (!first || !second) throw new Error("expected seeded scheduled cycles");
+		const [first] = await scheduledCycles();
+		if (!first) throw new Error("expected seeded scheduled cycles");
+		const before = await scheduledCycles();
 		await db
 			.update(cycle)
 			.set({
@@ -179,10 +180,19 @@ describe("maintainPlannedCycleHorizon", () => {
 				endDate: new Date("2026-07-21T10:00:00.000Z"),
 			})
 			.where(eq(cycle.id, first.id));
-		expect((await maintain()).status).toBe("already_satisfied");
-		const [edited] = await scheduledCycles();
-		expect(edited?.name).toBe("Edited by manager");
+		const result = await maintain();
+		expect(result.status).toBe("scheduled_cycle_conflict");
+		expect(result).toMatchObject({ cycleId: first.id });
+		const after = await scheduledCycles();
+		expect(after.map((row) => row.id)).toEqual(before.map((row) => row.id));
+		expect(after[0]?.name).toBe("Edited by manager");
+		expect(after[0]?.startDate.toISOString()).toBe("2026-07-14T10:00:00.000Z");
+	});
 
+	test("does not count a canceled exact-boundary cycle as planned coverage", async () => {
+		await maintain();
+		const [first, second] = await scheduledCycles();
+		if (!first || !second) throw new Error("expected seeded scheduled cycles");
 		await db
 			.update(cycle)
 			.set({ state: "canceled" })
@@ -199,6 +209,12 @@ describe("maintainPlannedCycleHorizon", () => {
 					row.scheduledBoundary?.toISOString() === "2026-07-22T10:00:00.000Z",
 			),
 		).toHaveLength(1);
+		expect(
+			rows.find(
+				(row) =>
+					row.scheduledBoundary?.toISOString() === "2026-07-22T10:00:00.000Z",
+			)?.state,
+		).toBe("canceled");
 	});
 
 	test("uses current cadence, anchor, and timezone without counting old provenance", async () => {

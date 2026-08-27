@@ -17,6 +17,7 @@ let team: typeof import("db/features/tracker/tracker.schema").team;
 let workspace: typeof import("db/features/tracker/tracker.schema").workspace;
 let enqueueLifecycleJobs: typeof import("./lifecycle-jobs").enqueueLifecycleJobs;
 let retryLifecycleJob: typeof import("./lifecycle-jobs").retryLifecycleJob;
+let obsoleteNonStartedTeamEventJobs: typeof import("./lifecycle-jobs").obsoleteNonStartedTeamEventJobs;
 let teardown: Awaited<ReturnType<typeof setupDb>>;
 
 const ids = {
@@ -39,9 +40,11 @@ beforeAll(async () => {
 		"db/features/tracker/team-cycle-settings.schema"
 	));
 	({ team, workspace } = await import("db/features/tracker/tracker.schema"));
-	({ enqueueLifecycleJobs, retryLifecycleJob } = await import(
-		"./lifecycle-jobs"
-	));
+	({
+		enqueueLifecycleJobs,
+		retryLifecycleJob,
+		obsoleteNonStartedTeamEventJobs,
+	} = await import("./lifecycle-jobs"));
 }, 300_000);
 
 afterAll(async () => {
@@ -127,6 +130,65 @@ describe("cycle lifecycle job reconciliation", () => {
 		expect(
 			rows.find((row) => row.status === "queued")?.eventRevisionAt,
 		).toEqual(revision);
+	});
+
+	test("does not enqueue jobs for a correct boundary with the wrong cadence end", async () => {
+		const wrongEnd = new Date("2026-11-09T06:30:00.000Z");
+		await db.insert(cycle).values({
+			id: ids.cycle,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Lifecycle Jobs Cycle",
+			sequence: 1,
+			state: "planned",
+			origin: "scheduled",
+			scheduledBoundary: start,
+			startDate: start,
+			endDate: wrongEnd,
+		});
+		expect(await enqueueLifecycleJobs({ now })).toEqual({
+			enqueued: 0,
+			skipped: 1,
+		});
+		expect(await jobs()).toEqual([]);
+
+		await db
+			.update(cycle)
+			.set({ state: "active" })
+			.where(eq(cycle.id, ids.cycle));
+		expect(await enqueueLifecycleJobs({ now })).toEqual({
+			enqueued: 0,
+			skipped: 1,
+		});
+		expect(await jobs()).toEqual([]);
+	});
+
+	test("enqueues start and completion jobs only for the exact cadence interval", async () => {
+		await seedCycle("planned");
+		expect(await enqueueLifecycleJobs({ now })).toEqual({
+			enqueued: 1,
+			skipped: 0,
+		});
+		expect((await jobs())[0]).toMatchObject({
+			jobType: "start_scheduled_cycle",
+			scheduledBoundary: start,
+			status: "queued",
+		});
+
+		await db.execute(sql`truncate table cycle_schedule_job`);
+		await db
+			.update(cycle)
+			.set({ state: "active" })
+			.where(eq(cycle.id, ids.cycle));
+		expect(await enqueueLifecycleJobs({ now })).toEqual({
+			enqueued: 1,
+			skipped: 0,
+		});
+		expect((await jobs())[0]).toMatchObject({
+			jobType: "complete_scheduled_cycle",
+			scheduledBoundary: end,
+			status: "queued",
+		});
 	});
 
 	test("uses timezone-aware automatic grace and excludes confirmation mode", async () => {
@@ -234,5 +296,64 @@ describe("cycle lifecycle job reconciliation", () => {
 				now,
 			}),
 		).toEqual({ status: "obsolete" });
+	});
+
+	test("obsoletes non-started jobs immediately and preserves started leases", async () => {
+		await seedCycle();
+		const [settings] = await db.select().from(teamCycleSettings);
+		if (!settings) throw new Error("settings missing");
+		const startedId = "lifecycle-jobs-started";
+		const queuedId = "lifecycle-jobs-queued";
+		await db.insert(cycleScheduleJob).values([
+			{
+				id: startedId,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				cycleId: ids.cycle,
+				jobType: "start_scheduled_cycle",
+				scheduledBoundary: start,
+				eventRevisionAt: settings.updatedAt,
+				status: "started",
+				attempts: 1,
+				availableAt: start,
+				leaseExpiresAt: new Date("2030-01-01T00:00:00.000Z"),
+				workerId: "worker-1",
+				claimToken: "claim-1",
+				startedAt: now,
+			},
+			{
+				id: queuedId,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+				cycleId: ids.cycle,
+				jobType: "complete_scheduled_cycle",
+				scheduledBoundary: end,
+				eventRevisionAt: settings.updatedAt,
+				status: "queued",
+			},
+		]);
+		const [startedBefore] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, startedId));
+		await db.transaction((tx) =>
+			obsoleteNonStartedTeamEventJobs(tx, {
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+			}),
+		);
+		const [startedAfter] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, startedId));
+		const [queuedAfter] = await db
+			.select()
+			.from(cycleScheduleJob)
+			.where(eq(cycleScheduleJob.id, queuedId));
+		expect(startedAfter).toEqual(startedBefore);
+		expect(queuedAfter).toMatchObject({
+			status: "succeeded",
+			outcome: "obsolete_settings",
+		});
 	});
 });

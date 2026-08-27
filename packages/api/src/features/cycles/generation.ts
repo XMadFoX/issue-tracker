@@ -11,6 +11,7 @@ import {
 	lockCycleTeam,
 } from "./mutation";
 import {
+	cadenceOccurrenceAtBoundary,
 	enumerateScheduledCycleOccurrences,
 	type ScheduleSettings,
 } from "./schedule";
@@ -20,6 +21,15 @@ type ScheduledOccurrence = {
 	boundary: Date;
 	endDate: Date;
 };
+
+export type ScheduleCompatibilityReason =
+	| "scheduled_cycles_require_resolution"
+	| "active_cycle_conflict"
+	| "manual_cycle_conflict";
+
+export type ScheduleCompatibilityResult =
+	| { status: "compatible" }
+	| { status: "incompatible"; reason: ScheduleCompatibilityReason };
 
 export type PlannedCycleHorizonResult =
 	| { status: "team_not_found" }
@@ -61,8 +71,34 @@ function toScheduleSettings(
 	};
 }
 
+function sameInstant(left: Date | null | undefined, right: Date): boolean {
+	return left?.getTime() === right.getTime();
+}
+
 function hasSameBoundary(cycleRow: ScheduledCycle, boundary: Date): boolean {
-	return cycleRow.scheduledBoundary?.getTime() === boundary.getTime();
+	return sameInstant(cycleRow.scheduledBoundary, boundary);
+}
+
+function isExactScheduledOccurrence(
+	cycleRow: ScheduledCycle,
+	occurrence: ScheduledOccurrence,
+): boolean {
+	return (
+		cycleRow.origin === "scheduled" &&
+		hasSameBoundary(cycleRow, occurrence.boundary) &&
+		sameInstant(cycleRow.startDate, occurrence.boundary) &&
+		sameInstant(cycleRow.endDate, occurrence.endDate)
+	);
+}
+
+function isExactPlannedOccurrence(
+	cycleRow: ScheduledCycle,
+	occurrence: ScheduledOccurrence,
+): boolean {
+	return (
+		cycleRow.state === "planned" &&
+		isExactScheduledOccurrence(cycleRow, occurrence)
+	);
 }
 
 function overlaps({
@@ -77,6 +113,37 @@ function overlaps({
 		cycleRow.startDate < occurrence.endDate &&
 		cycleRow.endDate > occurrence.boundary
 	);
+}
+
+function conflictFromCycle(
+	cycleRow: ScheduledCycle,
+	scheduledBoundary: Date,
+):
+	| {
+			status: "manual_conflict";
+			cycleId: string;
+			scheduledBoundary: Date;
+			state: ScheduledCycle["state"];
+	  }
+	| {
+			status: "scheduled_conflict";
+			cycleId: string;
+			scheduledBoundary: Date;
+			state: ScheduledCycle["state"];
+	  } {
+	return cycleRow.origin === "manual"
+		? {
+				status: "manual_conflict",
+				cycleId: cycleRow.id,
+				scheduledBoundary,
+				state: cycleRow.state,
+			}
+		: {
+				status: "scheduled_conflict",
+				cycleId: cycleRow.id,
+				scheduledBoundary,
+				state: cycleRow.state,
+			};
 }
 
 function uniqueBoundaries(cycles: ScheduledCycle[]): Date[] {
@@ -130,8 +197,18 @@ function findMissingOccurrences({
 }):
 	| { status: "satisfied"; scheduledBoundaries: Date[] }
 	| { status: "unreachable" }
-	| { status: "manual_conflict"; cycleId: string; scheduledBoundary: Date }
-	| { status: "scheduled_conflict"; cycleId: string; scheduledBoundary: Date }
+	| {
+			status: "manual_conflict";
+			cycleId: string;
+			scheduledBoundary: Date;
+			state: ScheduledCycle["state"];
+	  }
+	| {
+			status: "scheduled_conflict";
+			cycleId: string;
+			scheduledBoundary: Date;
+			state: ScheduledCycle["state"];
+	  }
 	| { status: "missing"; occurrences: ScheduledOccurrence[] } {
 	const firstBoundary = occurrences[0]?.boundary;
 	if (!firstBoundary) return { status: "unreachable" };
@@ -143,33 +220,30 @@ function findMissingOccurrences({
 			hasSameBoundary(cycleRow, occurrence.boundary),
 		);
 		if (matchingCycle) {
-			if (matchingCycle.state === "planned")
+			if (isExactPlannedOccurrence(matchingCycle, occurrence)) {
 				matchingPlanned.push(matchingCycle);
-			if (matchingPlanned.length >= planningHorizon) {
-				return {
-					status: "satisfied",
-					scheduledBoundaries: uniqueBoundaries(matchingPlanned),
-				};
+				if (matchingPlanned.length >= planningHorizon) {
+					return {
+						status: "satisfied",
+						scheduledBoundaries: uniqueBoundaries(matchingPlanned),
+					};
+				}
+				continue;
 			}
-			continue;
+			if (
+				isExactScheduledOccurrence(matchingCycle, occurrence) &&
+				matchingCycle.state !== "canceled"
+			) {
+				continue;
+			}
+			if (matchingCycle.state === "canceled") continue;
+			return conflictFromCycle(matchingCycle, occurrence.boundary);
 		}
 
 		const overlap = cycles.find((cycleRow) =>
 			overlaps({ cycleRow, occurrence }),
 		);
-		if (overlap) {
-			return overlap.origin === "manual"
-				? {
-						status: "manual_conflict",
-						cycleId: overlap.id,
-						scheduledBoundary: occurrence.boundary,
-					}
-				: {
-						status: "scheduled_conflict",
-						cycleId: overlap.id,
-						scheduledBoundary: occurrence.boundary,
-					};
-		}
+		if (overlap) return conflictFromCycle(overlap, occurrence.boundary);
 
 		missing.push(occurrence);
 		if (matchingPlanned.length + missing.length === planningHorizon) {
@@ -178,6 +252,133 @@ function findMissingOccurrences({
 	}
 
 	return { status: "unreachable" };
+}
+
+function toRequestedScheduleSettings(
+	settings: CycleSettingsLike,
+): ScheduleSettings {
+	return {
+		cadenceEnabled: settings.cadenceEnabled,
+		cadenceDays: settings.cadenceDays,
+		anchorDate: settings.anchorDate
+			? settings.anchorDate instanceof Date
+				? settings.anchorDate
+				: new Date(settings.anchorDate)
+			: null,
+		endBehavior: settings.endBehavior,
+		gracePeriodMinutes: settings.gracePeriodMinutes,
+		reminderLeadMinutes: settings.reminderLeadMinutes,
+	};
+}
+
+type CycleSettingsLike = {
+	cadenceEnabled: boolean;
+	cadenceDays: number;
+	anchorDate: Date | string | null;
+	planningHorizon: number;
+	endBehavior: ScheduleSettings["endBehavior"];
+	gracePeriodMinutes: number;
+	reminderLeadMinutes: number;
+};
+
+function compatibilityReasonFromConflict(
+	conflict:
+		| {
+				status: "manual_conflict";
+				cycleId: string;
+				scheduledBoundary: Date;
+				state: ScheduledCycle["state"];
+		  }
+		| {
+				status: "scheduled_conflict";
+				cycleId: string;
+				scheduledBoundary: Date;
+				state: ScheduledCycle["state"];
+		  },
+): ScheduleCompatibilityReason {
+	if (conflict.state === "active") return "active_cycle_conflict";
+	if (conflict.status === "manual_conflict") return "manual_cycle_conflict";
+	return "scheduled_cycles_require_resolution";
+}
+
+export function assessEnabledScheduleCompatibility({
+	cycles,
+	workspaceTimezone,
+	settings,
+	now,
+}: {
+	cycles: ScheduledCycle[];
+	workspaceTimezone: string;
+	settings: CycleSettingsLike;
+	now: Date;
+}): ScheduleCompatibilityResult {
+	if (!settings.cadenceEnabled || !settings.anchorDate) {
+		return { status: "compatible" };
+	}
+
+	const scheduleSettings = toRequestedScheduleSettings(settings);
+	for (const cycleRow of cycles) {
+		if (cycleRow.origin !== "scheduled" || cycleRow.state !== "planned") {
+			continue;
+		}
+		if (!cycleRow.scheduledBoundary) {
+			return {
+				status: "incompatible",
+				reason: "scheduled_cycles_require_resolution",
+			};
+		}
+		const occurrence = cadenceOccurrenceAtBoundary({
+			workspaceTimezone,
+			settings: scheduleSettings,
+			boundary: cycleRow.scheduledBoundary,
+		});
+		if (!occurrence || !isExactPlannedOccurrence(cycleRow, occurrence)) {
+			return {
+				status: "incompatible",
+				reason: "scheduled_cycles_require_resolution",
+			};
+		}
+	}
+
+	const [firstOccurrence] = enumerateScheduledCycleOccurrences({
+		workspaceTimezone,
+		settings: scheduleSettings,
+		now,
+		count: 1,
+	});
+	if (!firstOccurrence) {
+		return {
+			status: "incompatible",
+			reason: "scheduled_cycles_require_resolution",
+		};
+	}
+	const persistedIdentityCount = cycles.filter(
+		(cycleRow) =>
+			cycleRow.origin === "scheduled" &&
+			cycleRow.scheduledBoundary !== null &&
+			cycleRow.scheduledBoundary >= firstOccurrence.boundary,
+	).length;
+	const occurrences = enumerateScheduledCycleOccurrences({
+		workspaceTimezone,
+		settings: scheduleSettings,
+		now,
+		count: settings.planningHorizon + persistedIdentityCount,
+	});
+	const reconciliation = findMissingOccurrences({
+		cycles,
+		occurrences,
+		planningHorizon: settings.planningHorizon,
+	});
+	if (
+		reconciliation.status === "manual_conflict" ||
+		reconciliation.status === "scheduled_conflict"
+	) {
+		return {
+			status: "incompatible",
+			reason: compatibilityReasonFromConflict(reconciliation),
+		};
+	}
+	return { status: "compatible" };
 }
 
 export async function maintainPlannedCycleHorizonInTransaction({

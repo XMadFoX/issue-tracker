@@ -6,7 +6,10 @@ import { teamCycleSettings } from "db/features/tracker/team-cycle-settings.schem
 import { workspace } from "db/features/tracker/tracker.schema";
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { type CycleTransaction, lockCycleTeam } from "./mutation";
-import { deriveScheduleActionTiming } from "./schedule";
+import {
+	deriveScheduleActionTiming,
+	exactCadenceOccurrenceForCycle,
+} from "./schedule";
 
 export const START_LIFECYCLE_JOB_TYPE = "start_scheduled_cycle" as const;
 export const COMPLETE_LIFECYCLE_JOB_TYPE = "complete_scheduled_cycle" as const;
@@ -26,6 +29,48 @@ type ExpectedLifecycleJob = {
 
 export function isLifecycleJobType(value: string): value is LifecycleJobType {
 	return (LIFECYCLE_JOB_TYPES as readonly string[]).includes(value);
+}
+
+const NOTIFICATION_EVENT_JOB_TYPES = [
+	"send_cycle_reminder",
+	"create_cycle_confirmation_required",
+] as const;
+
+/** Obsoletes queued/blocked/failed event jobs without touching started leases. */
+export async function obsoleteNonStartedTeamEventJobs(
+	tx: CycleTransaction,
+	{
+		workspaceId,
+		teamId,
+	}: {
+		workspaceId: string;
+		teamId: string;
+	},
+): Promise<void> {
+	const now = new Date();
+	await tx
+		.update(cycleScheduleJob)
+		.set({
+			status: "succeeded",
+			outcome: "obsolete_settings",
+			finishedAt: now,
+			leaseExpiresAt: null,
+			workerId: null,
+			claimToken: null,
+			lastErrorCode: null,
+			lastErrorSummary: null,
+		})
+		.where(
+			and(
+				eq(cycleScheduleJob.workspaceId, workspaceId),
+				eq(cycleScheduleJob.teamId, teamId),
+				inArray(cycleScheduleJob.jobType, [
+					...LIFECYCLE_JOB_TYPES,
+					...NOTIFICATION_EVENT_JOB_TYPES,
+				]),
+				inArray(cycleScheduleJob.status, ["queued", "blocked", "failed"]),
+			),
+		);
 }
 
 function sameInstant(left: Date | null, right: Date): boolean {
@@ -60,13 +105,17 @@ function expectedLifecycleJobs(
 	settings: typeof teamCycleSettings.$inferSelect | null,
 	workspaceTimezone: string,
 ): ExpectedLifecycleJob[] {
-	if (
-		!settings?.cadenceEnabled ||
-		cycleRow.origin !== "scheduled" ||
-		!sameInstant(cycleRow.scheduledBoundary, cycleRow.startDate)
-	) {
-		return [];
-	}
+	if (!settings?.cadenceEnabled) return [];
+	const occurrence = exactCadenceOccurrenceForCycle({
+		workspaceTimezone,
+		settings: {
+			cadenceEnabled: settings.cadenceEnabled,
+			cadenceDays: settings.cadenceDays,
+			anchorDate: settings.anchorDate,
+		},
+		cycleRow,
+	});
+	if (!occurrence) return [];
 	if (cycleRow.state === "planned") {
 		return [
 			{
