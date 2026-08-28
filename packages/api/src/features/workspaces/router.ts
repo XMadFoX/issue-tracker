@@ -17,6 +17,7 @@ import {
 import { eq } from "drizzle-orm";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
+import { ensureTeamCycleSettings } from "../cycles/settings";
 import { buildDefaultIssuePrioritySeed } from "../issue-priorities/defaults";
 import { buildDefaultIssueStatusSeed } from "../issue-statuses/defaults";
 import { ensureDefaultIssueTypes } from "../issue-types/defaults";
@@ -150,12 +151,18 @@ export const create = authedRouter
 					key: "default",
 					privacy: "private",
 				})
-				.returning({ id: team.id });
+				.returning({ id: team.id, cycleDuration: team.cycleDuration });
 			if (!defaultTeam) {
 				throw new ORPCError(
 					"Failed to create default team for the new workspace",
 				);
 			}
+
+			await ensureTeamCycleSettings({
+				executor: tx,
+				teamRow: defaultTeam,
+				updatedBy: context.auth.session.userId,
+			});
 
 			const teamRoles = await ensureTeamBuiltInRoles({
 				executor: tx,
