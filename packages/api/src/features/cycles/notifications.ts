@@ -13,6 +13,7 @@ import {
 } from "db/features/tracker/tracker.schema";
 import { and, eq, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { isAllowed } from "../../lib/abac";
+import { lockCycleTeam } from "./mutation";
 import { deriveScheduleActionTiming, type ScheduleSettings } from "./schedule";
 import type { WorkerClock } from "./worker";
 
@@ -168,19 +169,66 @@ export async function cancelCycleArtifacts(
 		);
 }
 
-async function loadCyclesForReconciliation(): Promise<CycleWithSettings[]> {
+async function loadCyclesForReconciliation(): Promise<
+	Array<{ id: string; workspaceId: string; teamId: string }>
+> {
 	return await db
 		.select({
-			cycle,
-			settings: teamCycleSettings,
+			id: cycle.id,
+			workspaceId: cycle.workspaceId,
+			teamId: cycle.teamId,
+		})
+		.from(cycle)
+		.where(eq(cycle.origin, "scheduled"));
+}
+
+async function loadLockedCycleWithSettings(
+	tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+	{
+		cycleId,
+		workspaceId,
+		teamId,
+	}: {
+		cycleId: string;
+		workspaceId: string;
+		teamId: string;
+	},
+): Promise<CycleWithSettings | null> {
+	const [cycleRow] = await tx
+		.select()
+		.from(cycle)
+		.where(
+			and(
+				eq(cycle.id, cycleId),
+				eq(cycle.workspaceId, workspaceId),
+				eq(cycle.teamId, teamId),
+			),
+		)
+		.limit(1)
+		.for("update");
+	if (!cycleRow) return null;
+	const [settings] = await tx
+		.select()
+		.from(teamCycleSettings)
+		.where(eq(teamCycleSettings.teamId, teamId))
+		.limit(1)
+		.for("update");
+	const [scope] = await tx
+		.select({
 			workspaceTimezone: workspace.timezone,
 			teamName: team.name,
 		})
-		.from(cycle)
-		.innerJoin(team, eq(cycle.teamId, team.id))
-		.innerJoin(workspace, eq(cycle.workspaceId, workspace.id))
-		.leftJoin(teamCycleSettings, eq(teamCycleSettings.teamId, team.id))
-		.where(eq(cycle.origin, "scheduled"));
+		.from(team)
+		.innerJoin(workspace, eq(team.workspaceId, workspace.id))
+		.where(and(eq(team.id, teamId), eq(team.workspaceId, workspaceId)))
+		.limit(1);
+	if (!scope) return null;
+	return {
+		cycle: cycleRow,
+		settings: settings ?? null,
+		workspaceTimezone: scope.workspaceTimezone,
+		teamName: scope.teamName,
+	};
 }
 
 export async function cancelTeamCycleArtifacts(
@@ -218,35 +266,41 @@ export async function enqueueNotificationJobs({
 	clock: WorkerClock;
 }): Promise<{ enqueued: number; skipped: number }> {
 	const now = clock.now();
-	const rows = await loadCyclesForReconciliation();
+	const candidates = await loadCyclesForReconciliation();
 	let enqueued = 0;
 	let skipped = 0;
-	for (const row of rows) {
-		const expected = expectedJob(row);
-		if (
-			row.cycle.state === "completed" ||
-			row.cycle.state === "canceled" ||
-			!row.settings?.cadenceEnabled
-		) {
-			await db.transaction((tx) =>
-				cancelCycleArtifacts(tx, {
+	for (const candidate of candidates) {
+		const result = await db.transaction(async (tx) => {
+			await lockCycleTeam({
+				tx,
+				workspaceId: candidate.workspaceId,
+				teamId: candidate.teamId,
+			});
+			const row = await loadLockedCycleWithSettings(tx, {
+				cycleId: candidate.id,
+				workspaceId: candidate.workspaceId,
+				teamId: candidate.teamId,
+			});
+			if (!row) return { enqueued: 0, skipped: 1 };
+			const expected = expectedJob(row);
+			if (
+				row.cycle.state === "completed" ||
+				row.cycle.state === "canceled" ||
+				!row.settings?.cadenceEnabled
+			) {
+				await cancelCycleArtifacts(tx, {
 					workspaceId: row.cycle.workspaceId,
 					teamId: row.cycle.teamId,
 					cycleId: row.cycle.id,
 					reason: "cycle_not_eligible",
-				}),
-			);
-			skipped += 1;
-			continue;
-		}
-		if (!row.settings || expected.length === 0) {
-			skipped += 1;
-			continue;
-		}
-		const settingsRevision = row.settings.updatedAt;
-		const currentSettings = row.settings;
-		const expectedTypes = expected.map((item) => item.jobType);
-		await db.transaction(async (tx) => {
+				});
+				return { enqueued: 0, skipped: 1 };
+			}
+			if (!row.settings || expected.length === 0) {
+				return { enqueued: 0, skipped: 1 };
+			}
+			const settingsRevision = row.settings.updatedAt;
+			const expectedTypes = expected.map((item) => item.jobType);
 			const staleJobs = await tx
 				.select({ id: cycleScheduleJob.id })
 				.from(cycleScheduleJob)
@@ -277,7 +331,7 @@ export async function enqueueNotificationJobs({
 						),
 					);
 			}
-			if (currentSettings.endBehavior !== "confirmation_required") {
+			if (row.settings.endBehavior !== "confirmation_required") {
 				await tx
 					.update(cycleActionRequired)
 					.set({
@@ -306,33 +360,38 @@ export async function enqueueNotificationJobs({
 						isNull(cycleNotification.canceledAt),
 					),
 				);
+			let insertedCount = 0;
+			let skippedCount = 0;
+			for (const event of expected) {
+				const inserted = await tx
+					.insert(cycleScheduleJob)
+					.values({
+						id: createId(),
+						workspaceId: row.cycle.workspaceId,
+						teamId: row.cycle.teamId,
+						cycleId: row.cycle.id,
+						jobType: event.jobType,
+						scheduledBoundary: row.cycle.endDate,
+						eventRevisionAt: event.eventRevisionAt,
+						availableAt: event.availableAt,
+					})
+					.onConflictDoNothing({
+						target: [
+							cycleScheduleJob.cycleId,
+							cycleScheduleJob.jobType,
+							cycleScheduleJob.scheduledBoundary,
+							cycleScheduleJob.eventRevisionAt,
+						],
+						where: sql`${cycleScheduleJob.jobType} <> 'generate_planned_cycles'`,
+					})
+					.returning({ id: cycleScheduleJob.id });
+				if (inserted.length > 0) insertedCount += 1;
+				else skippedCount += 1;
+			}
+			return { enqueued: insertedCount, skipped: skippedCount };
 		});
-		for (const event of expected) {
-			const inserted = await db
-				.insert(cycleScheduleJob)
-				.values({
-					id: createId(),
-					workspaceId: row.cycle.workspaceId,
-					teamId: row.cycle.teamId,
-					cycleId: row.cycle.id,
-					jobType: event.jobType,
-					scheduledBoundary: row.cycle.endDate,
-					eventRevisionAt: event.eventRevisionAt,
-					availableAt: event.availableAt,
-				})
-				.onConflictDoNothing({
-					target: [
-						cycleScheduleJob.cycleId,
-						cycleScheduleJob.jobType,
-						cycleScheduleJob.scheduledBoundary,
-						cycleScheduleJob.eventRevisionAt,
-					],
-					where: sql`${cycleScheduleJob.jobType} <> 'generate_planned_cycles'`,
-				})
-				.returning({ id: cycleScheduleJob.id });
-			if (inserted.length > 0) enqueued += 1;
-			else skipped += 1;
-		}
+		enqueued += result.enqueued;
+		skipped += result.skipped;
 	}
 	return { enqueued, skipped };
 }
@@ -395,6 +454,11 @@ export async function processNotificationJob({
 	if (!cycleId || !isNotificationJobType(job.jobType))
 		return "obsolete_settings";
 	return await db.transaction(async (tx) => {
+		await lockCycleTeam({
+			tx,
+			workspaceId: job.workspaceId,
+			teamId: job.teamId,
+		});
 		const [row] = await tx
 			.select({
 				cycle,

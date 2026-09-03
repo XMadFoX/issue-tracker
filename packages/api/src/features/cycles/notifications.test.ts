@@ -259,4 +259,37 @@ describe("durable notification events", () => {
 		});
 		expect(result).toBe("no_recipients");
 	});
+
+	async function waitForBlockedLock() {
+		for (let attempt = 0; attempt < 200; attempt++) {
+			const result = await db.execute<{ waiting: boolean }>(
+				sql`select exists (select 1 from pg_locks where not granted) as waiting`,
+			);
+			if (result.rows[0]?.waiting) return;
+			await Bun.sleep(10);
+		}
+		throw new Error("notification work never waited for a lock");
+	}
+
+	test("reloads settings inside the locked reconciliation transaction", async () => {
+		const { enqueueNotificationJobs } = await import("./notifications");
+		const { lockCycleTeam } = await import("./mutation");
+		const held = await db.transaction(async (tx) => {
+			await lockCycleTeam({
+				tx,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+			});
+			const enqueue = enqueueNotificationJobs({ clock });
+			await waitForBlockedLock();
+			await tx
+				.update(teamCycleSettings)
+				.set({ cadenceEnabled: false })
+				.where(eq(teamCycleSettings.teamId, ids.team));
+			return { enqueue };
+		});
+		const result = await held.enqueue;
+		expect(result.enqueued).toBe(0);
+		expect(await db.select().from(cycleScheduleJob)).toHaveLength(0);
+	});
 });

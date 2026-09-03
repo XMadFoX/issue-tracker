@@ -1,10 +1,27 @@
 import type { db } from "db";
 import { cycle } from "db/features/tracker/cycles.schema";
+import { workspace } from "db/features/tracker/tracker.schema";
 import { and, eq, gt, lt, max, ne, sql } from "drizzle-orm";
 
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type CycleTransaction = DbTransaction;
+
+export async function lockWorkspaceForCycleWork({
+	tx,
+	workspaceId,
+}: {
+	tx: CycleTransaction;
+	workspaceId: string;
+}): Promise<typeof workspace.$inferSelect | null> {
+	const [row] = await tx
+		.select()
+		.from(workspace)
+		.where(eq(workspace.id, workspaceId))
+		.limit(1)
+		.for("update");
+	return row ?? null;
+}
 
 export async function lockCycleTeam({
 	tx,
@@ -15,6 +32,7 @@ export async function lockCycleTeam({
 	workspaceId: string;
 	teamId: string;
 }): Promise<void> {
+	await lockWorkspaceForCycleWork({ tx, workspaceId });
 	await tx.execute(
 		sql`select pg_advisory_xact_lock(hashtext(${`cycle:${workspaceId}:${teamId}`}))`,
 	);

@@ -17,6 +17,7 @@ let router: typeof import("../../router").router;
 let cycle: typeof import("db/features/tracker/cycles.schema").cycle;
 let cycleScheduleJob: typeof import("db/features/tracker/cycle-schedule-jobs.schema").cycleScheduleJob;
 let issue: typeof import("db/features/tracker/issues.schema").issue;
+let issueActivity: typeof import("db/features/tracker/issue-activities.schema").issueActivity;
 let issueStatus: typeof import("db/features/tracker/issue-statuses.schema").issueStatus;
 let issueStatusGroup: typeof import("db/features/tracker/issue-statuses.schema").issueStatusGroup;
 let issueType: typeof import("db/features/tracker/issue-types.schema").issueType;
@@ -305,6 +306,34 @@ async function waitForWaiter() {
 	throw new Error("route never waited for the cycle advisory lock");
 }
 
+async function waitForBlockedLocks(expected: number) {
+	for (let attempt = 0; attempt < 100; attempt++) {
+		const result = await db.execute<{ waiting: number }>(
+			sql`select count(*)::int as waiting from pg_locks where not granted`,
+		);
+		if ((result.rows[0]?.waiting ?? 0) >= expected) return;
+		await Bun.sleep(10);
+	}
+	throw new Error(`race never waited for ${expected} database locks`);
+}
+
+async function withRaceTimeout<T>(operation: PromiseLike<T>, label: string) {
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			operation,
+			new Promise<never>((_, reject) => {
+				timeout = setTimeout(
+					() => reject(new Error(`${label} exceeded 5 second DB timeout`)),
+					5_000,
+				);
+			}),
+		]);
+	} finally {
+		if (timeout) clearTimeout(timeout);
+	}
+}
+
 beforeAll(async () => {
 	teardown = await setupDb();
 	({ db } = await import("db"));
@@ -313,6 +342,9 @@ beforeAll(async () => {
 		"db/features/tracker/cycle-schedule-jobs.schema"
 	));
 	({ issue } = await import("db/features/tracker/issues.schema"));
+	({ issueActivity } = await import(
+		"db/features/tracker/issue-activities.schema"
+	));
 	({ issueStatus, issueStatusGroup } = await import(
 		"db/features/tracker/issue-statuses.schema"
 	));
@@ -1111,6 +1143,149 @@ describe("issue assignment races", () => {
 			return { completing, assigned };
 		});
 	}
+
+	async function runCompletionUnassignmentRace(
+		first: "completion" | "unassignment",
+	) {
+		await db.insert(issue).values({
+			id: ids.unassignedIssue,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			number: 1,
+			title: "Completion race",
+			statusId: ids.status,
+			issueTypeId: ids.type,
+			creatorId: ids.actor,
+			cycleId: ids.source,
+			sortOrder: "a00",
+		});
+
+		const pending = await db.transaction(async (tx) => {
+			await tx.execute(
+				sql`select pg_advisory_xact_lock(hashtext(${`cycle:${ids.workspace}:${ids.team}`}))`,
+			);
+			const startCompletion = (): Promise<unknown> =>
+				Promise.resolve(
+					client().cycle.complete(
+						{
+							workspaceId: ids.workspace,
+							cycleId: ids.source,
+							disposition: { type: "moveToBacklog" },
+						},
+						options(),
+					),
+				);
+			const startUnassignment = (): Promise<unknown> =>
+				Promise.resolve(
+					client().cycle.unassignIssue(
+						{
+							workspaceId: ids.workspace,
+							issueId: ids.unassignedIssue,
+							cycleId: ids.source,
+						},
+						options(),
+					),
+				);
+			const firstPending =
+				first === "completion" ? startCompletion() : startUnassignment();
+			await waitForWaiter();
+			const secondPending =
+				first === "completion" ? startUnassignment() : startCompletion();
+			await waitForBlockedLocks(2);
+			return first === "completion"
+				? { completion: firstPending, unassignment: secondPending }
+				: { completion: secondPending, unassignment: firstPending };
+		});
+
+		return await Promise.allSettled([
+			withRaceTimeout(pending.completion, `${first} completion`),
+			withRaceTimeout(pending.unassignment, `${first} unassignment`),
+		]);
+	}
+
+	test("serializes completion before unassignment without an issue/workspace deadlock", async () => {
+		await seed([
+			"cycle:complete",
+			"cycle:read",
+			"cycle:update",
+			"issue:update",
+		]);
+		const [completion, unassignment] =
+			await runCompletionUnassignmentRace("completion");
+
+		expect(completion.status).toBe("fulfilled");
+		expect(unassignment.status).toBe("rejected");
+		if (unassignment.status !== "rejected") throw new Error("unassignment won");
+		expect(unassignment.reason).toBeInstanceOf(ORPCError);
+		if (!(unassignment.reason instanceof ORPCError))
+			throw new Error("unassignment returned an untyped error");
+		expect(unassignment.reason.code).toBe("NOT_FOUND");
+		expect(await sourceState()).toBe("completed");
+		const [row] = await db
+			.select({ cycleId: issue.cycleId })
+			.from(issue)
+			.where(eq(issue.id, ids.unassignedIssue));
+		expect(row?.cycleId).toBeNull();
+		const activities = await db
+			.select({ actionType: issueActivity.actionType })
+			.from(issueActivity)
+			.where(eq(issueActivity.issueId, ids.unassignedIssue));
+		expect(activities).toEqual([
+			{ actionType: "issue.cycle_returned_to_backlog" },
+		]);
+	});
+
+	test("serializes unassignment before completion without an issue/workspace deadlock", async () => {
+		await seed([
+			"cycle:complete",
+			"cycle:read",
+			"cycle:update",
+			"issue:update",
+		]);
+		const [completion, unassignment] =
+			await runCompletionUnassignmentRace("unassignment");
+
+		expect(completion.status).toBe("fulfilled");
+		expect(unassignment.status).toBe("fulfilled");
+		expect(await sourceState()).toBe("completed");
+		const [row] = await db
+			.select({ cycleId: issue.cycleId })
+			.from(issue)
+			.where(eq(issue.id, ids.unassignedIssue));
+		expect(row?.cycleId).toBeNull();
+		const activities = await db
+			.select({ actionType: issueActivity.actionType })
+			.from(issueActivity)
+			.where(eq(issueActivity.issueId, ids.unassignedIssue));
+		expect(activities).toEqual([{ actionType: "issue.cycle_unassigned" }]);
+	});
+
+	test("keeps an already-unassigned issue a no-op", async () => {
+		await seed(["issue:update"]);
+		await db.insert(issue).values({
+			id: ids.unassignedIssue,
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			number: 1,
+			title: "Already unassigned",
+			statusId: ids.status,
+			issueTypeId: ids.type,
+			creatorId: ids.actor,
+			sortOrder: "a00",
+		});
+
+		const updated = await client().cycle.unassignIssue(
+			{ workspaceId: ids.workspace, issueId: ids.unassignedIssue },
+			options(),
+		);
+		expect(updated.cycleId).toBeNull();
+		expect(
+			await db
+				.select()
+				.from(issueActivity)
+				.where(eq(issueActivity.issueId, ids.unassignedIssue)),
+		).toHaveLength(0);
+	});
 
 	test("create revalidates after a completion-first advisory-lock gate", async () => {
 		await seed([

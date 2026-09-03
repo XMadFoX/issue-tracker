@@ -15,6 +15,7 @@ import {
 	enumerateScheduledCycleOccurrences,
 	type ScheduleSettings,
 } from "./schedule";
+import type { ScheduleCompatibilityReason } from "./schedule-reconciliation";
 
 type ScheduledCycle = typeof cycle.$inferSelect;
 type ScheduledOccurrence = {
@@ -22,10 +23,7 @@ type ScheduledOccurrence = {
 	endDate: Date;
 };
 
-export type ScheduleCompatibilityReason =
-	| "scheduled_cycles_require_resolution"
-	| "active_cycle_conflict"
-	| "manual_cycle_conflict";
+export type { ScheduleCompatibilityReason } from "./schedule-reconciliation";
 
 export type ScheduleCompatibilityResult =
 	| { status: "compatible" }
@@ -312,19 +310,31 @@ export function assessEnabledScheduleCompatibility({
 	settings: CycleSettingsLike;
 	now: Date;
 }): ScheduleCompatibilityResult {
-	if (!settings.cadenceEnabled || !settings.anchorDate) {
+	if (!settings.cadenceEnabled) {
 		return { status: "compatible" };
+	}
+	if (!settings.anchorDate || !isValidIanaTimezone(workspaceTimezone)) {
+		return {
+			status: "incompatible",
+			reason: "scheduled_cycles_require_resolution",
+		};
 	}
 
 	const scheduleSettings = toRequestedScheduleSettings(settings);
 	for (const cycleRow of cycles) {
-		if (cycleRow.origin !== "scheduled" || cycleRow.state !== "planned") {
+		if (
+			cycleRow.origin !== "scheduled" ||
+			(cycleRow.state !== "planned" && cycleRow.state !== "active")
+		) {
 			continue;
 		}
 		if (!cycleRow.scheduledBoundary) {
 			return {
 				status: "incompatible",
-				reason: "scheduled_cycles_require_resolution",
+				reason:
+					cycleRow.state === "active"
+						? "active_cycle_conflict"
+						: "scheduled_cycles_require_resolution",
 			};
 		}
 		const occurrence = cadenceOccurrenceAtBoundary({
@@ -332,10 +342,13 @@ export function assessEnabledScheduleCompatibility({
 			settings: scheduleSettings,
 			boundary: cycleRow.scheduledBoundary,
 		});
-		if (!occurrence || !isExactPlannedOccurrence(cycleRow, occurrence)) {
+		if (!occurrence || !isExactScheduledOccurrence(cycleRow, occurrence)) {
 			return {
 				status: "incompatible",
-				reason: "scheduled_cycles_require_resolution",
+				reason:
+					cycleRow.state === "active"
+						? "active_cycle_conflict"
+						: "scheduled_cycles_require_resolution",
 			};
 		}
 	}

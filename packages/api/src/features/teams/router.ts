@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
+import { cycle } from "db/features/tracker/cycles.schema";
 import {
 	issueType,
 	issueTypeAllowedStatus,
@@ -11,6 +12,7 @@ import { teamCycleSettings } from "db/features/tracker/team-cycle-settings.schem
 import {
 	team,
 	teamMembership,
+	workspace,
 	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
 import { and, DrizzleQueryError, eq, inArray } from "drizzle-orm";
@@ -18,6 +20,12 @@ import { omit } from "remeda";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
 import { getReadableTeamIdsForPermission } from "../../lib/permissions-helpers";
+import { assessEnabledScheduleCompatibility } from "../cycles/generation";
+import { lockCycleTeam, lockWorkspaceForCycleWork } from "../cycles/mutation";
+import {
+	scheduleReconciliationMessages,
+	scheduleReconciliationRequiredError,
+} from "../cycles/schedule-reconciliation";
 import {
 	buildInitialTeamCycleSettings,
 	normalizeCadenceDays,
@@ -31,7 +39,11 @@ import {
 	teamUpdateSchema,
 } from "./schema";
 
-const commonErrors = { UNAUTHORIZED: {}, NOT_FOUND: {} };
+const commonErrors = {
+	UNAUTHORIZED: {},
+	NOT_FOUND: {},
+	...scheduleReconciliationRequiredError,
+};
 
 export const listUserTeams = authedRouter.handler(async ({ context }) => {
 	const userTeams = await db
@@ -178,6 +190,10 @@ export const create = authedRouter
 
 		try {
 			const createdTeam = await db.transaction(async (tx) => {
+				await lockWorkspaceForCycleWork({
+					tx,
+					workspaceId: input.workspaceId,
+				});
 				const cycleDuration = normalizeCadenceDays(input.cycleDuration ?? null);
 				const [insertedTeam] = await tx
 					.insert(team)
@@ -264,6 +280,58 @@ const update = authedRouter
 				: { cycleDuration: normalizeCadenceDays(legacyCycleDuration) }),
 		};
 		return await db.transaction(async (tx) => {
+			await lockCycleTeam({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: input.id,
+			});
+			if (legacyCycleDuration !== undefined) {
+				const [settings] = await tx
+					.select()
+					.from(teamCycleSettings)
+					.where(eq(teamCycleSettings.teamId, input.id))
+					.limit(1)
+					.for("update");
+				if (!settings) {
+					throw new ORPCError(
+						"Cycle settings are not initialized for this team",
+					);
+				}
+				const nextCadenceDays = normalizeCadenceDays(legacyCycleDuration);
+				if (settings.cadenceEnabled) {
+					const [workspaceRow] = await tx
+						.select({ timezone: workspace.timezone })
+						.from(workspace)
+						.where(eq(workspace.id, input.workspaceId))
+						.limit(1);
+					if (!workspaceRow) throw new ORPCError("Team not found");
+					const cycles = await tx
+						.select()
+						.from(cycle)
+						.where(
+							and(
+								eq(cycle.workspaceId, input.workspaceId),
+								eq(cycle.teamId, input.id),
+							),
+						)
+						.for("update");
+					const compatibility = assessEnabledScheduleCompatibility({
+						cycles,
+						workspaceTimezone: workspaceRow.timezone,
+						settings: {
+							...settings,
+							cadenceDays: nextCadenceDays,
+						},
+						now: new Date(),
+					});
+					if (compatibility.status === "incompatible") {
+						throw errors.SCHEDULE_RECONCILIATION_REQUIRED({
+							message: scheduleReconciliationMessages[compatibility.reason],
+							data: { reason: compatibility.reason },
+						});
+					}
+				}
+			}
 			const [updatedTeam] = await tx
 				.update(team)
 				.set(values)
@@ -321,6 +389,11 @@ const deleteTeam = authedRouter
 			});
 
 		return await db.transaction(async (tx) => {
+			await lockCycleTeam({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: input.id,
+			});
 			await tx
 				.delete(issue)
 				.where(

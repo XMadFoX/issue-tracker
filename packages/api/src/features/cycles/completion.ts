@@ -6,9 +6,9 @@ import {
 	issueStatusGroup,
 } from "db/features/tracker/issue-statuses.schema";
 import { issue } from "db/features/tracker/issues.schema";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { writeIssueActivity } from "../issues/activity";
-import type { CycleTransaction } from "./mutation";
+import { type CycleTransaction, lockCycleTeam } from "./mutation";
 import { resolveCycleConfirmationAction } from "./notifications";
 
 export type CycleCompletionDisposition =
@@ -88,9 +88,11 @@ export async function completeCycleInTransaction(
 	tx: CycleTransaction,
 	input: CycleCompletionInput,
 ): Promise<CompletionResult> {
-	await tx.execute(
-		sql`select pg_advisory_xact_lock(hashtext(${`cycle:${input.workspaceId}:${input.teamId}`}))`,
-	);
+	await lockCycleTeam({
+		tx,
+		workspaceId: input.workspaceId,
+		teamId: input.teamId,
+	});
 
 	const lockedCycles = await lockCycles(tx, input);
 	const source = lockedCycles.find((row) => row.id === input.cycleId);

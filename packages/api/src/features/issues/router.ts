@@ -23,6 +23,7 @@ import {
 	calculateMiddleRank,
 } from "../../utils/lexorank";
 import { rebalanceStatusIssues } from "../../utils/rebalancing";
+import { lockCycleTeam, lockWorkspaceForCycleWork } from "../cycles/mutation";
 import { isPureHideOverride, omitsSourceType } from "../issue-types/helpers";
 import { type DbExecutor, writeIssueActivity } from "./activity";
 import {
@@ -850,11 +851,10 @@ const createIssue = authedRouter
 		for (let attempt = 0; attempt <= 1; attempt++) {
 			try {
 				const created = await db.transaction(async (tx) => {
+					await lockWorkspaceForCycleWork({ tx, workspaceId });
 					await acquireIssueHierarchyLock(tx, { workspaceId, teamId });
 					if (input.cycleId !== null && input.cycleId !== undefined) {
-						await tx.execute(
-							sql`select pg_advisory_xact_lock(hashtext(${`cycle:${workspaceId}:${teamId}`}))`,
-						);
+						await lockCycleTeam({ tx, workspaceId, teamId });
 						const validCycle = await validateIssueCycleAssignment(tx, {
 							cycleId: input.cycleId,
 							workspaceId,
@@ -1113,10 +1113,23 @@ const updateIssue = authedRouter
 		}
 
 		const updated = await db.transaction(async (tx) => {
+			if (assigningCycle || unassigningCycle) {
+				await lockWorkspaceForCycleWork({
+					tx,
+					workspaceId: input.workspaceId,
+				});
+				await acquireIssueHierarchyLock(tx, {
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+				});
+				await lockCycleTeam({
+					tx,
+					workspaceId: input.workspaceId,
+					teamId: existingIssue.teamId,
+				});
+			}
+
 			if (assigningCycle) {
-				await tx.execute(
-					sql`select pg_advisory_xact_lock(hashtext(${`cycle:${input.workspaceId}:${existingIssue.teamId}`}))`,
-				);
 				const validCycle = await validateIssueCycleAssignment(tx, {
 					cycleId: input.cycleId,
 					workspaceId: input.workspaceId,

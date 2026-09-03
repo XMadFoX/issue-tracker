@@ -3,20 +3,28 @@ import { ORPCError } from "@orpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "db";
 import { roleDefinitions } from "db/features/abac/abac.schema";
+import { cycle } from "db/features/tracker/cycles.schema";
 import { issuePriority } from "db/features/tracker/issue-priorities.schema";
 import {
 	issueStatus,
 	issueStatusGroup,
 } from "db/features/tracker/issue-statuses.schema";
+import { teamCycleSettings } from "db/features/tracker/team-cycle-settings.schema";
 import {
 	team,
 	teamMembership,
 	workspace,
 	workspaceMembership,
 } from "db/features/tracker/tracker.schema";
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { authedRouter } from "../../context";
 import { isAllowed } from "../../lib/abac";
+import { assessEnabledScheduleCompatibility } from "../cycles/generation";
+import { lockCycleTeam, lockWorkspaceForCycleWork } from "../cycles/mutation";
+import {
+	scheduleReconciliationMessages,
+	scheduleReconciliationRequiredError,
+} from "../cycles/schedule-reconciliation";
 import { ensureTeamCycleSettings } from "../cycles/settings";
 import { buildDefaultIssuePrioritySeed } from "../issue-priorities/defaults";
 import { buildDefaultIssueStatusSeed } from "../issue-statuses/defaults";
@@ -194,7 +202,11 @@ export const create = authedRouter
 		});
 	});
 
-const commonErrors = { INVALID_CONFIRMATION: {}, UNAUTHORIZED: {} };
+const commonErrors = {
+	INVALID_CONFIRMATION: {},
+	UNAUTHORIZED: {},
+	...scheduleReconciliationRequiredError,
+};
 const unauthorizedMessage = (action: "update" | "delete") =>
 	`You don't have permission to ${action} this workspace or the workspace doesn't exist`;
 
@@ -212,10 +224,67 @@ const update = authedRouter
 				message: unauthorizedMessage("update"),
 			});
 
-		return await db
-			.update(workspace)
-			.set(input)
-			.where(eq(workspace.id, input.id));
+		return await db.transaction(async (tx) => {
+			const current = await lockWorkspaceForCycleWork({
+				tx,
+				workspaceId: input.id,
+			});
+			if (
+				current &&
+				input.timezone !== undefined &&
+				input.timezone !== current.timezone
+			) {
+				const teams = await tx
+					.select({ id: team.id })
+					.from(team)
+					.where(eq(team.workspaceId, input.id))
+					.orderBy(asc(team.id));
+				const now = new Date();
+				for (const teamRow of teams) {
+					await lockCycleTeam({
+						tx,
+						workspaceId: input.id,
+						teamId: teamRow.id,
+					});
+				}
+				for (const teamRow of teams) {
+					const [settings] = await tx
+						.select()
+						.from(teamCycleSettings)
+						.where(eq(teamCycleSettings.teamId, teamRow.id))
+						.limit(1)
+						.for("update");
+					if (!settings?.cadenceEnabled) continue;
+					const cycles = await tx
+						.select()
+						.from(cycle)
+						.where(
+							and(
+								eq(cycle.workspaceId, input.id),
+								eq(cycle.teamId, teamRow.id),
+							),
+						)
+						.for("update");
+					const compatibility = assessEnabledScheduleCompatibility({
+						cycles,
+						workspaceTimezone: input.timezone,
+						settings,
+						now,
+					});
+					if (compatibility.status === "incompatible") {
+						throw errors.SCHEDULE_RECONCILIATION_REQUIRED({
+							message: scheduleReconciliationMessages[compatibility.reason],
+							data: { reason: compatibility.reason },
+						});
+					}
+				}
+			}
+
+			return await tx
+				.update(workspace)
+				.set(input)
+				.where(eq(workspace.id, input.id));
+		});
 	});
 
 const deleteWorkspace = authedRouter

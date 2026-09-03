@@ -502,3 +502,70 @@ describe("maintainPlannedCycleHorizon", () => {
 		expect(new Set(rows.map((row) => row.sequence)).size).toBe(2);
 	});
 });
+
+describe("assessEnabledScheduleCompatibility", () => {
+	async function assess(workspaceTimezone = "UTC") {
+		const { assessEnabledScheduleCompatibility } = await import("./generation");
+		const [settings] = await db
+			.select()
+			.from(teamCycleSettings)
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		if (!settings) throw new Error("settings missing");
+		const cycles = await db
+			.select()
+			.from(cycle)
+			.where(eq(cycle.teamId, ids.team));
+		return assessEnabledScheduleCompatibility({
+			cycles,
+			workspaceTimezone,
+			settings,
+			now,
+		});
+	}
+
+	test("fails closed for enabled cadence without an anchor", async () => {
+		await db
+			.update(teamCycleSettings)
+			.set({ cadenceEnabled: true, anchorDate: null })
+			.where(eq(teamCycleSettings.teamId, ids.team));
+		expect(await assess()).toEqual({
+			status: "incompatible",
+			reason: "scheduled_cycles_require_resolution",
+		});
+	});
+
+	test("rejects off-horizon active scheduled identity mismatches", async () => {
+		await db.insert(cycle).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "Off-horizon active",
+			sequence: 1,
+			state: "active",
+			origin: "scheduled",
+			scheduledBoundary: new Date("2020-01-01T10:00:00.000Z"),
+			startDate: new Date("2020-01-01T10:00:00.000Z"),
+			endDate: new Date("2020-01-08T10:00:00.000Z"),
+		});
+		expect(await assess()).toEqual({
+			status: "incompatible",
+			reason: "active_cycle_conflict",
+		});
+	});
+
+	test("accepts matching off-horizon active scheduled cycles", async () => {
+		await db.insert(cycle).values({
+			id: createId(),
+			workspaceId: ids.workspace,
+			teamId: ids.team,
+			name: "On-grid historical active",
+			sequence: 1,
+			state: "active",
+			origin: "scheduled",
+			scheduledBoundary: new Date("2026-07-01T10:00:00.000Z"),
+			startDate: new Date("2026-07-01T10:00:00.000Z"),
+			endDate: new Date("2026-07-08T10:00:00.000Z"),
+		});
+		expect(await assess()).toEqual({ status: "compatible" });
+	});
+});

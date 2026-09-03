@@ -50,12 +50,17 @@ import {
 	getNextCycleSequence,
 	getOverlappingCycle,
 	lockCycleTeam,
+	lockWorkspaceForCycleWork,
 } from "./mutation";
 import {
 	cancelCycleArtifacts,
 	cancelTeamCycleArtifacts,
 } from "./notifications";
 import { deriveSchedulePreview } from "./schedule";
+import {
+	scheduleReconciliationMessages,
+	scheduleReconciliationReasonSchema,
+} from "./schedule-reconciliation";
 import {
 	cycleAssignIssueSchema,
 	cycleCompleteSchema,
@@ -146,21 +151,6 @@ const completionErrors = {
 		message: "Cycle and rollover target must belong to the same team.",
 	},
 };
-
-const scheduleReconciliationReasonSchema = z.enum([
-	"scheduled_cycles_require_resolution",
-	"active_cycle_conflict",
-	"manual_cycle_conflict",
-]);
-
-const scheduleReconciliationMessages = {
-	scheduled_cycles_require_resolution:
-		"Existing scheduled cycles cannot be safely moved to the requested cadence. Cancel or reschedule the conflicting planned cycles explicitly, then retry.",
-	active_cycle_conflict:
-		"An active cycle overlaps the requested cadence. Complete or cancel it explicitly, then retry.",
-	manual_cycle_conflict:
-		"A manual cycle overlaps the requested cadence. Cancel or reschedule it explicitly, then retry.",
-} as const;
 
 const settingsErrors = {
 	...commonErrors,
@@ -786,12 +776,19 @@ const deleteCycle = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 
-		const [deleted] = await db
-			.delete(cycle)
-			.where(
-				and(eq(cycle.id, input.id), eq(cycle.workspaceId, input.workspaceId)),
-			)
-			.returning();
+		const [deleted] = await db.transaction(async (tx) => {
+			await lockCycleTeam({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: existing.teamId,
+			});
+			return await tx
+				.delete(cycle)
+				.where(
+					and(eq(cycle.id, input.id), eq(cycle.workspaceId, input.workspaceId)),
+				)
+				.returning();
+		});
 		if (!deleted) throw errors.NOT_FOUND();
 
 		return deleted;
@@ -802,6 +799,26 @@ const assignIssue = authedRouter
 	.errors(assignErrors)
 	.handler(async ({ context, input, errors }) => {
 		const updated = await db.transaction(async (tx) => {
+			await lockWorkspaceForCycleWork({
+				tx,
+				workspaceId: input.workspaceId,
+			});
+			const [peekedCycle] = await tx
+				.select({ teamId: cycle.teamId })
+				.from(cycle)
+				.where(
+					and(
+						eq(cycle.id, input.cycleId),
+						eq(cycle.workspaceId, input.workspaceId),
+					),
+				)
+				.limit(1);
+			if (!peekedCycle) throw errors.NOT_FOUND();
+			await lockCycleTeam({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: peekedCycle.teamId,
+			});
 			const [cycleRow] = await tx
 				.select()
 				.from(cycle)
@@ -913,6 +930,27 @@ const unassignIssue = authedRouter
 	.errors(assignErrors)
 	.handler(async ({ context, input, errors }) => {
 		const updated = await db.transaction(async (tx) => {
+			await lockWorkspaceForCycleWork({
+				tx,
+				workspaceId: input.workspaceId,
+			});
+			const [issueTeam] = await tx
+				.select({ teamId: issue.teamId })
+				.from(issue)
+				.where(
+					and(
+						eq(issue.id, input.issueId),
+						eq(issue.workspaceId, input.workspaceId),
+					),
+				)
+				.limit(1);
+			if (!issueTeam) throw errors.NOT_FOUND();
+
+			await lockCycleTeam({
+				tx,
+				workspaceId: input.workspaceId,
+				teamId: issueTeam.teamId,
+			});
 			const [issueRow] = await tx
 				.select({
 					id: issue.id,
@@ -1078,9 +1116,6 @@ const updateSettings = authedRouter
 		});
 		if (!allowed) throw errors.UNAUTHORIZED();
 		if (!scoped.settings) throw errors.SETTINGS_NOT_INITIALIZED();
-		if (!isValidIanaTimezone(scoped.workspaceTimezone)) {
-			throw errors.INVALID_WORKSPACE_TIMEZONE();
-		}
 		const { teamId, workspaceId, expectedUpdatedAt, ...settings } = input;
 		const updated = await db.transaction(async (tx) => {
 			await lockCycleTeam({
@@ -1088,6 +1123,16 @@ const updateSettings = authedRouter
 				workspaceId,
 				teamId,
 			});
+			const scopedTx = await getScopedTeamCycleSettings({
+				executor: tx,
+				workspaceId,
+				teamId,
+			});
+			if (!scopedTx?.settings) return null;
+			if (!isValidIanaTimezone(scopedTx.workspaceTimezone)) {
+				throw errors.INVALID_WORKSPACE_TIMEZONE();
+			}
+			const now = new Date();
 			const result = await updateScopedTeamCycleSettings({
 				executor: tx,
 				workspaceId,
@@ -1097,12 +1142,6 @@ const updateSettings = authedRouter
 				expectedUpdatedAt,
 				automationAvailable: env.CYCLES_AUTOMATION_ENABLED,
 				validateEnabledSchedule: async (current) => {
-					const scopedTx = await getScopedTeamCycleSettings({
-						executor: tx,
-						workspaceId,
-						teamId,
-					});
-					if (!scopedTx) return null;
 					const cycles = await tx
 						.select()
 						.from(cycle)
@@ -1114,7 +1153,7 @@ const updateSettings = authedRouter
 						cycles,
 						workspaceTimezone: scopedTx.workspaceTimezone,
 						settings,
-						now: new Date(),
+						now,
 					});
 					if (compatibility.status !== "incompatible") return null;
 					return {
@@ -1124,7 +1163,11 @@ const updateSettings = authedRouter
 					};
 				},
 			});
-			if (!result || result.status !== "updated") return result;
+			if (!result || result.status !== "updated") {
+				return result
+					? { result, workspaceTimezone: scopedTx.workspaceTimezone }
+					: null;
+			}
 			await cancelTeamCycleArtifacts(tx, {
 				workspaceId,
 				teamId,
@@ -1134,24 +1177,25 @@ const updateSettings = authedRouter
 				workspaceId,
 				teamId,
 			});
-			return result;
+			return { result, workspaceTimezone: scopedTx.workspaceTimezone };
 		});
 		if (!updated) throw errors.SETTINGS_NOT_INITIALIZED();
-		if (updated.status === "conflict") throw errors.SETTINGS_CHANGED();
-		if (updated.status === "unavailable") throw errors.AUTOMATION_UNAVAILABLE();
-		if (updated.status === "incompatible") {
+		if (updated.result.status === "conflict") throw errors.SETTINGS_CHANGED();
+		if (updated.result.status === "unavailable")
+			throw errors.AUTOMATION_UNAVAILABLE();
+		if (updated.result.status === "incompatible") {
 			throw errors.SCHEDULE_RECONCILIATION_REQUIRED({
-				message: scheduleReconciliationMessages[updated.reason],
-				data: { reason: updated.reason },
+				message: scheduleReconciliationMessages[updated.result.reason],
+				data: { reason: updated.result.reason },
 			});
 		}
 
 		return {
-			settings: updated.settings,
-			workspaceTimezone: scoped.workspaceTimezone,
+			settings: updated.result.settings,
+			workspaceTimezone: updated.workspaceTimezone,
 			canManageSettings: true,
 			automationAvailable: env.CYCLES_AUTOMATION_ENABLED,
-			unchanged: updated.status === "unchanged",
+			unchanged: updated.result.status === "unchanged",
 		};
 	});
 

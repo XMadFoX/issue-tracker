@@ -2051,4 +2051,43 @@ describe("cycle settings routes", () => {
 			).toEqual({ status: "disabled" });
 		});
 	});
+
+	test("settings response timezone is observed after the workspace barrier", async () => {
+		const { lockCycleTeam } = await import("./mutation");
+		const held = await db.transaction(async (tx) => {
+			await lockCycleTeam({
+				tx,
+				workspaceId: ids.workspace,
+				teamId: ids.team,
+			});
+			const pendingSettings = client(ids.manager).cycle.updateSettings(
+				{
+					workspaceId: ids.workspace,
+					teamId: ids.team,
+					expectedUpdatedAt: await currentRevision(),
+					...settings,
+					reminderLeadMinutes: 90,
+				},
+				options(ids.manager),
+			);
+			for (let attempt = 0; attempt < 200; attempt++) {
+				const waiting = await db.execute<{ waiting: boolean }>(
+					sql`select exists (select 1 from pg_locks where not granted) as waiting`,
+				);
+				if (waiting.rows[0]?.waiting) break;
+				if (attempt === 199) {
+					throw new Error("settings update never waited for a lock");
+				}
+				await Bun.sleep(10);
+			}
+			await tx
+				.update(workspace)
+				.set({ timezone: "UTC" })
+				.where(eq(workspace.id, ids.workspace));
+			return { pendingSettings };
+		});
+		const result = await held.pendingSettings;
+		expect(result.workspaceTimezone).toBe("UTC");
+		expect(result.settings.reminderLeadMinutes).toBe(90);
+	});
 });
