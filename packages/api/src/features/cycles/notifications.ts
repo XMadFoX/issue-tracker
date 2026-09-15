@@ -13,7 +13,7 @@ import {
 } from "db/features/tracker/tracker.schema";
 import { and, eq, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { isAllowed } from "../../lib/abac";
-import { lockCycleTeam } from "./mutation";
+import { type CycleTransaction, lockCycleTeam } from "./mutation";
 import { deriveScheduleActionTiming, type ScheduleSettings } from "./schedule";
 import type { WorkerClock } from "./worker";
 
@@ -183,7 +183,7 @@ async function loadCyclesForReconciliation(): Promise<
 }
 
 async function loadLockedCycleWithSettings(
-	tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+	tx: CycleTransaction,
 	{
 		cycleId,
 		workspaceId,

@@ -95,7 +95,6 @@ async function expectCode(operation: Promise<unknown>, code: string) {
 		expect(error.code).toBe(code);
 		return error;
 	}
-	throw new Error("expected oRPC error");
 }
 
 function setAutomationEnabled(value: boolean) {
@@ -425,10 +424,6 @@ async function waitForBlockedLocks(expected = 1) {
 		await Bun.sleep(10);
 	}
 	throw new Error(`work never waited for ${expected} lock(s)`);
-}
-
-async function waitForBlockedLock() {
-	await waitForBlockedLocks();
 }
 
 beforeAll(async () => {
@@ -1202,7 +1197,7 @@ describe("workspace timezone updates", () => {
 				{ id: ids.workspace, timezone: "US/Eastern" },
 				options(ids.updater),
 			);
-			await waitForBlockedLock();
+			await waitForBlockedLocks();
 			const generated = await maintainPlannedCycleHorizonInTransaction({
 				tx,
 				workspaceId: ids.workspace,
@@ -1240,7 +1235,7 @@ describe("workspace timezone updates", () => {
 					now,
 				});
 			})();
-			await waitForBlockedLock();
+			await waitForBlockedLocks();
 			await tx
 				.update(workspace)
 				.set({ timezone: "America/New_York" })
@@ -1266,7 +1261,7 @@ describe("workspace timezone updates", () => {
 					},
 					options(ids.updater),
 				);
-				await waitForBlockedLock();
+				await waitForBlockedLocks();
 				const pendingTimezone = client(ids.updater).workspace.update(
 					{ id: ids.workspace, timezone: "US/Eastern" },
 					options(ids.updater),
@@ -1293,7 +1288,7 @@ describe("workspace timezone updates", () => {
 				},
 				options(ids.updater),
 			);
-			await waitForBlockedLock();
+			await waitForBlockedLocks();
 			return { pendingLegacy };
 		});
 		await expectCode(
@@ -1350,7 +1345,7 @@ describe("workspace timezone updates", () => {
 				},
 				options(ids.updater),
 			);
-			await waitForBlockedLock();
+			await waitForBlockedLocks();
 			return { pendingCreate };
 		});
 		const created = await createHeld.pendingCreate;

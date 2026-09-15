@@ -59,7 +59,7 @@ import {
 import { deriveSchedulePreview } from "./schedule";
 import {
 	scheduleReconciliationMessages,
-	scheduleReconciliationReasonSchema,
+	scheduleReconciliationRequiredError,
 } from "./schedule-reconciliation";
 import {
 	cycleAssignIssueSchema,
@@ -154,6 +154,7 @@ const completionErrors = {
 
 const settingsErrors = {
 	...commonErrors,
+	...scheduleReconciliationRequiredError,
 	SETTINGS_NOT_INITIALIZED: {
 		status: 409,
 		message: "Cycle settings are not initialized for this team.",
@@ -169,13 +170,6 @@ const settingsErrors = {
 	SETTINGS_CHANGED: {
 		status: 409,
 		message: "Cycle settings changed. Review the current values and try again.",
-	},
-	SCHEDULE_RECONCILIATION_REQUIRED: {
-		status: 409,
-		message: scheduleReconciliationMessages.scheduled_cycles_require_resolution,
-		data: z.object({
-			reason: scheduleReconciliationReasonSchema,
-		}),
 	},
 };
 
