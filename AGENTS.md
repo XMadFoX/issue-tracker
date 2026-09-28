@@ -89,10 +89,3 @@ Conventions (for new code, don't refactor existing):
   - `bun test:e2e:report` — Open the Playwright HTML test report
   - `bun test:unit` — Run developer unit/integration tests (`bun test`)
 
-- **Nix & Playwright Environment**:
-  - This project uses Nix (`flake.nix`).
-  - Playwright browser binaries on NixOS are managed via `pkgs.playwright-driver.browsers`.
-  - The shell environment exports:
-    - `PLAYWRIGHT_BROWSERS_PATH`: points to the Nix-provided browser binaries
-    - `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true`: skips Linux distribution check
-  - These are defined in `flake.nix` `shellHook` and also kept in `.env` for convenience.

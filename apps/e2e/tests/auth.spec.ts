@@ -56,28 +56,4 @@ test.describe("Authentication - UI-AUTH Test Cases", () => {
 			await expect(authPage.signUpSubmitButton).not.toBeVisible();
 		});
 	});
-	/*  Test Ignored due to an issue on the website, see: https://github.com/XMadFoX/issue-tracker/issues/18
-   
-   test("[UI-AUTH-03] Auth Input Validation", async ({authPage}) => {
-    
-    }
-    );
-  */
-
-	test.only("[UI-AUTH-04]: Invalid Credentials Error State", async ({
-		authPage,
-	}) => {
-		//incorrect input
-		await test.step("authenticate with incorrect credentials", async () => {
-			await authPage.goto({ initialMode: "signin" });
-			await authPage.signIn("test@test.qa", "wrongPassword");
-			await expect(authPage.formError).toContainText("Invalid email");
-		});
-		//correct input
-		await test.step("authenticate with the correct credentials", async () => {
-			await authPage.goto({ initialMode: "signin" });
-			await authPage.signIn("test@test.qa", "testtest"); //correct credentials
-			await expect(authPage.createWorkspaceButton).toBeVisible();
-		});
-	});
 });

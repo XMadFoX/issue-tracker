@@ -1,0 +1,14 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.3.15/schema.json",
+	"extends": "//",
+	"linter": {
+		"rules": {
+			"correctness": {
+				"noEmptyPattern": "off"
+			},
+			"suspicious": {
+				"noConfusingVoidType": "off"
+			}
+		}
+	}
+}
