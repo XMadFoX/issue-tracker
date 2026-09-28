@@ -12,6 +12,7 @@ services:
 
   web:
     image: docker.io/library/tss-web
+    profiles: ["production"]
     build:
       context: .
       dockerfile: apps/tss-web/Dockerfile

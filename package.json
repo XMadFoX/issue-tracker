@@ -4,7 +4,12 @@
 	"scripts": {
 		"db:migrate": "FORCE_COLOR=3 bun --env-file=.env -F db migrate",
 		"dev": "FORCE_COLOR=3 bun --env-file=.env -F tss-web dev",
-		"test": "echo \"Error: no test specified\" && exit 1",
+		"test": "bun test:e2e",
+		"test:e2e": "FORCE_COLOR=3 bun --env-file=.env -F e2e test",
+		"test:e2e:ui": "FORCE_COLOR=3 bun --env-file=.env -F e2e test:ui",
+		"test:e2e:headed": "FORCE_COLOR=3 bun --env-file=.env -F e2e test:headed",
+		"test:e2e:report": "bun -F e2e test:report",
+		"test:unit": "bun test",
 		"typecheck": "bun --workspaces --if-present run typecheck"
 	},
 	"keywords": [],

@@ -1,0 +1,17 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"strict": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"types": ["node"],
+		"paths": {
+			"db": ["../../packages/db/src/index.ts"],
+			"db/*": ["../../packages/db/src/*"]
+		}
+	},
+	"include": ["tests", "pages", "fixtures", "playwright.config.ts", "env.ts"]
+}

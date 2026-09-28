@@ -73,4 +73,19 @@ Conventions (for new code, don't refactor existing):
 
 - features/<domain>/
   - index.ts (public feature exports)
-  - components/, forms/, modals/, lists/, views/, types/, hooks/\*\*\*\*
+  - components/, forms/, modals/, lists/, views/, types/, hooks/****
+
+## Testing & QA Conventions
+
+- **QA Engineer Role & Focus**:
+  - The QA engineer writes and maintains **End-to-End (E2E) tests** using **TypeScript + Playwright** located in `apps/e2e`.
+  - **Unit and integration tests** (located in `packages/*` and `apps/tss-web`) are handled and maintained by the developers using `bun test`.
+  - Agents must not confuse the two roles: keep E2E tests inside `apps/e2e` and leave developer unit/integration tests to the dev team.
+
+- **Test Commands**:
+  - `bun test:e2e` — Run Playwright E2E tests across configured browsers
+  - `bun test:e2e:ui` — Run Playwright with interactive UI
+  - `bun test:e2e:headed` — Run Playwright in headed browser mode
+  - `bun test:e2e:report` — Open the Playwright HTML test report
+  - `bun test:unit` — Run developer unit/integration tests (`bun test`)
+

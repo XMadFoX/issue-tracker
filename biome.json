@@ -13,7 +13,9 @@
 			"!packages/ui/src/components",
 			"!apps/tss-web/src/routeTree.gen.ts",
 			"!data",
-			"!.direnv"
+			"!.direnv",
+			"!**/test-results",
+			"!**/playwright-report"
 		]
 	},
 	"formatter": { "enabled": true, "indentStyle": "tab" },
