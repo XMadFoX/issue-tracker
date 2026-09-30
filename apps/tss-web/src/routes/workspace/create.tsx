@@ -55,40 +55,32 @@ function RouteComponent() {
 				}}
 			>
 				<form.AppField name="name">
-					{(field) => {
-						const isInvalid =
-							field.state.meta.isTouched && !field.state.meta.isValid;
-
-						return (
-							<FormBase label="Name">
+					{(field) => (
+						<FormBase label="Name">
+							{(controlProps) => (
 								<Input
-									id={field.name}
+									{...controlProps}
 									name={field.name}
 									value={field.state.value}
 									onBlur={field.handleBlur}
 									onChange={(e) => {
 										const name = e.target.value;
 										field.handleChange(name);
-
 										if (!slugManuallyEditedRef.current) {
 											form.setFieldValue("slug", slugifyWorkspaceName(name));
 										}
 									}}
-									aria-invalid={isInvalid}
 								/>
-							</FormBase>
-						);
-					}}
+							)}
+						</FormBase>
+					)}
 				</form.AppField>
 				<form.AppField name="slug">
-					{(field) => {
-						const isInvalid =
-							field.state.meta.isTouched && !field.state.meta.isValid;
-
-						return (
-							<FormBase label="Slug" description="For example 'my-workspace'">
+					{(field) => (
+						<FormBase label="Slug" description="For example 'my-workspace'">
+							{(controlProps) => (
 								<Input
-									id={field.name}
+									{...controlProps}
 									name={field.name}
 									value={field.state.value}
 									onBlur={field.handleBlur}
@@ -96,11 +88,10 @@ function RouteComponent() {
 										slugManuallyEditedRef.current = true;
 										field.handleChange(e.target.value);
 									}}
-									aria-invalid={isInvalid}
 								/>
-							</FormBase>
-						);
-					}}
+							)}
+						</FormBase>
+					)}
 				</form.AppField>
 				{/* TODO: add combobox (select with search) */}
 				<form.AppField name="timezone">

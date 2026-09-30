@@ -1,23 +1,24 @@
 import { Input } from "../input";
-import { FormBase, FormControlProps } from "./form-base";
+import { FormBase, type FormControlProps } from "./form-base";
 import { useFieldContext } from "./form-hooks";
 
 export function FormInput(props: FormControlProps) {
-  const field = useFieldContext<string>();
-  const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+	const field = useFieldContext<string>();
 
-  return (
-    <FormBase {...props}>
-      <Input
-        id={field.name}
-        name={field.name}
-        value={field.state.value}
-        onBlur={field.handleBlur}
-        onChange={(e) => field.handleChange(e.target.value)}
-        type={props.type}
-        placeholder={props.placeholder}
-        aria-invalid={isInvalid}
-      />
-    </FormBase>
-  );
+	return (
+		<FormBase {...props}>
+			{(controlProps) => (
+				<Input
+					{...controlProps}
+					name={field.name}
+					value={field.state.value}
+					onBlur={field.handleBlur}
+					onChange={(e) => field.handleChange(e.target.value)}
+					type={props.type}
+					placeholder={props.placeholder}
+					autoComplete={props.autoComplete}
+				/>
+			)}
+		</FormBase>
+	);
 }

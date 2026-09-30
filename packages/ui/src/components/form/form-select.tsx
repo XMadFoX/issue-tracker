@@ -31,7 +31,13 @@ type FormSelectProps<TItem> = FormControlProps & {
 	children?: ReactNode;
 	triggerProps?: Omit<
 		ComponentProps<typeof SelectTrigger>,
-		"id" | "aria-invalid" | "onBlur" | "size" | "clearable" | "onClear"
+		| "id"
+		| "aria-invalid"
+		| "aria-describedby"
+		| "onBlur"
+		| "size"
+		| "clearable"
+		| "onClear"
 	>;
 	contentProps?: ComponentProps<typeof SelectContent>;
 };
@@ -50,7 +56,6 @@ export function FormSelect<TItem = never>({
 	...baseProps
 }: FormSelectProps<TItem>) {
 	const field = useFieldContext<string | undefined | null>();
-	const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
 
 	const value =
 		typeof field.state.value === "string" ? field.state.value : undefined;
@@ -84,37 +89,38 @@ export function FormSelect<TItem = never>({
 
 	return (
 		<FormBase {...baseProps}>
-			<Select
-				onValueChange={(nextValue) => field.handleChange(nextValue)}
-				value={value}
-			>
-				<SelectTrigger
-					{...triggerProps}
-					size={size}
-					clearable={clearable && hasValue}
-					onClear={handleClear}
-					aria-invalid={isInvalid}
-					id={field.name}
-					onBlur={field.handleBlur}
-					className={cn(triggerProps?.className, "cursor-pointer")}
+			{(controlProps) => (
+				<Select
+					onValueChange={(nextValue) => field.handleChange(nextValue)}
+					value={value}
 				>
-					<SelectValue placeholder={placeholder}>
-						{(v) => {
-							if (options) {
-								return (
-									options.find((option) => option.value === v)?.label ?? v
-								);
-							}
-							if (items && getItemValue && getItemLabel) {
-								const item = items.find((i) => getItemValue(i) === v);
-								return item ? getItemLabel(item) : v;
-							}
-							return v;
-						}}
-					</SelectValue>
-				</SelectTrigger>
-				<SelectContent {...contentProps}>{resolvedChildren}</SelectContent>
-			</Select>
+					<SelectTrigger
+						{...triggerProps}
+						size={size}
+						clearable={clearable && hasValue}
+						onClear={handleClear}
+						{...controlProps}
+						onBlur={field.handleBlur}
+						className={cn(triggerProps?.className, "cursor-pointer")}
+					>
+						<SelectValue placeholder={placeholder}>
+							{(v) => {
+								if (options) {
+									return (
+										options.find((option) => option.value === v)?.label ?? v
+									);
+								}
+								if (items && getItemValue && getItemLabel) {
+									const item = items.find((i) => getItemValue(i) === v);
+									return item ? getItemLabel(item) : v;
+								}
+								return v;
+							}}
+						</SelectValue>
+					</SelectTrigger>
+					<SelectContent {...contentProps}>{resolvedChildren}</SelectContent>
+				</Select>
+			)}
 		</FormBase>
 	);
 }

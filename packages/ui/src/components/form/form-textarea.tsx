@@ -3,23 +3,36 @@ import { Textarea } from "../textarea";
 import { FormBase, type FormControlProps } from "./form-base";
 import { useFieldContext } from "./form-hooks";
 
-type FormTextareaProps = FormControlProps & ComponentProps<typeof Textarea>;
+type FormTextareaProps = FormControlProps &
+	Omit<
+		ComponentProps<typeof Textarea>,
+		"id" | "aria-invalid" | "aria-describedby"
+	>;
 
-export function FormTextarea(props: FormTextareaProps) {
+export function FormTextarea({
+	label,
+	description,
+	announceErrors,
+	...props
+}: FormTextareaProps) {
 	const field = useFieldContext<string | undefined | null>();
-	const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
 
 	return (
-		<FormBase {...props}>
-			<Textarea
-				id={field.name}
-				name={field.name}
-				value={field.state.value ?? ""}
-				onBlur={field.handleBlur}
-				onChange={(e) => field.handleChange(e.target.value)}
-				aria-invalid={isInvalid}
-				{...props}
-			/>
+		<FormBase
+			label={label}
+			description={description}
+			announceErrors={announceErrors}
+		>
+			{(controlProps) => (
+				<Textarea
+					name={field.name}
+					value={field.state.value ?? ""}
+					onBlur={field.handleBlur}
+					onChange={(e) => field.handleChange(e.target.value)}
+					{...props}
+					{...controlProps}
+				/>
+			)}
 		</FormBase>
 	);
 }
