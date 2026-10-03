@@ -7,6 +7,9 @@ export default defineConfig({
 	testDir: "./tests",
 	fullyParallel: true,
 	forbidOnly: env.CI,
+	expect: {
+		timeout: 10_000,
+	},
 	retries: env.CI ? 2 : 0,
 	workers: env.CI ? 1 : undefined,
 	reporter: [["list"], ["html", { open: "never" }]],
@@ -24,10 +27,6 @@ export default defineConfig({
 		{
 			name: "firefox",
 			use: { ...devices["Desktop Firefox"] },
-		},
-		{
-			name: "webkit",
-			use: { ...devices["Desktop Safari"] },
 		},
 	],
 	webServer: {

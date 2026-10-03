@@ -26,7 +26,26 @@ export function createAuthPage(page: Page) {
 		name: "Sign in",
 		exact: true,
 	});
+	const createWorkspaceButton = page.getByRole("link", {
+		//confirms auth
+		name: "Create Workspace",
+		exact: true,
+	});
 	const formError = page.locator(".form-error");
+	const alerts = page.getByRole("alert");
+	const fieldErrors = page.locator('[data-slot="field-error"]');
+	const emailError = page
+		.getByRole("group")
+		.filter({ has: emailInput })
+		.getByRole("alert");
+	const passwordError = page
+		.getByRole("group")
+		.filter({ has: passwordInput })
+		.getByRole("alert");
+	const nameError = page
+		.getByRole("group")
+		.filter({ has: nameInput })
+		.getByRole("alert");
 
 	async function goto(options?: AuthPageNavigateOptions): Promise<void> {
 		const params = new URLSearchParams();
@@ -57,7 +76,6 @@ export function createAuthPage(page: Page) {
 		email: string,
 		password: string,
 	): Promise<void> {
-		await switchToSignUp();
 		await nameInput.fill(name);
 		await emailInput.fill(email);
 		await passwordInput.fill(password);
@@ -74,6 +92,12 @@ export function createAuthPage(page: Page) {
 		toggleSignUpButton,
 		toggleSignInButton,
 		formError,
+		alerts,
+		fieldErrors,
+		emailError,
+		passwordError,
+		nameError,
+		createWorkspaceButton,
 		goto,
 		switchToSignUp,
 		switchToSignIn,
